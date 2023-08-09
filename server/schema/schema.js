@@ -156,12 +156,45 @@ const Mutation = new GraphQLObjectType({
                 return project.save()
             }
         },
-        // deleteProject: {
-
-        // },
-        // updateProject:{
-
-        // }
+        deleteProject: {
+            type: ProjectType,
+            args:{ id :{type:new GraphQLNonNull(GraphQLID)}},
+            resolve: (parent, args) => {
+                return Project.findByIdAndRemove(args.id)
+            }
+        },
+        updateProject:{
+            type: ProjectType,
+            args: {
+                id : {type:new GraphQLNonNull(GraphQLID)},
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                description: { type: new GraphQLNonNull(GraphQLString) },
+                status: { 
+                    type: new GraphQLEnumType({
+                        name: 'ProjectStatus',
+                        values: {
+                            new: { value: 'Not Started' },
+                            progress: { value: 'In Progress' },
+                            completed: { value: 'Completed' }
+                        },
+                    }),
+                    defaultValue:'Not Started',
+                }
+            },
+            resolve: (parent, args) => {
+                return Project.findByIdAndUpdate(
+                    args.id,
+                    {
+                        $set: {
+                            name: args.name,
+                            description: args.description,
+                            status: args.status
+                        }
+                    },
+                    { new: true }
+                )
+            }
+        }
     }
 })
 
