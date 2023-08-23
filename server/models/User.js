@@ -6,10 +6,12 @@ const UserSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['User', 'Admin', 'Client Admin']
+        enum: ['Super Admin', 'Client Admin', 'User']
     },
     email: {
-        type: String
+        type: String,
+        unique: true,
+        index: true
     },
     number: {
         type: String
@@ -21,9 +23,14 @@ const UserSchema = new mongoose.Schema({
     dob: {
         type: String
     },
-    clientId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Client'
+    password: {
+        type: String
+    },
+    loginAttempts: {
+        type: Number,
+    },
+    lastFailedLogin: {
+        type: String
     }
 })
 
