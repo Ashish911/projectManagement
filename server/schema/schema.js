@@ -6,6 +6,7 @@ import {
     GraphQLObjectType,
     GraphQLSchema,
     GraphQLID,
+    GraphQLInt,
     GraphQLList,
     GraphQLNonNull,
     GraphQLEnumType
@@ -129,9 +130,6 @@ const Mutation = new GraphQLObjectType({
                     user.lastFailedLogin = new Date().toISOString()
 
                     await User.save(user)
-                    // let attempts = user[0]?.loginAttempts + 1
-                    // let lastFailedLogin = new Date().toISOString();
-                    // await User.updateOne({ email: user[0]?.email }, { loginAttempts: attempts, lastFailedLogin: lastFailedLogin})
                     throw new Error('Invalid password')
                 }
     
@@ -298,7 +296,7 @@ const Mutation = new GraphQLObjectType({
                 description: { type: new GraphQLNonNull(GraphQLString) },
                 status: { 
                     type: new GraphQLEnumType({
-                        name: 'ProjectStatus',
+                        name: 'UpdateProjectStatus',
                         values: {
                             new: { value: 'Not Started' },
                             progress: { value: 'In Progress' },
