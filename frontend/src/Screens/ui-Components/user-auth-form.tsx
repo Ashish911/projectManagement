@@ -5,6 +5,9 @@ import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useInputMap } from "@/hooks/useInputMap";
 import { useInputFields } from "@/hooks/useInputFields";
+import { useLogin } from "../../actions/auth";
+import { QueryClient, useMutation, useQuery } from "react-query";
+import { loginUser } from "@/api/authApi";
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -109,25 +112,50 @@ export function UserAuthRegisterForm({
 }
 
 export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
-  const [isLoading, setIsLoading] = useState<Boolean>(false);
+  //   const [isLoading, setIsLoading] = useState<Boolean>(false);
   //   const [email, setEmail] = useState<String>("");
   //   const [password, setPassword] = useState<String>("");
+  const queryClient = new QueryClient();
 
   const requiredInputs = ["email", "password"];
 
   const inputMap = useInputMap(requiredInputs);
 
+  //   const { data, isLoading } = useQuery({
+  //     queryFn: () => fetchUser(),
+  //     queryKey: ["users", { search }],
+  //   staleTime: Infinity,
+  // cacheTime: 0,
+  //   })
+
+  const { mutateAsync: loginUserMutation } = useMutation({
+    mutationFn: loginUser,
+    // onSuccess: () => {
+    //     queryClient.invalidateQueries(["users"])
+    // }
+  });
+
+  //   const { mutate, isLoading, isError, error } = useLogin();
+
   async function onSubmit(event: SyntheticEvent) {
     event.preventDefault();
-    setIsLoading(true);
+    // setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 3000);
+    // setTimeout(() => {
+    //   setIsLoading(false);
+    // }, 3000);
+    // mutate({ inputMap.email, inputMap.password });
+
+    try {
+      await loginUserMutation(inputMap);
+    } catch (e) {
+      console.log(e);
+    }
   }
 
   return (
     <div className={cn("grid gap-6", className)} {...props}>
+      {/* {isError && <div>{error?.message}</div>} */}
       <form onSubmit={onSubmit}>
         <div className="grid gap-2">
           {useInputFields(inputMap, isLoading)}

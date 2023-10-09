@@ -1,25 +1,34 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
-const TaskSchema = new mongoose.Schema({
+const TaskSchema = new mongoose.Schema(
+  {
     priority: {
-        type: String,
-        enum: ['Urgent', 'High', 'Normal', 'Backlog']
+      type: String,
+      enum: ["Urgent", "High", "Normal", "Backlog"],
     },
     deadline: {
-        type: String
+      type: String,
     },
     currentStatus: {
-        type: String,
-        enum: ['New', 'InProgress', 'Resolved', 'ReOpened']
+      type: String,
+      enum: ["New", "InProgress", "Resolved", "ReOpened"],
     },
     assignedTo: {
-        type: String
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
     createdBy: {
-        type: String
-    }
-}, { timestamps: true })
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    project: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+    },
+  },
+  { timestamps: true }
+);
 
-const Task = mongoose.model("Task", TaskSchema)
+const Task = mongoose.model("Task", TaskSchema);
 
-export default Task
+export default Task;
