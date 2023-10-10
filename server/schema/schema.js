@@ -15,6 +15,7 @@ import {
 } from "graphql";
 import User from "../models/User.js";
 import { request } from "express";
+import { removeObject } from "../util.js";
 
 const UserType = new GraphQLObjectType({
   name: "User",
@@ -99,7 +100,6 @@ const RootQuery = new GraphQLObjectType({
       type: ProjectType,
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: (parent, args) => {
-        console.log(args);
         return Project.findById(args.id);
       },
     },
@@ -157,8 +157,6 @@ const Mutation = new GraphQLObjectType({
         if (!validPassword) {
           user[0].loginAttempts += 1;
           user[0].lastFailedLogin = new Date().toISOString();
-
-          console.log(user);
 
           await User.updateOne(
             { email: user[0]?.email },
@@ -412,21 +410,24 @@ const Mutation = new GraphQLObjectType({
           defaultValue: "Not Started",
         },
         clientId: { type: new GraphQLNonNull(GraphQLID) },
-        token: { type: new GraphQLNonNull(GraphQLString) },
       },
-      resolve: async (parent, args) => {
-        debugger;
-        const decoded = jwt.verify(args.token, process.env.SECRET_KEY);
+      resolve: async (parent, args, context) => {
+        const token = context.request.headers.authorization.replace(
+          "Bearer ",
+          ""
+        );
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
 
-        if (decoded.role != "User") {
+        if (decoded.role == "User") {
           throw new Error(
             "Current role does not have the permission to Add Projects"
           );
         }
 
-        const client = Client.findById(args.clientId);
+        const client = await Client.findById(args.clientId);
+        let clientId = removeObject(client.assignedAdmin);
 
-        if (client.assignedAdmin.id != decoded.id) {
+        if (clientId != decoded.id) {
           throw new Error("Current user is not a client admin of this client.");
         }
 
@@ -437,10 +438,51 @@ const Mutation = new GraphQLObjectType({
           clientId: args.clientId,
         });
 
-        return project.save();
+        return await project.save();
       },
     },
-    // addUserToProject: {},
+    addUserToProject: {
+      type: ProjectType,
+      args: {
+        user: { type: new GraphQLNonNull(new GraphQLList(GraphQLID)) },
+        id: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: async (parent, args, context) => {
+        const token = context.request.headers.authorization.replace(
+          "Bearer ",
+          ""
+        );
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+        if (decoded.role == "User") {
+          throw new Error(
+            "Current role does not have the permission to new users to Projects"
+          );
+        }
+
+        const currentProject = await Project.findById(args.id);
+
+        const client = await Client.findById(currentProject.clientId);
+        let clientId = removeObject(client.assignedAdmin);
+
+        if (clientId != decoded.id) {
+          throw new Error("Current user is not a client admin of this client.");
+        }
+
+        args.user.forEach((it) => {
+          let currentUser = User.findById(it);
+          console.log(currentUser);
+          if (currentUser == null) {
+            throw new Error("User with id " + it + " does not exist.");
+          } else if (currentUser.role != "User") {
+            throw new Error("Only normal users are assigned to projects.");
+          }
+          currentProject.assignedUser.push(it);
+        });
+
+        return await currentProject.save();
+      },
+    },
     deleteProject: {
       type: ProjectType,
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
