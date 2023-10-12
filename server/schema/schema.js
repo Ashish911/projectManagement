@@ -470,14 +470,9 @@ const Mutation = new GraphQLObjectType({
         }
 
         args.user.forEach((it) => {
-          let currentUser = User.findById(it);
-          console.log(currentUser);
-          if (currentUser == null) {
-            throw new Error("User with id " + it + " does not exist.");
-          } else if (currentUser.role != "User") {
-            throw new Error("Only normal users are assigned to projects.");
+          if (currentProject.assignedUser.includes(it) == false) {
+            currentProject.assignedUser.push(it);
           }
-          currentProject.assignedUser.push(it);
         });
 
         return await currentProject.save();
@@ -486,11 +481,67 @@ const Mutation = new GraphQLObjectType({
     deleteProject: {
       type: ProjectType,
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
-      resolve: (parent, args) => {
+      resolve: async (parent, args, content) => {
+        const token = context.request.headers.authorization.replace(
+          "Bearer ",
+          ""
+        );
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+        if (decoded.role == "User") {
+          throw new Error(
+            "Current role does not have the permission to delete Projects"
+          );
+        }
+
+        const client = await Client.findById(args.clientId);
+        let clientId = removeObject(client.assignedAdmin);
+
+        if (clientId != decoded.id) {
+          throw new Error("Current user is not a client admin of this client.");
+        }
+
         return Project.findByIdAndRemove(args.id);
       },
     },
-    // deleteUserFromProject: {},
+    deleteUserFromProject: {
+      type: ProjectType,
+      args: {
+        user: { type: new GraphQLNonNull(new GraphQLList(GraphQLID)) },
+        id: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: async (parent, args, context) => {
+        const token = context.request.headers.authorization.replace(
+          "Bearer ",
+          ""
+        );
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+        if (decoded.role == "User") {
+          throw new Error(
+            "Current role does not have the permission to delete users from the Projects"
+          );
+        }
+
+        const currentProject = await Project.findById(args.id);
+
+        const client = await Client.findById(currentProject.clientId);
+        let clientId = removeObject(client.assignedAdmin);
+
+        if (clientId != decoded.id) {
+          throw new Error("Current user is not a client admin of this client.");
+        }
+
+        args.user.forEach((it) => {
+          if (currentProject.assignedUser.includes(it) == true) {
+            let index = currentProject.assignedUser.indexOf(it);
+            currentProject.assignedUser.splice(index, 1);
+          }
+        });
+
+        return await currentProject.save();
+      },
+    },
     updateProject: {
       type: ProjectType,
       args: {
@@ -509,7 +560,26 @@ const Mutation = new GraphQLObjectType({
           defaultValue: "Not Started",
         },
       },
-      resolve: (parent, args) => {
+      resolve: async (parent, args, context) => {
+        const token = context.request.headers.authorization.replace(
+          "Bearer ",
+          ""
+        );
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+        if (decoded.role == "User") {
+          throw new Error(
+            "Current role does not have the permission to Add Projects"
+          );
+        }
+
+        const client = await Client.findById(args.clientId);
+        let clientId = removeObject(client.assignedAdmin);
+
+        if (clientId != decoded.id) {
+          throw new Error("Current user is not a client admin of this client.");
+        }
+
         return Project.findByIdAndUpdate(
           args.id,
           {
