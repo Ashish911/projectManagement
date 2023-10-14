@@ -14,6 +14,7 @@ export const loginUser = async (
   credentials: Login
 ): Promise<AxiosResponse<Login>> => {
   try {
+    debugger;
     const response = await api.post<Login>("/login", credentials);
     return response.data;
   } catch (error) {

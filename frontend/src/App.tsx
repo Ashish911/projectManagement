@@ -5,7 +5,15 @@ import { HashRouter as Router, Route, Routes } from "react-router-dom";
 import { Register } from "./Screens/Register";
 import { QueryClient, QueryClientProvider } from "react-query";
 
-const queryClient = new QueryClient();
+const baseUri = "http://localhost:4040/graphql";
+
+const queryKeyFn = (queryKey) => {
+  return [baseUri, ...queryKey].join("/");
+};
+
+const queryClient = new QueryClient({
+  queryKeyFn,
+});
 
 function App() {
   return (
