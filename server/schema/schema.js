@@ -80,6 +80,37 @@ const ProjectType = new GraphQLObjectType({
   },
 });
 
+const TaskType = new GraphQLObjectType({
+  name: "Task",
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    priority: { type: new GraphQLNonNull(GraphQLString) },
+    deadline: { type: new GraphQLNonNull(GraphQLString) },
+    currentStatus: { type: new GraphQLNonNull(GraphQLString) },
+    assignedTo: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent.assignedUser);
+      },
+    },
+  },
+});
+
+const SubTaskType = new GraphQLObjectType({
+  name: "Sub Task",
+  fields: {},
+});
+
+const NotificationType = new GraphQLObjectType({
+  name: "Notification",
+  fields: {},
+});
+
+const PreferenceType = new GraphQLObjectType({
+  name: "Preference",
+  fields: {},
+});
+
 const RootQuery = new GraphQLObjectType({
   name: "RootQueryType",
   fields: {

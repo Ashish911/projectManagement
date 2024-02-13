@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from "axios";
 
-const BASE_URL = "https://your-backend-api-url.com";
+const BASE_URL = "http://localhost:4040/graphql";
 
 const api = axios.create({
   baseURL: BASE_URL,

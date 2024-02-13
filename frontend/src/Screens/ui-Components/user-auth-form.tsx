@@ -51,7 +51,7 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await loginUserMutation({ email, password });
+      await loginUserMutation({ email: email, password: password });
     } catch (e) {
       console.log(e);
     }
