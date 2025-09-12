@@ -3,11 +3,11 @@
   "type": "module",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "env-cmd -f .env.local nodemon index.js",
-    "start": "env-cmd -f .env.local node index.js"
+    "dev": "env-cmd -f .env.local nodemon app.js",
+    "start": "env-cmd -f .env.local node app.js"
   },
   "author": "",
   "license": "ISC",

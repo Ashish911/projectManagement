@@ -1,4 +1,4 @@
-import React, { SyntheticEvent, useState } from "react";
+import React, { SyntheticEvent, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { Icons } from "@/components/ui/icons";
@@ -8,6 +8,7 @@ import { QueryClient, useMutation, useQuery } from "react-query";
 import { loginUser } from "@/api/authApi";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import useStore from "@/store/store";
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -38,6 +39,7 @@ export function UserAuthRegisterForm({
 }
 
 export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
+  const { token, setToken } = useStore();
   const [isLoading, setIsLoading] = useState<Boolean>(false);
   const [email, setEmail] = useState<String>("");
   const [password, setPassword] = useState<String>("");
@@ -51,15 +53,24 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await loginUserMutation({ email: email, password: password });
+      const response = await loginUserMutation({
+        email: email,
+        password: password,
+      });
+      setToken(response.data.data);
     } catch (e) {
       console.log(e);
+    } finally {
+      setIsLoading(false);
     }
   }
 
+  useEffect(() => {
+    console.log(token);
+  }, [token]);
+
   return (
     <div className={cn("grid gap-6", className)} {...props}>
-      {/* {isError && <div>{error?.message}</div>} */}
       <form onSubmit={onSubmit}>
         <div className="grid gap-2">
           <div className="grid gap-1">

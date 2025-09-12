@@ -1,4 +1,5 @@
 import axios, { AxiosResponse } from "axios";
+import { LOGIN } from "../mutations/authMutations";
 
 const BASE_URL = "http://localhost:4040/graphql";
 
@@ -12,11 +13,13 @@ const api = axios.create({
 
 export const loginUser = async (
   credentials: Login
-): Promise<AxiosResponse<Login>> => {
+): Promise<AxiosResponse<LoginResponse>> => {
   try {
-    debugger;
-    const response = await api.post<Login>("/login", credentials);
-    return response.data;
+    const response = await api.post<LoginResponse>("", {
+      query: LOGIN,
+      variables: credentials,
+    });
+    return response;
   } catch (error) {
     console.log(error);
     throw new Error("Invalid credentials");

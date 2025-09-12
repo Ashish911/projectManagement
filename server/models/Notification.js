@@ -1,19 +1,37 @@
 import mongoose from "mongoose";
 
-const PreferenceSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+/**
+ * The Notification model.
+ *
+ * This model represents a notification that a user can receive. Each notification
+ * has a content and a user that it belongs to.
+ *
+ * @typedef {import('mongoose').Document & {
+ *   content: string,
+ *   status: string,
+ *   user: import('mongoose').Types.ObjectId,
+ * }} NotificationDocument
+ */
+const NotificationSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["READ", "UNREAD"],
+      default: "UNREAD",
+    },
   },
-  content: {
-    type: String,
-  },
-  status: {
-    type: String,
-    enum: ["Read", "Unread"],
-  },
-});
+  { timestamps: true, versionKey: false }
+);
 
-const Preference = mongoose.model("Preference", PreferenceSchema);
+const Notification = mongoose.model("Notification", NotificationSchema);
 
-export default Preference;
+export default Notification;

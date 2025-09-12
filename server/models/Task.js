@@ -1,17 +1,20 @@
 import mongoose from "mongoose";
 
+
 const TaskSchema = new mongoose.Schema(
   {
     priority: {
       type: String,
-      enum: ["Urgent", "High", "Normal", "Backlog"],
+      enum: ["URGENT", "HIGH", "NORMAL", "BACKLOG"],
+        default: "NORMAL",
     },
     deadline: {
       type: String,
     },
     currentStatus: {
       type: String,
-      enum: ["New", "InProgress", "Resolved", "ReOpened"],
+      enum: ["NEW", "IN_PROGRESS", "RESOLVED", "REOPENED"],
+        default: "NEW",
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
@@ -20,13 +23,15 @@ const TaskSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+        required: true,
     },
     project: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
+        required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, versionKey: false }
 );
 
 const Task = mongoose.model("Task", TaskSchema);

@@ -16,6 +16,7 @@ import {
 import User from "../models/User.js";
 import { request } from "express";
 import { removeObject } from "../util.js";
+import Preference from "../models/Preference.js";
 
 const UserType = new GraphQLObjectType({
   name: "User",
@@ -23,7 +24,7 @@ const UserType = new GraphQLObjectType({
     id: { type: new GraphQLNonNull(GraphQLID) },
     name: { type: new GraphQLNonNull(GraphQLString) },
     email: { type: new GraphQLNonNull(GraphQLString) },
-    phone: { type: new GraphQLNonNull(GraphQLString) },
+    number: { type: new GraphQLNonNull(GraphQLString) },
     role: { type: new GraphQLNonNull(GraphQLString) },
     dob: { type: new GraphQLNonNull(GraphQLString) },
     gender: { type: new GraphQLNonNull(GraphQLString) },
@@ -80,6 +81,7 @@ const ProjectType = new GraphQLObjectType({
   },
 });
 
+// Task
 const TaskType = new GraphQLObjectType({
   name: "Task",
   fields: {
@@ -90,25 +92,76 @@ const TaskType = new GraphQLObjectType({
     assignedTo: {
       type: UserType,
       resolve: (parent, args) => {
-        return User.findById(parent.assignedUser);
+        return User.findById(parent.id);
+      },
+    },
+    createdBy: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent.id);
+      },
+    },
+    project: {
+      type: ProjectType,
+      resolve: (parent, args) => {
+        return Project.findById(parent);
       },
     },
   },
 });
 
+// Sub Task
 const SubTaskType = new GraphQLObjectType({
-  name: "Sub Task",
-  fields: {},
+  name: "SubTask",
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    priority: { type: new GraphQLNonNull(GraphQLString) },
+    deadline: { type: new GraphQLNonNull(GraphQLString) },
+    currentStatus: { type: new GraphQLNonNull(GraphQLString) },
+    assignedTo: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent);
+      },
+    },
+    createdBy: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent);
+      },
+    },
+  },
 });
 
+// Notification
 const NotificationType = new GraphQLObjectType({
   name: "Notification",
-  fields: {},
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    content: { type: new GraphQLNonNull(GraphQLString) },
+    status: { type: new GraphQLNonNull(GraphQLString) },
+    user: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent);
+      },
+    },
+  },
 });
 
 const PreferenceType = new GraphQLObjectType({
   name: "Preference",
-  fields: {},
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    theme: { type: new GraphQLNonNull(GraphQLString) },
+    language: { type: new GraphQLNonNull(GraphQLString) },
+    user: {
+      type: UserType,
+      resolve: (parent, args) => {
+        return User.findById(parent);
+      },
+    },
+  },
 });
 
 const RootQuery = new GraphQLObjectType({
@@ -147,6 +200,20 @@ const RootQuery = new GraphQLObjectType({
         return Client.findById(args.id);
       },
     },
+    notification: {
+      type: NotificationType,
+      args: { user: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: (parent, args) => {
+        return Notification.findOne({ user: args.user });
+      },
+    },
+    preference: {
+      type: PreferenceType,
+      args: { user: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: (parent, args) => {
+        return Preference.findOne({ user: args.user });
+      },
+    },
   },
 });
 
@@ -161,11 +228,14 @@ const Mutation = new GraphQLObjectType({
         password: { type: new GraphQLNonNull(GraphQLString) },
       },
       resolve: async (parent, args) => {
+        console.log("Login Section");
         const user = await User.find({ email: args.email });
 
         if (!user[0]?.email) {
           throw new Error("User not found");
         }
+
+        console.log("User Found");
 
         if (user[0]?.loginAttempts >= 5 && user[0]?.lastFailedLogin) {
           const lastFailedLoginTime = new Date(
@@ -201,6 +271,8 @@ const Mutation = new GraphQLObjectType({
           throw new Error("Invalid password");
         }
 
+        console.log("Password Valid");
+
         user.loginAttempts = 0;
         user.lastFailedLogin = null;
         await User.updateOne(
@@ -230,7 +302,7 @@ const Mutation = new GraphQLObjectType({
       args: {
         name: { type: new GraphQLNonNull(GraphQLString) },
         email: { type: new GraphQLNonNull(GraphQLString) },
-        phone: { type: new GraphQLNonNull(GraphQLString) },
+        number: { type: new GraphQLNonNull(GraphQLString) },
         dob: { type: new GraphQLNonNull(GraphQLString) },
         password: { type: new GraphQLNonNull(GraphQLString) },
         role: {
@@ -268,10 +340,11 @@ const Mutation = new GraphQLObjectType({
         }
 
         const hashedPassword = await bcrypt.hash(args.password, 10);
+
         const user = new User({
           name: args.name,
           email: args.email,
-          phone: args.phone,
+          number: args.number,
           role: args.role,
           dob: args.dob,
           gender: args.gender,
@@ -279,6 +352,17 @@ const Mutation = new GraphQLObjectType({
           loginAttempts: 0,
           lastFailedLogin: null,
         });
+
+        await user.save();
+
+        // Default Preference save
+        const preference = new Preference({
+          theme: "Light",
+          language: "English",
+          user: user,
+        });
+
+        await preference.save();
 
         return await user.save();
       },
