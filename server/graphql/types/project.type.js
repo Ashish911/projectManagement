@@ -4,7 +4,7 @@ import { ClientType, UserType } from "./import.type.js";
 
 export const ProjectType = new GraphQLObjectType({
     name: "Project",
-    fields: {
+    fields: () => ({
         id: { type: new GraphQLNonNull(GraphQLID)},
         name: { type: new GraphQLNonNull(GraphQLString)},
         description: { type: new GraphQLNonNull(GraphQLString)},
@@ -21,5 +21,5 @@ export const ProjectType = new GraphQLObjectType({
                 return User.findById(parent.assignedUser);
             },
         },
-    },
+    }),
 });

@@ -1,11 +1,23 @@
 import { UserService } from "../../services/user.service.js";
+import {GraphQLList, GraphQLNonNull, GraphQLID} from "graphql";
 
 export const userResolvers = {
     Query: {
-        profile: (_, { id }) => UserService.getProfile(id),
+        profile: async (_, args, context) => {
+            const { user } = context;
+
+            if (!user) {
+                throw new Error("Unauthorized");
+            }
+
+            return await UserService.getProfile(user.id)
+        }
     },
     Mutation: {
-        login: (_, { email, password }) => UserService.login(email, password),
-        register: (_, args) => UserService.register(args),
+        login: async (_, { email, password }) => await UserService.login(email, password),
+        register: async (_, args) => await UserService.register(args),
+        // resetPassword
+        // forgotPassword
+        // loginViaOauth
     },
 };

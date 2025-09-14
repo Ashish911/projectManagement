@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { UserRepo } from "../repositories/user.repo.js";
-import {gqlError} from "../util.js";
+import {PreferenceRepo} from "../repositories/import.repo.js";
+import User from "../models/User.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;
@@ -10,12 +11,12 @@ export const UserService = {
     async login (email, password) {
         const user = await UserRepo.findByEmail(email);
 
-        if (!user) return gqlError("User not found");
+        if (!user) throw new Error("User not found");
 
-        if (user.loginAttempts >= 5 && user.lastFailedLogin) {
+        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS && user.lastFailedLogin) {
             const elapsed = Date.now() - new Date(user.lastFailedLogin).getTime();
-            if (elapsed < 3600000) {
-                return gqlError("Too many failed login attempts. Try again later.");
+            if (elapsed < LOCKOUT_MS) {
+                throw new Error("Too many failed login attempts. Try again later.");
             }
         }
 
@@ -24,7 +25,7 @@ export const UserService = {
             user.loginAttempts++;
             user.lastFailedLogin = new Date().toISOString();
             await user.save();
-            return gqlError("Invalid password");
+            throw new Error("Invalid password");
         }
 
         user.loginAttempts = 0;
@@ -37,17 +38,16 @@ export const UserService = {
             { expiresIn: "1h" }
         );
 
-        return gqlResponse({
-            id: user.id,
-            email: user.email,
+        return {
+            id: user[0]?.id,
+            email: user[0]?.email,
             token,
             tokenExpiration: 1,
-        }, "Login successful");
-
+        }
     },
     async register(data) {
         const existing = await UserRepo.findByEmail(data.email);
-        if (existing) return gqlError("Email already exists")
+        if (existing) throw new Error("Email already exists please use a different email")
 
         const hashedPassword = await bcrypt.hash(data.password, 10);
         const user = await UserRepo.create({
@@ -57,6 +57,18 @@ export const UserService = {
             lastFailedLogin: null,
         });
 
-        return gqlResponse(user, "User registered successfully");
+        await PreferenceRepo.create({
+            theme: "LIGHT",
+            language: "ENGLISH",
+            user: user,
+        });
+
+        return user;
     },
+
+    async getProfile(id) {
+        const user = await UserRepo.findById(id);
+        if (!user) throw new Error("User not found");
+        return user;
+    }
 }

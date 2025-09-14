@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import colors from "colors";
 
 /**
  * This function connects to the MongoDB database using the provided URI.
