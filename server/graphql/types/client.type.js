@@ -9,6 +9,7 @@ export const ClientType = new GraphQLObjectType({
         name: { type: new GraphQLNonNull(GraphQLString)},
         email: { type: new GraphQLNonNull(GraphQLString)},
         phone: { type: new GraphQLNonNull(GraphQLString)},
+        deleteRequest: { type: new GraphQLNonNull(GraphQLString)},
         user: {
             type: UserType,
             resolve: (parent, args) => {

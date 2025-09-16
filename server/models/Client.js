@@ -29,6 +29,10 @@ const ClientSchema = new mongoose.Schema(
     phone: {
       type: String,
     },
+    deleteRequest: {
+      type: Boolean,
+      default: false,
+    },
     assignedAdmin: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

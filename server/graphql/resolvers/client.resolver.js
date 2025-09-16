@@ -3,12 +3,13 @@ import {ClientService} from "../../services/client.service.js";
 
 export const clientResolvers = {
     Query: {
-        clients: async () => await ClientService.getClients(),
-        client: async (_, { id }) => await ClientService.getClient(id)
+        clients: async (_, args, context) => await ClientService.getClients(context),
+        client: async (_, { id }, context) => await ClientService.getClient(id, context),
     },
     Mutation: {
-        addClient: async (_, args) => await ClientService.addClient(input),
-        // updateClient
-        // deleteClient
+        addClient: async (_, args, context) => await ClientService.addClient(args, context),
+        updateClient: async (_, args, context) => await ClientService.updateClient(args, context),
+        confirmDeleteClient: async (_, args, context) => await ClientService.deleteClientRequest(args, context),
+        deleteClientBySuperAdmin: async (_, args, context) => await ClientService.deleteClientBySuperAdmin(args, context),
     },
 };

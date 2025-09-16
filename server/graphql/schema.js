@@ -26,7 +26,6 @@ const RootQuery = new GraphQLObjectType({
         },
         clients: {
             type: new GraphQLList(ClientType),
-            args: { id: { type: new GraphQLNonNull(GraphQLID) } },
             resolve: clientResolvers.Query.clients,
         },
         client: {
@@ -82,6 +81,47 @@ const Mutation = new GraphQLObjectType({
                 },
             },
             resolve: userResolvers.Mutation.register,
+        },
+        addClient: {
+            type: ClientType,
+            args: {
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                email: { type: new GraphQLNonNull(GraphQLString) },
+                phone: { type: new GraphQLNonNull(GraphQLString) },
+                user: { type: new GraphQLNonNull(GraphQLID) },
+                assignedUser: { type: new GraphQLNonNull(GraphQLString) },
+            },
+            resolve: clientResolvers.Mutation.addClient,
+        },
+        updateClient: {
+            type: ClientType,
+            args: {
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                email: { type: new GraphQLNonNull(GraphQLString) },
+                phone: { type: new GraphQLNonNull(GraphQLString) },
+                user: { type: new GraphQLNonNull(GraphQLID) },
+            },
+            resolve: clientResolvers.Mutation.updateClient,
+        },
+        confirmDeleteClient: {
+            type: ClientType,
+            args: {
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                email: { type: new GraphQLNonNull(GraphQLString) },
+                phone: { type: new GraphQLNonNull(GraphQLString) },
+                user: { type: new GraphQLNonNull(GraphQLID) },
+            },
+            resolve: clientResolvers.Mutation.confirmDeleteClient,
+        },
+        deleteClientBySuperAdmin: {
+            type: ClientType,
+            args: {
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                email: { type: new GraphQLNonNull(GraphQLString) },
+                phone: { type: new GraphQLNonNull(GraphQLString) },
+                user: { type: new GraphQLNonNull(GraphQLID) },
+            },
+            resolve: clientResolvers.Mutation.deleteClientBySuperAdmin,
         }
     },
 });
