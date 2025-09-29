@@ -10,7 +10,8 @@ export const projectResolvers = {
         project: async (_, { id }) => await ProjectService.getProject(id)
     },
     Mutation: {
-        login: (_, { email, password }) => UserService.login(email, password),
-        register: (_, args) => UserService.register(args),
+        createProject: async (_, args, context) => await ProjectService.createProject(args),
+        updateProject: async (_, args, context) => await ProjectService.updateProject(args),
+        deleteProject: async (_, args, context) => await ProjectService.deleteProject(args)
     },
 };

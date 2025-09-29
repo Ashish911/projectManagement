@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from "axios";
-import { LOGIN } from "../mutations/authMutations";
+import { LOGIN }  from "../mutations/authMutations";
 
-const BASE_URL = "http://localhost:4040/graphql";
+const BASE_URL = "http://localhost:8000/graphql";
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -13,13 +13,18 @@ const api = axios.create({
 
 export const loginUser = async (
   credentials: Login
-): Promise<AxiosResponse<LoginResponse>> => {
+): Promise<AuthResponse> => {
   try {
-    const response = await api.post<LoginResponse>("", {
+    const response: AxiosResponse<GraphqlResponse<AuthResponse>> = await api.post("", {
       query: LOGIN,
       variables: credentials,
     });
-    return response;
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    return response.data.data;
   } catch (error) {
     console.log(error);
     throw new Error("Invalid credentials");
@@ -30,8 +35,7 @@ export const registerUser = async (
   userData: Register
 ): Promise<AxiosResponse<Register>> => {
   try {
-    const response = await api.post<Register>("/register", userData);
-    return response.data;
+    return await api.post<Register>("", userData);
   } catch (error) {
     throw new Error("Registration failed");
   }

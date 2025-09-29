@@ -4,7 +4,7 @@ import { server } from "./server.js";
 
 // dotenv.config();
 
-const port = process.env.PORT || 4040;
+const port = process.env.PORT || 8000;
 
 async function startApp() {
     try {

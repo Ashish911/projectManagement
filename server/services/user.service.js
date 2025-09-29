@@ -9,6 +9,7 @@ const LOCKOUT_MS = 60 * 60 * 1000;
 
 export const UserService = {
     async login (email, password) {
+        console.log(email, password);
         const user = await UserRepo.findByEmail(email);
 
         if (!user) throw new Error("User not found");

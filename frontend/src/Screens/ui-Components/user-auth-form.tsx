@@ -3,12 +3,13 @@ import React, { SyntheticEvent, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-import { useLogin } from "../../actions/auth";
-import { QueryClient, useMutation, useQuery } from "react-query";
+// import { QueryClient, useMutation, useQuery } from "react-query";
+import { useMutation } from "react-query";
 import { loginUser } from "@/api/authApi";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import useStore from "@/store/store";
+// import {setToken, StoreState} from "@/store/store";
+import { store } from "@/redux/store/store";
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -39,11 +40,9 @@ export function UserAuthRegisterForm({
 }
 
 export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
-  const { token, setToken } = useStore();
-  const [isLoading, setIsLoading] = useState<Boolean>(false);
-  const [email, setEmail] = useState<String>("");
-  const [password, setPassword] = useState<String>("");
-  const queryClient = new QueryClient();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
 
   const { mutateAsync: loginUserMutation } = useMutation({
     mutationFn: loginUser,
@@ -57,7 +56,8 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
         email: email,
         password: password,
       });
-      setToken(response.data.data);
+      console.log(response.login.token);
+
     } catch (e) {
       console.log(e);
     } finally {
@@ -66,8 +66,8 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
   }
 
   useEffect(() => {
-    console.log(token);
-  }, [token]);
+    console.log(store.getState().token);
+  }, []);
 
   return (
     <div className={cn("grid gap-6", className)} {...props}>

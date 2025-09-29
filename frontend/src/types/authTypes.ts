@@ -3,12 +3,10 @@ interface Login {
   password: string;
 }
 
-interface LoginResponse {
-  data: string;
-  status: string;
-  statusText: string;
-  headers: string;
-  config: string;
+interface AuthResponse {
+  login: {
+    token: string;
+  }
 }
 
 interface Register {

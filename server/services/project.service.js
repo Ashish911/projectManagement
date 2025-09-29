@@ -4,11 +4,11 @@ export const ProjectService = {
     async getProjects() {
         const projects = await ProjectRepo.find();
 
-        return gqlResponse(projects, "Projects retrieved successfully");
+        return projects;
     },
     async getProject(id) {
         const project = await ProjectRepo.findById(id);
-        if (!project) return gqlError("Project not found");
-        return gqlResponse(project, "Project retrieved successfully");
-    }
+        if (!project) throw new Error("Project not found");
+        return project;
+    },
 }
