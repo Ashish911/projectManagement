@@ -1,13 +1,11 @@
 import React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/components/lib/utils.ts";
 import { Img } from "react-image";
 
-import { UserAuthRegisterForm } from "@/Screens/ui-Components/user-auth-form";
+import { UserAuthRegisterForm } from "@/Screens/ui-Components/user-auth-form.tsx";
 import { Link } from "react-router-dom";
-import { buttonVariants } from "@/components/ui/button";
-
-interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
+import { buttonVariants } from "@/components/ui/button.tsx";
 
 interface Props {
   currentLanguage: String;

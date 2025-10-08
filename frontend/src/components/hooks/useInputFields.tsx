@@ -1,20 +1,20 @@
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { cn } from "@/components/lib/utils.ts";
+import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Label } from "@/components/ui/label.tsx";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/select.tsx";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+} from "@/components/ui/popover.tsx";
+import { Calendar } from "@/components/ui/calendar.tsx";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 

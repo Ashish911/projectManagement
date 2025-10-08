@@ -1,15 +1,15 @@
-import React, { SyntheticEvent, useEffect, useState } from "react";
+import React, { SyntheticEvent, useState } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/components/lib/utils";
 import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-// import { QueryClient, useMutation, useQuery } from "react-query";
-import { useMutation } from "react-query";
-import { loginUser } from "@/api/authApi";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-// import {setToken, StoreState} from "@/store/store";
-import { store } from "@/redux/store/store";
+import { useDispatch, useSelector } from 'react-redux';
+import { Navigate } from 'react-router-dom';
+import {useMutation} from "react-query";
+import {loginUser} from "@/api/authApi.ts";
+import {LOGIN_FAIL, LOGIN_REQUEST, LOGIN_SUCCESS} from "@/redux/constants/authConstants.ts";
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -40,9 +40,13 @@ export function UserAuthRegisterForm({
 }
 
 export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+
+  const authInfo = useSelector((state) => state.login)
+  const { loading, token } = authInfo;
+
+  const dispatch = useDispatch();
 
   const { mutateAsync: loginUserMutation } = useMutation({
     mutationFn: loginUser,
@@ -50,24 +54,37 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
 
   async function onSubmit(event: SyntheticEvent) {
     event.preventDefault();
-    setIsLoading(true);
     try {
+      dispatch({
+        type: LOGIN_REQUEST
+      })
+
       const response = await loginUserMutation({
         email: email,
         password: password,
       });
-      console.log(response.login.token);
 
-    } catch (e) {
-      console.log(e);
-    } finally {
-      setIsLoading(false);
+      dispatch({
+        type: LOGIN_SUCCESS,
+        payload: response.login.token
+      });
+      localStorage.setItem('token', JSON.stringify(response.login.token))
+
+    } catch (error) {
+      dispatch({
+        type: LOGIN_FAIL,
+        payload:
+            error.response && error.response.data.message
+                ? error.response.data.message
+                : error.message
+      })
+      console.log(error);
     }
   }
 
-  useEffect(() => {
-    console.log(store.getState().token);
-  }, []);
+  if (token != null) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className={cn("grid gap-6", className)} {...props}>
@@ -85,7 +102,7 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
                 placeholder="Email Address"
                 type="email"
                 autoCapitalize="none"
-                disabled={isLoading}
+                disabled={loading}
               />
             </div>
             <div>
@@ -99,13 +116,13 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
                 placeholder="Password"
                 type="password"
                 autoCapitalize="none"
-                disabled={isLoading}
+                disabled={loading}
               />
             </div>
           </div>
 
-          <Button disabled={isLoading}>
-            {isLoading && (
+          <Button disabled={loading}>
+            {loading && (
               <Icons.niceSpinner className="mr-2 h-4 w-4 animate-spin" />
             )}
             Login
@@ -129,9 +146,9 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
               key={name + index}
               variant="outline"
               type="button"
-              disabled={isLoading}
+              disabled={loading}
             >
-              {isLoading ? (
+              {loading ? (
                 <Icons.niceSpinner className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 icon
