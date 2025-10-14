@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "react-query";
 import store from "@/redux/store/store.ts"
 import {Provider} from "react-redux";
 import { Dashboard } from "@/Screens/Dashboard.tsx";
+import { ProtectedRoute, PublicRoute } from "@/Screens/RouteHandler/RouteNavigator.tsx";
 
 const queryClient = new QueryClient();
 
@@ -16,12 +17,14 @@ function App() {
         <Router>
           <div className="app">
             <Routes>
-              <Route path={"/"} element={<Login currentLanguage="en" />} />
+              <Route path={"/"} element={
+                <PublicRoute element={<Login currentLanguage="en" />} />}
+                     />
               <Route
                 path={"/register"}
-                element={<Register currentLanguage="en" />}
+                element={<PublicRoute element={<Register currentLanguage="en" />} />}
               />
-              <Route path="/dashboard" element={<Dashboard currentLanguage="en" />} />
+              <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard currentLanguage="en" />} />} />
             </Routes>
           </div>
         </Router>
