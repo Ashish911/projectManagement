@@ -11,8 +11,8 @@ interface AuthResponse {
 
 interface Register {
   email: string;
-  fullName: string;
-  phoneNumber: string;
+  name: string;
+  number: string;
   gender: string;
   dob: string;
   password: string;

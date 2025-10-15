@@ -1,5 +1,5 @@
 import axios, { AxiosResponse } from "axios";
-import { LOGIN }  from "../mutations/authMutations";
+import {LOGIN, REGISTER} from "../mutations/authMutations";
 
 const BASE_URL = "http://localhost:8000/graphql";
 
@@ -33,10 +33,20 @@ export const loginUser = async (
 
 export const registerUser = async (
   userData: Register
-): Promise<AxiosResponse<Register>> => {
+): Promise<Register> => {
   try {
-    return await api.post<Register>("", userData);
+    const response: AxiosResponse<GraphqlResponse<Register>> = await api.post("", {
+      query: REGISTER,
+      variables: userData,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    return response.data;
   } catch (error) {
+    console.log(error);
     throw new Error("Registration failed");
   }
 };

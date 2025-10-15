@@ -13,8 +13,7 @@ export const REGISTER = `
     $number: String!
     $dob: String!
     $password: String!
-    $role: String!
-    $gender: String!
+    $gender: Gender!
   ) {
     register(
       name: $name
@@ -22,7 +21,6 @@ export const REGISTER = `
       number: $number
       dob: $dob
       password: $password
-      role: $role
       gender: $gender
     ) {
       name
