@@ -32,6 +32,9 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import {useDispatch, useSelector} from "react-redux";
+import {useEffect} from "react";
+import {fetchProfile} from "@/redux/actions/userActions.ts";
 
 const data = {
     user: {
@@ -129,6 +132,14 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
+    const dispatch = useDispatch();
+
+    useEffect(() => {
+        dispatch(fetchProfile())
+    },[])
+
+
     return (
         <Sidebar collapsible="offcanvas" {...props}>
             <SidebarHeader>

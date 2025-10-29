@@ -83,8 +83,6 @@ export function UserAuthRegisterForm({
         password: password,
       });
 
-      console.log(response);
-
       dispatch({
         type: REGISTER_SUCCESS,
         payload: response.data.register
@@ -309,7 +307,7 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
         type: LOGIN_SUCCESS,
         payload: response.login.token
       });
-      localStorage.setItem('token', JSON.stringify(response.login.token))
+      localStorage.setItem('token', response.login.token)
 
     } catch (error) {
       dispatch({

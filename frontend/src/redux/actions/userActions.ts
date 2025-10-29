@@ -1,41 +1,25 @@
-import { LOGIN_REQUEST,
-    LOGIN_SUCCESS,
-    LOGIN_FAIL,
-} from "../constants/authConstants";
-import {useMutation} from "react-query";
-import {loginUser} from "@/api/authApi.ts";
+import {USER_PROFILE_FAIL, USER_PROFILE_REQUEST, USER_PROFILE_SUCCESS} from "@/redux/constants/userConstants.ts";
+import {getProfile} from "@/api/userApi.ts";
 
-const { mutateAsync: loginUserMutation } = useMutation({
-    mutationFn: loginUser,
-});
 
-type authParams = {
-    email: string;
-    password: string;
-}
-
-export const getProfile = (email, password) => async (dispatch) => {
+export const fetchProfile = () => async (dispatch) => {
     try {
         dispatch({
-            type: LOGIN_REQUEST
+            type: USER_PROFILE_REQUEST
         });
 
-        const response = await loginUserMutation({
-            email: email,
-            password: passwo rd,
-        });
+        const response = await getProfile()
 
-        console.log(response.login.token);
+        console.log(response);
 
         dispatch({
-            type: LOGIN_SUCCESS,
-            payload: response.login.token
+            type: USER_PROFILE_SUCCESS,
+            payload: response.profile
         });
 
-        localStorage.setItem('userInfo', JSON.stringify(response.login.token));
     } catch (error) {
         dispatch({
-            type: LOGIN_FAIL,
+            type: USER_PROFILE_FAIL,
             payload:
                 error.response && error.response.data.message
                     ? error.response.data.message
