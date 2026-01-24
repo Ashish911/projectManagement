@@ -1,11 +1,12 @@
 import "./App.css";
-import { Login } from "./Screens/Login.tsx";
+import { Login } from "./Screens/Auth/Login.tsx";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import { Register } from "./Screens/Register.tsx";
+import { Register } from "./Screens/Auth/Register.tsx";
 import { QueryClient, QueryClientProvider } from "react-query";
 import store from "@/redux/store/store.ts"
 import {Provider} from "react-redux";
-import { Dashboard } from "@/Screens/Dashboard.tsx";
+import { Dashboard } from "@/Screens/Dashboard/Dashboard.tsx";
+import { Account } from "@/Screens/Dashboard/Account.tsx";
 import { ProtectedRoute, PublicRoute } from "@/Screens/RouteHandler/RouteNavigator.tsx";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ function App() {
                 element={<PublicRoute element={<Register currentLanguage="en" />} />}
               />
               <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard currentLanguage="en" />} />} />
+              <Route path="/account" element={<ProtectedRoute element={<Account currentLanguage="en" />} />} />
             </Routes>
           </div>
         </Router>

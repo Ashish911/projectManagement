@@ -1,7 +1,6 @@
 "use client"
 
 import {
-    IconCreditCard,
     IconDotsVertical,
     IconLogout,
     IconNotification,
@@ -31,6 +30,7 @@ import {
 
 import {useDispatch, useSelector} from "react-redux"
 import {logout} from "@/redux/actions/authActions.ts";
+import { useNavigate} from 'react-router-dom';
 
 export function NavUser({
                             user,
@@ -51,7 +51,12 @@ export function NavUser({
 
     const { profile, loading, error } = useSelector((state) => state.profile)
 
-    console.log(profile)
+    const navigate = useNavigate()
+
+    const goToAccount = async () => {
+        console.log("Going to account...")
+        navigate("/account", { replace: true })
+    }
 
     if (loading) {
         return (
@@ -128,7 +133,7 @@ export function NavUser({
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={goToAccount}>
                                 <IconUserCircle />
                                 Account
                             </DropdownMenuItem>

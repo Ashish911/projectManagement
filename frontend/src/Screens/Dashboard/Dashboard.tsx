@@ -1,10 +1,10 @@
 import {
     SidebarInset,
     SidebarProvider,
-} from "@/components/ui/sidebar"
-import { SectionCards } from "@/Screens/Components/section-cards"
-import { SiteHeader } from "@/Screens/Components/site-header"
-import { AppSidebar } from "@/Screens/Components/app-sidebar"
+} from "@/components/ui/sidebar.tsx"
+import { SectionCards } from "@/Screens/Components/section-cards.tsx"
+import { SiteHeader } from "@/Screens/Components/site-header.tsx"
+import { AppSidebar } from "@/Screens/Components/app-sidebar.tsx"
 
 interface Props {
     currentLanguage: String;
