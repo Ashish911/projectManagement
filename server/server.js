@@ -1,10 +1,16 @@
 import express from "express";
 import cors from "cors";
-import {graphqlHTTP} from "express-graphql";
+import { ApolloServer } from "@apollo/server";
+import { expressMiddleware } from "@apollo/server/express4"
 import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
 
-const PUBLIC_OPERATIONS = ["LoginMutation", "RegisterMutation", "ForgotPasswordMutation", "ResetPasswordMutation"];
+const PUBLIC_OPERATIONS = [
+    "LoginMutation", 
+    "RegisterMutation", 
+    "ForgotPasswordMutation", 
+    "ResetPasswordMutation"
+];
 
 export const server = () => {
     const server = express();
@@ -12,9 +18,13 @@ export const server = () => {
     server.use(express.json());
     server.use(cors());
 
+    const apolloServer = new ApolloServer({ schema });
+    await apolloServer.start();
+
     // API routes
     server.use(
         "/graphql",
+        expressMiddleware()
         graphqlHTTP((request, response, graphQLParams) => {
             let user = null;
             const auth = request.headers.authorization || "";
