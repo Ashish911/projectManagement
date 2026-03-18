@@ -1,7 +1,5 @@
-import express from "express";
-import cors from "cors";
 import { ApolloServer } from "@apollo/server";
-import { expressMiddleware } from "@apollo/server/express4"
+import { startStandaloneServer} from "@apollo/server/standalone"
 import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
 
@@ -12,31 +10,29 @@ const PUBLIC_OPERATIONS = [
     "ResetPasswordMutation"
 ];
 
-export const server = () => {
-    const server = express();
+export const createServer = async () => {
+    const server = new ApolloServer({ schema });
 
-    server.use(express.json());
-    server.use(cors());
+    return server;
+}
 
-    const apolloServer = new ApolloServer({ schema });
-    await apolloServer.start();
+export const startServer = async (port = 8000) => {
+    const server = await createServer();
 
     // API routes
-    server.use(
-        "/graphql",
-        expressMiddleware()
-        graphqlHTTP((request, response, graphQLParams) => {
+    const { url } = await startStandaloneServer(server, {
+        context: async ({ req }) => {
             let user = null;
-            const auth = request.headers.authorization || "";
-
+            const auth = req.headers.authorization || "";
+    
             function extractOperationName(query) {
                 const match = query.match(/(query|mutation|subscription)\s+(\w+)/);
                 return match ? match[2] : null;
             }
-
+    
             const operation =
-                graphQLParams?.operationName || extractOperationName(graphQLParams?.query);
-
+            graphQLParams?.operationName || extractOperationName(graphQLParams?.query);
+    
             if (!PUBLIC_OPERATIONS.includes(operation || "")) {
                 if (auth.startsWith("Bearer ")) {
                     const token = auth.replace("Bearer ", "");
@@ -49,18 +45,12 @@ export const server = () => {
             } else {
                 throw new Error("Authorization required. Please provide a Bearer token.");
             }
-        }
-        return {
-            schema,
-            graphiql: process.env.NODE_ENV === "development",
-            context: {
-                request,
-                response,
-                user,
-            }
-        }
-        })
-    );
-
+    
+            return { user };
+        }},
+        listen: { port, path:"/graphql"}
+    });
+    
+    console.log(`Server running at ${url}`);
     return server;
 };
