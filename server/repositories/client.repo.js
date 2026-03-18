@@ -5,7 +5,7 @@ export const ClientRepo = {
     findById: (id) => Client.findById(id).lean(),
     findByUser: (userId) => Client.find({ user: userId }).lean(),
     findByEmail: (email) => Client.findOne({ email }).lean(),
-    create: (client) => Client.create(client).save(),
+    create: async (client) => await new Client(client).save(),
     update: (id, client) => Client.findByIdAndUpdate(id, { $set: client }, { new: true, runValidators: true }).lean(),
     delete: (id) => Client.findByIdAndDelete(id).lean(),
 }
