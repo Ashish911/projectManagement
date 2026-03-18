@@ -19,6 +19,8 @@ const CommentSchema = new mongoose.Schema(
   {
     content: {
       type: String,
+      required: true,
+      trim: true
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,

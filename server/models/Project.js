@@ -24,6 +24,7 @@ const ProjectSchema = new mongoose.Schema({
   },
   description: {
     type: String,
+    required: true
   },
   status: {
     type: String,
@@ -35,7 +36,7 @@ const ProjectSchema = new mongoose.Schema({
     ref: "Client",
     required: true,
   },
-  assignedUser: [
+  assignedUsers: [
     {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

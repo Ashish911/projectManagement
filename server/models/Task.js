@@ -3,13 +3,18 @@ import mongoose from "mongoose";
 
 const TaskSchema = new mongoose.Schema(
   {
+    title: {
+    type: String,
+    required: true,
+    trim: true,
+    },
     priority: {
       type: String,
       enum: ["URGENT", "HIGH", "NORMAL", "BACKLOG"],
         default: "NORMAL",
     },
     deadline: {
-      type: String,
+      type: Date,
     },
     currentStatus: {
       type: String,
