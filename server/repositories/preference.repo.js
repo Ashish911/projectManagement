@@ -5,5 +5,6 @@ export const PreferenceRepo = {
     findById: (id) => Preference.findById(id).lean(),
     create: async (preference) => await new Preference(preference).save(),
     update: (id, preference) => Preference.findByIdAndUpdate(id, { $set: preference }, { new: true, runValidators: true }).lean(),
-    delete: (id) => Preference.findByIdAndDelete(id).lean()
+    delete: (id) => Preference.findByIdAndDelete(id).lean(),
+    findByUser: (userId) => Preference.findOne({ user: userId })
 }
