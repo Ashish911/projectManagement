@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 /**
  * The User model.
  *
@@ -16,49 +15,52 @@ import mongoose from "mongoose";
  *   role: string,
  * }} UserDocument
  */
-const UserSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
+const UserSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    role: {
+      type: String,
+      enum: ["SUPER_ADMIN", "CLIENT_ADMIN", "USER"],
+      default: "USER",
+    },
+    email: {
+      type: String,
+      unique: true,
+      index: true,
+      lowercase: true,
+      required: true,
+    },
+    number: {
+      type: String,
+      required: true,
+    },
+    gender: {
+      type: String,
+      required: true,
+      enum: ["MALE", "FEMALE", "OTHERS"],
+    },
+    dob: {
+      type: Date,
+    },
+    password: {
+      type: String,
+      required: true,
+    },
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lastFailedLogin: {
+      type: Date,
+      default: null,
+    },
   },
-  role: {
-    type: String,
-    enum: ["SUPER_ADMIN", "CLIENT_ADMIN", "USER"],
-    default: "USER",
-  },
-  email: {
-    type: String,
-    unique: true,
-    index: true,
-    lowercase: true,
-    required: true,
-  },
-  number: {
-    type: String,
-    required: true
-  },
-  gender: {
-    type: String,
-    required: true,
-    enum: ["MALE", "FEMALE", "OTHERS"],
-  },
-  dob: {
-    type: Date,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-  loginAttempts: {
-    type: Number,
-    default: 0,
-  },
-  lastFailedLogin: {
-    type: Date,
-    default: null,
-  },
-}, { timestamps: true, versionKey: false });
+  { timestamps: true, versionKey: false },
+);
 
 const User = mongoose.model("User", UserSchema);
 

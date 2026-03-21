@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 /**
  * The Comment model.
  *
@@ -20,7 +19,7 @@ const CommentSchema = new mongoose.Schema(
     content: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -38,7 +37,7 @@ const CommentSchema = new mongoose.Schema(
       required: false,
     },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 const Comment = mongoose.model("Comment", CommentSchema);

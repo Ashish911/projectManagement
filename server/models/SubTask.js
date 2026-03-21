@@ -15,14 +15,14 @@ import mongoose from "mongoose";
 const SubTaskSchema = new mongoose.Schema(
   {
     title: {
-    type: String,
-    required: true,
-    trim: true,
+      type: String,
+      required: true,
+      trim: true,
     },
     priority: {
-        type: String,
-        enum: ["URGENT", "HIGH", "NORMAL", "BACKLOG"],
-        default: "NORMAL",
+      type: String,
+      enum: ["URGENT", "HIGH", "NORMAL", "BACKLOG"],
+      default: "NORMAL",
     },
     deadline: {
       type: Date,
@@ -30,7 +30,7 @@ const SubTaskSchema = new mongoose.Schema(
     currentStatus: {
       type: String,
       enum: ["NEW", "IN_PROGRESS", "RESOLVED", "REOPENED"],
-        default: "NEW",
+      default: "NEW",
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
@@ -39,15 +39,15 @@ const SubTaskSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-        required: true,
+      required: true,
     },
     task: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Task",
-        required: true,
+      required: true,
     },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 const SubTask = mongoose.model("SubTask", SubTaskSchema);

@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 /**
  * The Preference model.
  *
@@ -32,7 +31,7 @@ const PreferenceSchema = new mongoose.Schema(
       default: "ENGLISH",
     },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 const Preference = mongoose.model("Preference", PreferenceSchema);

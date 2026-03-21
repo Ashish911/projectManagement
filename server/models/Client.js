@@ -38,7 +38,7 @@ const ClientSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 const Client = mongoose.model("Client", ClientSchema);

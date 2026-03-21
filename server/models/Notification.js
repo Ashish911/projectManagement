@@ -29,7 +29,7 @@ const NotificationSchema = new mongoose.Schema(
       default: "UNREAD",
     },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 const Notification = mongoose.model("Notification", NotificationSchema);

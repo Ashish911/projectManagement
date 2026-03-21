@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 /**
  * The Project model.
  *
@@ -16,33 +15,36 @@ import mongoose from "mongoose";
  *   assignedUser: Array<import('mongoose').Types.ObjectId>
  * }} ProjectDocument
  */
-const ProjectSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  description: {
-    type: String,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
-    default: "NOT_STARTED",
-  },
-  clientId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Client",
-    required: true,
-  },
-  assignedUsers: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+const ProjectSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-  ],
-}, { timestamps: true, versionKey: false });
+    description: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
+      default: "NOT_STARTED",
+    },
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: true,
+    },
+    assignedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+  },
+  { timestamps: true, versionKey: false },
+);
 
 const Project = mongoose.model("Project", ProjectSchema);
 
