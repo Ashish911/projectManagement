@@ -4,7 +4,7 @@ export const PreferenceService = {
   async getPreference(context) {
     const { user } = context;
 
-    return await PreferenceRepo.findById(user.id).orElseThrow(
+    return await PreferenceRepo.findByUser(user.id).orElseThrow(
       new Error("Preference not found"),
     );
   },

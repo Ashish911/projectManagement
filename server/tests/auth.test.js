@@ -19,7 +19,7 @@ const mockDelete = jest.fn();
 const mockPreferenceCreate = jest.fn();
 
 // ─── Mock the modules using unstable_mockModule ───────────────────
-jest.unstable_mockModule("../repositories/import.repo.js", () => ({
+jest.unstable_mockModule("../repositories/user.repo.js", () => ({
   UserRepo: {
     findByEmail: mockFindByEmail,
     findById: mockFindById,
@@ -29,14 +29,14 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   },
 }));
 
-jest.unstable_mockModule("../repositories/import.repo.js", () => ({
+jest.unstable_mockModule("../repositories/preference.repo.js", () => ({
   PreferenceRepo: {
     create: mockPreferenceCreate,
   },
 }));
 
 // ─── Import AFTER mocking ─────────────────────────────────────────
-const { UserService } = await import("../services/import.service.js");
+const { UserService } = await import("../services/user.service.js");
 const bcrypt = await import("bcryptjs");
 
 // ─── Setup test data ──────────────────────────────────────────────
