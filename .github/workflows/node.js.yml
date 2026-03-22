@@ -21,11 +21,9 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: server
-        run: npm i
+        run: npm ci
 
       - name: Run tests
-        working-directory: server
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           NODE_ENV: test
