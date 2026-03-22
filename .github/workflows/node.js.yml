@@ -13,10 +13,7 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-
+    
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v4
