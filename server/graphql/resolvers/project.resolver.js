@@ -1,17 +1,22 @@
-import {GraphQLID, GraphQLList, GraphQLNonNull} from "graphql";
-import Project from "../../models/Project.js";
-import {ProjectType} from "../types/project.type.js";
-import {ProjectService} from "../../services/project.service.js";
-
+import { ProjectService } from "../../services/project.service.js";
 
 export const projectResolvers = {
-    Query: {
-        getProjects: async () => await ProjectService.getProjects(),
-        project: async (_, { id }) => await ProjectService.getProject(id)
-    },
-    Mutation: {
-        createProject: async (_, args, context) => await ProjectService.createProject(args),
-        updateProject: async (_, args, context) => await ProjectService.updateProject(args),
-        deleteProject: async (_, args, context) => await ProjectService.deleteProject(args)
-    },
+  Query: {
+    projects: async (_, args, context) =>
+      await ProjectService.getProjects(context),
+    project: async (_, { id }, context) =>
+      await ProjectService.getProject(id, context),
+  },
+  Mutation: {
+    addProject: async (_, args, context) =>
+      await ProjectService.addProject(args, context),
+    updateProject: async (_, args, context) =>
+      await ProjectService.updateProject(args, context),
+    deleteProject: async (_, { id }, context) =>
+      await ProjectService.deleteProject(id, context),
+    addUserToProject: async (_, args, context) =>
+      await ProjectService.addUserToProject(args, context),
+    removeUserFromProject: async (_, args, context) =>
+      await ProjectService.removeUserFromProject(args, context),
+  },
 };

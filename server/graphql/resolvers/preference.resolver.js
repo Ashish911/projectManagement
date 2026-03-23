@@ -1,11 +1,12 @@
-
+import { PreferenceService } from "../../services/preference.service.js";
 
 export const preferenceResolvers = {
-    Query: {
-        // getPreference: async (id) => await PreferenceService.getPreferences(id)
-    },
-    Mutation: {
-        // addPreference: async () => await PreferenceService.addPreference()
-        // updatePreference: async () => await PreferenceService.updatePreference()
-    },
+  Query: {
+    preference: async (_, args, context) =>
+      await PreferenceService.getPreference(context),
+  },
+  Mutation: {
+    updatePreference: async (_, args, context) =>
+      await PreferenceService.updatePreference(args, context),
+  },
 };
