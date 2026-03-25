@@ -1,4 +1,4 @@
-import { SubTaskService } from "../../services/sub-task.service.js";
+import { SubTaskService } from "../../services/subTask.service.js";
 
 export const subTaskResolvers = {
   Query: {

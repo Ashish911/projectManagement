@@ -386,4 +386,42 @@ describe("UserService", () => {
       );
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // Promote to Client Admin
+  // ════════════════════════════════════════════════════════════════
+  // describe("promoteToAdmin", () => {
+  //   it("🟢 should return user profile", async () => {
+  //     mockFindById.mockResolvedValue(mockUser);
+
+  //     const result = await UserService.getProfile(mockUser.id);
+
+  //     expect(result).toEqual(mockUser);
+  //     expect(mockFindById).toHaveBeenCalledWith(mockUser.id);
+  //   });
+
+  //   it("🟢 should return SUPER_ADMIN profile", async () => {
+  //     mockFindById.mockResolvedValue(mockSuperAdmin);
+
+  //     const result = await UserService.getProfile(mockSuperAdmin.id);
+
+  //     expect(result.role).toBe("SUPER_ADMIN");
+  //   });
+
+  //   it("🟢 should return CLIENT_ADMIN profile", async () => {
+  //     mockFindById.mockResolvedValue(mockClientAdmin);
+
+  //     const result = await UserService.getProfile(mockClientAdmin.id);
+
+  //     expect(result.role).toBe("CLIENT_ADMIN");
+  //   });
+
+  //   it("🔴 should throw if user not found", async () => {
+  //     mockFindById.mockResolvedValue(null);
+
+  //     await expect(UserService.getProfile(mockUser.id)).rejects.toThrow(
+  //       "User not found",
+  //     );
+  //   });
+  // });
 });

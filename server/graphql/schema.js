@@ -6,6 +6,7 @@ import {
   GraphQLList,
   GraphQLNonNull,
   GraphQLString,
+  GraphQLBoolean,
 } from "graphql";
 
 import {
@@ -142,7 +143,8 @@ const Mutation = new GraphQLObjectType({
         name: { type: new GraphQLNonNull(GraphQLString) },
         email: { type: new GraphQLNonNull(GraphQLString) },
         phone: { type: new GraphQLNonNull(GraphQLString) },
-        assignedUser: { type: new GraphQLNonNull(GraphQLID) },
+        assignedAdmin: { type: GraphQLID },
+        deleteRequest: { type: GraphQLBoolean },
       },
       resolve: clientResolvers.Mutation.addClient,
     },
