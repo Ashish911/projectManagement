@@ -74,4 +74,26 @@ export const UserService = {
     if (!user) throw new Error("User not found");
     return user;
   },
+
+  async promoteToAdmin(userId, context) {
+    const { user } = context;
+
+    if (user.role !== "SUPER_ADMIN") {
+      throw new Error(
+        "Current role does not have the permission to promote users to admin",
+      );
+    }
+
+    const userToPromote = await UserRepo.findById(userId).orElseThrow(
+      new Error("User not found"),
+    );
+
+    if (
+      userToPromote.role == "CLIENT_ADMIN" ||
+      userToPromote.role == "SUPER_ADMIN"
+    ) {
+      throw new Error("User is already a admin.");
+    }
+    return await UserRepo.update(userId, { role: "CLIENT_ADMIN" });
+  },
 };

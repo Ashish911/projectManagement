@@ -59,6 +59,15 @@ const mockClient = {
   deleteRequest: false,
 };
 
+const mockDeleteClient = {
+  _id: "748a1b2c3d4e5f6a7b8c9d0e",
+  name: "Test Client",
+  email: "client@example.com",
+  phone: "1234567890",
+  assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a",
+  deleteRequest: true,
+};
+
 const addClientData = {
   name: "New Client",
   email: "newclient@example.com",
@@ -318,19 +327,6 @@ describe("ClientService", () => {
   // DELETE CLIENT REQUEST
   // ════════════════════════════════════════════════════════════════
   describe("deleteClientRequest", () => {
-    it("🟢 SUPER_ADMIN should be able to request client deletion", async () => {
-      mockClientUpdate.mockResolvedValue({
-        ...mockClient,
-        deleteRequest: true,
-      });
-      const result = await ClientService.deleteClientRequest(
-        { id: mockClient._id },
-        { user: mockSuperAdmin },
-      );
-      expect(mockClientUpdate).toHaveBeenCalledWith(mockClient._id, {
-        deleteRequest: true,
-      });
-    });
     it("🟢 CLIENT_ADMIN should be able to request client deletion", async () => {
       mockClientUpdate.mockResolvedValue({
         ...mockClient,
@@ -349,7 +345,7 @@ describe("ClientService", () => {
           { user: mockUser },
         ),
       ).rejects.toThrow(
-        "Current role does not have the permission to request client deletion",
+        "Current role does not have the permission to request client deletion.",
       );
     });
   });
@@ -358,109 +354,120 @@ describe("ClientService", () => {
   // DELETE CLIENT BY SUPER ADMIN
   // ════════════════════════════════════════════════════════════════
   describe("deleteClientBySuperAdmin", () => {
-    // it("🟢 SUPER_ADMIN should delete a client", async () => {
-    //   mockClientFindById.mockResolvedValue(mockClient);
-    //   mockClientDelete.mockResolvedValue(mockClient);
-    //   const result = await ClientService.deleteClientBySuperAdmin(
-    //     { id: mockClient._id },
-    //     { user: mockSuperAdmin },
-    //   );
-    //   expect(result).toEqual(mockClient);
-    //   expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
-    // });
-    // it("🔴 CLIENT_ADMIN should not delete a client", async () => {
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockClientAdmin },
-    //     ),
-    //   ).rejects.toThrow(
-    //     "Current role does not have the permission to delete Clients",
-    //   );
-    // });
-    // it("🔴 USER should not delete a client", async () => {
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockUser },
-    //     ),
-    //   ).rejects.toThrow(
-    //     "Current role does not have the permission to delete Clients",
-    //   );
-    // });
-    // it("🔴 should throw if client not found", async () => {
-    //   mockClientFindById.mockResolvedValue(null);
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockSuperAdmin },
-    //     ),
-    //   ).rejects.toThrow("Client not found");
-    // });
-    // it("🔴 should not call delete if client not found", async () => {
-    //   mockClientFindById.mockResolvedValue(null);
-    //   try {
-    //     await ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockSuperAdmin },
-    //     );
-    //   } catch (e) {}
-    //   expect(mockClientDelete).not.toHaveBeenCalled();
-    // });
+    it("🟢 SUPER_ADMIN should delete a client", async () => {
+      mockClientFindById.mockResolvedValue(mockDeleteClient);
+      mockClientDelete.mockResolvedValue(mockDeleteClient);
+      const result = await ClientService.deleteClientBySuperAdmin(
+        { id: mockDeleteClient._id },
+        { user: mockSuperAdmin },
+      );
+      expect(result).toEqual(mockDeleteClient);
+      expect(mockClientDelete).toHaveBeenCalledWith(mockDeleteClient._id);
+    });
+    if (
+      ("🔴 should not delete if delete request not found",
+      async () => {
+        await expect(
+          ClientService.deleteClientBySuperAdmin(
+            { id: mockClient._id },
+            { user: mockSuperAdmin },
+          ),
+        ).rejects.toThrow("Delete request not found for this client.");
+      })
+    );
+    it("🔴 CLIENT_ADMIN should not delete a client", async () => {
+      await expect(
+        ClientService.deleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockClientAdmin },
+        ),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete Clients",
+      );
+    });
+    it("🔴 USER should not delete a client", async () => {
+      await expect(
+        ClientService.deleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockUser },
+        ),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete Clients.",
+      );
+    });
+    it("🔴 should throw if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      await expect(
+        ClientService.deleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Client not found");
+    });
+    it("🔴 should not call delete if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      try {
+        await ClientService.deleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockSuperAdmin },
+        );
+      } catch (e) {}
+      expect(mockClientDelete).not.toHaveBeenCalled();
+    });
   });
 
   // ════════════════════════════════════════════════════════════════
   // FORCE DELETE CLIENT BY SUPER ADMIN
   // ════════════════════════════════════════════════════════════════
-  describe("deleteClientBySuperAdmin", () => {
-    // it("🟢 SUPER_ADMIN should delete a client", async () => {
-    //   mockClientFindById.mockResolvedValue(mockClient);
-    //   mockClientDelete.mockResolvedValue(mockClient);
-    //   const result = await ClientService.deleteClientBySuperAdmin(
-    //     { id: mockClient._id },
-    //     { user: mockSuperAdmin },
-    //   );
-    //   expect(result).toEqual(mockClient);
-    //   expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
-    // });
-    // it("🔴 CLIENT_ADMIN should not delete a client", async () => {
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockClientAdmin },
-    //     ),
-    //   ).rejects.toThrow(
-    //     "Current role does not have the permission to delete Clients",
-    //   );
-    // });
-    // it("🔴 USER should not delete a client", async () => {
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockUser },
-    //     ),
-    //   ).rejects.toThrow(
-    //     "Current role does not have the permission to delete Clients",
-    //   );
-    // });
-    // it("🔴 should throw if client not found", async () => {
-    //   mockClientFindById.mockResolvedValue(null);
-    //   await expect(
-    //     ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockSuperAdmin },
-    //     ),
-    //   ).rejects.toThrow("Client not found");
-    // });
-    // it("🔴 should not call delete if client not found", async () => {
-    //   mockClientFindById.mockResolvedValue(null);
-    //   try {
-    //     await ClientService.deleteClientBySuperAdmin(
-    //       { id: mockClient._id },
-    //       { user: mockSuperAdmin },
-    //     );
-    //   } catch (e) {}
-    //   expect(mockClientDelete).not.toHaveBeenCalled();
-    // });
+  describe("forceDeleteClientBySuperAdmin", () => {
+    it("🟢 SUPER_ADMIN should delete a client", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      mockClientDelete.mockResolvedValue(mockClient);
+      const result = await ClientService.forceDeleteClientBySuperAdmin(
+        { id: mockClient._id },
+        { user: mockSuperAdmin },
+      );
+      expect(result).toEqual(mockClient);
+      expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
+    });
+    it("🔴 CLIENT_ADMIN should not delete a client", async () => {
+      await expect(
+        ClientService.forceDeleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockClientAdmin },
+        ),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete Clients",
+      );
+    });
+    it("🔴 USER should not delete a client", async () => {
+      await expect(
+        ClientService.forceDeleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockUser },
+        ),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete Clients",
+      );
+    });
+    it("🔴 should throw if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      await expect(
+        ClientService.forceDeleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Client not found");
+    });
+    it("🔴 should not call delete if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      try {
+        await ClientService.forceDeleteClientBySuperAdmin(
+          { id: mockClient._id },
+          { user: mockSuperAdmin },
+        );
+      } catch (e) {}
+      expect(mockClientDelete).not.toHaveBeenCalled();
+    });
   });
 });

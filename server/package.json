@@ -6,7 +6,13 @@
   "main": "app.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/.bin/jest --watchAll",
-    "test:ci": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:auth": "node --experimental-vm-modules node_modules/.bin/jest tests/auth.test.js --verbose",
+    "test:client": "node --experimental-vm-modules node_modules/.bin/jest tests/client.test.js --verbose",
+    "test:notification": "node --experimental-vm-modules node_modules/.bin/jest tests/notification.test.js --verbose",
+    "test:preference": "node --experimental-vm-modules node_modules/.bin/jest tests/preference.test.js --verbose",
+    "test:project": "node --experimental-vm-modules node_modules/.bin/jest tests/project.test.js --verbose",
+    "test:subTask": "node --experimental-vm-modules node_modules/.bin/jest tests/subTask.test.js --verbose",
+    "test:task": "node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbose",
     "dev": "env-cmd -f .env.local nodemon app.js",
     "start": "env-cmd -f .env.local node app.js"
   },
