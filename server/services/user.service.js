@@ -1,8 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { UserRepo } from "../repositories/user.repo.js";
-import { PreferenceRepo } from "../repositories/import.repo.js";
-import User from "../models/User.js";
+import { UserRepo, PreferenceRepo } from "../repositories/import.repo.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;

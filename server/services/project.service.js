@@ -1,4 +1,5 @@
-import { ProjectRepo } from "../repositories/project.repo.js";
+import { ProjectRepo } from "../repositories/import.repo.js";
+import { ClientRepo } from "../repositories/import.repo.js";
 
 export const ProjectService = {
   async getProjects(context) {
@@ -11,9 +12,9 @@ export const ProjectService = {
 
     // CLIENT_ADMIN sees only their client's projects
     if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByUser(user.id).orElseThrow(
-        new Error("No client assigned to this admin"),
-      );
+      const client = await ClientRepo.findByUser(user.id);
+      if (!client) throw new Error("No client assigned to this admin");
+
       return await ProjectRepo.findByClient(client._id);
     }
 
@@ -23,16 +24,16 @@ export const ProjectService = {
   async getProject(id, context) {
     const { user } = context;
 
-    const project = await ProjectRepo.findById(id).orElseThrow(
-      new Error("Project not found."),
-    );
+    const project = await ProjectRepo.findById(id);
+
+    if (!project) throw new Error("Project not found.");
 
     if (user.role === "SUPER_ADMIN") return project;
 
     if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByUser(user.id).orElseThrow(
-        new Error("No client assigned to this admin"),
-      );
+      const client = await ClientRepo.findByUser(user.id);
+      if (!client) throw new Error("No client assigned to this admin");
+
       if (project.clientId.toString() !== client._id.toString()) {
         throw new Error("You do not have access to this project");
       }
@@ -56,9 +57,9 @@ export const ProjectService = {
         "Current role does not have the permission to add Projects",
       );
 
-    const client = await ClientRepo.findById(data.clientId).orElseThrow(
-      new Error("Client not found"),
-    );
+    const client = await ClientRepo.findById(data.clientId);
+
+    if (!client) throw new Error("Client not found");
 
     // CLIENT_ADMIN can only add projects for their own client
     if (user.role === "CLIENT_ADMIN") {
@@ -83,9 +84,9 @@ export const ProjectService = {
       );
     }
 
-    const project = await ProjectRepo.findById(data.id).orElseThrow(
-      "Project not found.",
-    );
+    const project = await ProjectRepo.findById(data.id);
+
+    if (!project) throw new Error("Project not found.");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
@@ -109,9 +110,9 @@ export const ProjectService = {
       );
     }
 
-    const project = await ProjectRepo.findById(id).orElseThrow(
-      new Error("Project not found"),
-    );
+    const project = await ProjectRepo.findById(id);
+
+    if (!project) throw new Error("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
@@ -131,9 +132,9 @@ export const ProjectService = {
       );
     }
 
-    const project = await ProjectRepo.findById(data.id).orElseThrow(
-      new Error("Project not found"),
-    );
+    const project = await ProjectRepo.findById(data.id);
+
+    if (!project) throw new Error("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
@@ -161,9 +162,8 @@ export const ProjectService = {
       );
     }
 
-    const project = await ProjectRepo.findById(data.id).orElseThrow(
-      new Error("Project not found"),
-    );
+    const project = await ProjectRepo.findById(data.id);
+
     if (!project) throw new Error("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
