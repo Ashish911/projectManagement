@@ -5,9 +5,8 @@ export const SubTaskService = {
   async getSubTasks(taskId, context) {
     const { user } = context;
 
-    const task = await TaskRepo.findById(taskId).orElseThrow(
-      new Error("Task not found"),
-    );
+    const task = await TaskRepo.findById(taskId);
+    if (!task) throw new Error("Task not found");
 
     if (user.role === "USER") {
       const isAssigned =
@@ -23,9 +22,9 @@ export const SubTaskService = {
   async getSubTask(id, context) {
     const { user } = context;
 
-    const subTask = await SubTaskRepo.findById(id).orElseThrow(
-      new Error("SubTask not found"),
-    );
+    const subTask = await SubTaskRepo.findById(id);
+
+    if (!subTask) throw new Error("SubTask not found");
 
     if (user.role === "USER") {
       const isAssigned =
@@ -42,9 +41,8 @@ export const SubTaskService = {
   async createSubTask(data, context) {
     const { user } = context;
 
-    const task = await TaskRepo.findById(data.taskId).orElseThrow(
-      new Error("Task not found"),
-    );
+    const task = await TaskRepo.findById(data.taskId);
+    if (!task) throw new Error("Task not found");
 
     // Only assigned user or admin can create subtasks
     if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
@@ -77,9 +75,8 @@ export const SubTaskService = {
   async updateSubTask(data, context) {
     const { user } = context;
 
-    const subTask = await SubTaskRepo.findById(data.id).orElseThrow(
-      new Error("SubTask not found"),
-    );
+    const subTask = await SubTaskRepo.findById(data.id);
+    if (!subTask) throw new Error("SubTask not found");
 
     if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
       throw new Error("You do not have permission to update this subtask");
@@ -105,9 +102,8 @@ export const SubTaskService = {
   async updateSubTaskStatus(id, status, context) {
     const { user } = context;
 
-    const subTask = await SubTaskRepo.findById(id).orElseThrow(
-      new Error("SubTask not found"),
-    );
+    const subTask = await SubTaskRepo.findById(id);
+    if (!subTask) throw new Error("SubTask not found");
 
     if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
       throw new Error(
@@ -148,9 +144,8 @@ export const SubTaskService = {
   async deleteSubTask(id, context) {
     const { user } = context;
 
-    const subTask = await SubTaskRepo.findById(id).orElseThrow(
-      new Error("SubTask not found"),
-    );
+    const subTask = await SubTaskRepo.findById(id);
+    if (!subTask) throw new Error("SubTask not found");
 
     if (user.role === "USER" && subTask.createdBy?.toString() !== user.id) {
       throw new Error("You do not have permission to delete this subtask");

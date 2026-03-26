@@ -57,190 +57,190 @@ describe("PreferenceService", () => {
         user: mockUser,
       });
 
-      expect(result).toEqual(mockPrefexrence);
+      expect(result).toEqual(mockPreference);
       expect(mockFindByUser).toHaveBeenCalledWith(mockUser.id);
     });
 
-    // it("🟢 should return preference for a SUPER_ADMIN", async () => {
-    //   mockFindByUser.mockResolvedValue({
-    //     ...mockPreference,
-    //     user: mockSuperAdmin.id,
-    //   });
+    it("🟢 should return preference for a SUPER_ADMIN", async () => {
+      mockFindByUser.mockResolvedValue({
+        ...mockPreference,
+        user: mockSuperAdmin.id,
+      });
 
-    //   const result = await PreferenceService.getPreference({
-    //     user: mockSuperAdmin,
-    //   });
+      const result = await PreferenceService.getPreference({
+        user: mockSuperAdmin,
+      });
 
-    //   expect(result).toBeDefined();
-    //   expect(mockFindByUser).toHaveBeenCalledWith(mockSuperAdmin.id);
-    // });
+      expect(result).toBeDefined();
+      expect(mockFindByUser).toHaveBeenCalledWith(mockSuperAdmin.id);
+    });
 
-    // it("🟢 should return preference for a CLIENT_ADMIN", async () => {
-    //   mockFindByUser.mockResolvedValue({
-    //     ...mockPreference,
-    //     user: mockClientAdmin.id,
-    //   });
+    it("🟢 should return preference for a CLIENT_ADMIN", async () => {
+      mockFindByUser.mockResolvedValue({
+        ...mockPreference,
+        user: mockClientAdmin.id,
+      });
 
-    //   const result = await PreferenceService.getPreference({
-    //     user: mockClientAdmin,
-    //   });
+      const result = await PreferenceService.getPreference({
+        user: mockClientAdmin,
+      });
 
-    //   expect(result).toBeDefined();
-    //   expect(mockFindByUser).toHaveBeenCalledWith(mockClientAdmin.id);
-    // });
+      expect(result).toBeDefined();
+      expect(mockFindByUser).toHaveBeenCalledWith(mockClientAdmin.id);
+    });
 
-    // it("🔴 should throw if preference not found", async () => {
-    //   mockFindByUser.mockResolvedValue(null);
+    it("🔴 should throw if preference not found", async () => {
+      mockFindByUser.mockResolvedValue(null);
 
-    //   await expect(
-    //     PreferenceService.getPreference({ user: mockUser }),
-    //   ).rejects.toThrow("Preference not found");
-    // });
+      await expect(
+        PreferenceService.getPreference({ user: mockUser }),
+      ).rejects.toThrow("Preference not found");
+    });
   });
 
   // ════════════════════════════════════════════════════════════════
   // UPDATE PREFERENCE
   // ════════════════════════════════════════════════════════════════
-  //   describe("updatePreference", () => {
-  //     it("🟢 should update theme successfully", async () => {
-  //       mockFindByUser.mockResolvedValue(mockPreference);
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         theme: "DARK",
-  //       });
+  describe("updatePreference", () => {
+    it("🟢 should update theme successfully", async () => {
+      mockFindByUser.mockResolvedValue(mockPreference);
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        theme: "DARK",
+      });
 
-  //       const result = await PreferenceService.updatePreference(
-  //         { theme: "DARK" },
-  //         { user: mockUser },
-  //       );
+      const result = await PreferenceService.updatePreference(
+        { theme: "DARK" },
+        { user: mockUser },
+      );
 
-  //       expect(mockUpdate).toHaveBeenCalledWith(
-  //         mockPreference._id,
-  //         expect.objectContaining({ theme: "DARK" }),
-  //       );
-  //       expect(result.theme).toBe("DARK");
-  //     });
+      expect(mockUpdate).toHaveBeenCalledWith(
+        mockPreference._id,
+        expect.objectContaining({ theme: "DARK" }),
+      );
+      expect(result.theme).toBe("DARK");
+    });
 
-  //     it("🟢 should update language successfully", async () => {
-  //       mockFindByUser.mockResolvedValue(mockPreference);
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         language: "JAPANESE",
-  //       });
+    it("🟢 should update language successfully", async () => {
+      mockFindByUser.mockResolvedValue(mockPreference);
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        language: "JAPANESE",
+      });
 
-  //       const result = await PreferenceService.updatePreference(
-  //         { language: "JAPANESE" },
-  //         { user: mockUser },
-  //       );
+      const result = await PreferenceService.updatePreference(
+        { language: "JAPANESE" },
+        { user: mockUser },
+      );
 
-  //       expect(mockUpdate).toHaveBeenCalledWith(
-  //         mockPreference._id,
-  //         expect.objectContaining({ language: "JAPANESE" }),
-  //       );
-  //       expect(result.language).toBe("JAPANESE");
-  //     });
+      expect(mockUpdate).toHaveBeenCalledWith(
+        mockPreference._id,
+        expect.objectContaining({ language: "JAPANESE" }),
+      );
+      expect(result.language).toBe("JAPANESE");
+    });
 
-  //     it("🟢 should update both theme and language", async () => {
-  //       mockFindByUser.mockResolvedValue(mockPreference);
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         theme: "DARK",
-  //         language: "KOREAN",
-  //       });
+    it("🟢 should update both theme and language", async () => {
+      mockFindByUser.mockResolvedValue(mockPreference);
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        theme: "DARK",
+        language: "KOREAN",
+      });
 
-  //       const result = await PreferenceService.updatePreference(
-  //         { theme: "DARK", language: "KOREAN" },
-  //         { user: mockUser },
-  //       );
+      const result = await PreferenceService.updatePreference(
+        { theme: "DARK", language: "KOREAN" },
+        { user: mockUser },
+      );
 
-  //       expect(mockUpdate).toHaveBeenCalledWith(
-  //         mockPreference._id,
-  //         expect.objectContaining({
-  //           theme: "DARK",
-  //           language: "KOREAN",
-  //         }),
-  //       );
-  //       expect(result.theme).toBe("DARK");
-  //       expect(result.language).toBe("KOREAN");
-  //     });
+      expect(mockUpdate).toHaveBeenCalledWith(
+        mockPreference._id,
+        expect.objectContaining({
+          theme: "DARK",
+          language: "KOREAN",
+        }),
+      );
+      expect(result.theme).toBe("DARK");
+      expect(result.language).toBe("KOREAN");
+    });
 
-  //     it("🟢 should not update fields that are not provided", async () => {
-  //       mockFindByUser.mockResolvedValue(mockPreference);
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         theme: "DARK",
-  //       });
+    it("🟢 should not update fields that are not provided", async () => {
+      mockFindByUser.mockResolvedValue(mockPreference);
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        theme: "DARK",
+      });
 
-  //       await PreferenceService.updatePreference(
-  //         { theme: "DARK" }, // only theme provided
-  //         { user: mockUser },
-  //       );
+      await PreferenceService.updatePreference(
+        { theme: "DARK" }, // only theme provided
+        { user: mockUser },
+      );
 
-  //       // language should not be in the update call
-  //       const updateCall = mockUpdate.mock.calls[0][1];
-  //       expect(updateCall.language).toBeUndefined();
-  //     });
+      // language should not be in the update call
+      const updateCall = mockUpdate.mock.calls[0][1];
+      expect(updateCall.language).toBeUndefined();
+    });
 
-  //     it("🟢 should work for SUPER_ADMIN", async () => {
-  //       mockFindByUser.mockResolvedValue({
-  //         ...mockPreference,
-  //         user: mockSuperAdmin.id,
-  //       });
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         theme: "DARK",
-  //         user: mockSuperAdmin.id,
-  //       });
+    it("🟢 should work for SUPER_ADMIN", async () => {
+      mockFindByUser.mockResolvedValue({
+        ...mockPreference,
+        user: mockSuperAdmin.id,
+      });
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        theme: "DARK",
+        user: mockSuperAdmin.id,
+      });
 
-  //       const result = await PreferenceService.updatePreference(
-  //         { theme: "DARK" },
-  //         { user: mockSuperAdmin },
-  //       );
+      const result = await PreferenceService.updatePreference(
+        { theme: "DARK" },
+        { user: mockSuperAdmin },
+      );
 
-  //       expect(result.theme).toBe("DARK");
-  //     });
+      expect(result.theme).toBe("DARK");
+    });
 
-  //     it("🟢 should work for CLIENT_ADMIN", async () => {
-  //       mockFindByUser.mockResolvedValue({
-  //         ...mockPreference,
-  //         user: mockClientAdmin.id,
-  //       });
-  //       mockUpdate.mockResolvedValue({
-  //         ...mockPreference,
-  //         language: "KOREAN",
-  //         user: mockClientAdmin.id,
-  //       });
+    it("🟢 should work for CLIENT_ADMIN", async () => {
+      mockFindByUser.mockResolvedValue({
+        ...mockPreference,
+        user: mockClientAdmin.id,
+      });
+      mockUpdate.mockResolvedValue({
+        ...mockPreference,
+        language: "KOREAN",
+        user: mockClientAdmin.id,
+      });
 
-  //       const result = await PreferenceService.updatePreference(
-  //         { language: "KOREAN" },
-  //         { user: mockClientAdmin },
-  //       );
+      const result = await PreferenceService.updatePreference(
+        { language: "KOREAN" },
+        { user: mockClientAdmin },
+      );
 
-  //       expect(result.language).toBe("KOREAN");
-  //     });
+      expect(result.language).toBe("KOREAN");
+    });
 
-  //     it("🔴 should throw if preference not found", async () => {
-  //       mockFindByUser.mockResolvedValue(null);
+    it("🔴 should throw if preference not found", async () => {
+      mockFindByUser.mockResolvedValue(null);
 
-  //       await expect(
-  //         PreferenceService.updatePreference(
-  //           { theme: "DARK" },
-  //           { user: mockUser },
-  //         ),
-  //       ).rejects.toThrow("Preference not found");
-  //     });
+      await expect(
+        PreferenceService.updatePreference(
+          { theme: "DARK" },
+          { user: mockUser },
+        ),
+      ).rejects.toThrow("Preference not found");
+    });
 
-  //     it("🔴 should not call update if preference not found", async () => {
-  //       mockFindByUser.mockResolvedValue(null);
+    it("🔴 should not call update if preference not found", async () => {
+      mockFindByUser.mockResolvedValue(null);
 
-  //       try {
-  //         await PreferenceService.updatePreference(
-  //           { theme: "DARK" },
-  //           { user: mockUser },
-  //         );
-  //       } catch (e) {}
+      try {
+        await PreferenceService.updatePreference(
+          { theme: "DARK" },
+          { user: mockUser },
+        );
+      } catch (e) {}
 
-  //       expect(mockUpdate).not.toHaveBeenCalled();
-  //     });
-  //   });
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+  });
 });

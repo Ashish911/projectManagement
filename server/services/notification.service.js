@@ -13,17 +13,19 @@ export const NotificationService = {
   async getNotifications(context) {
     const { user } = context;
 
-    return await NotificationRepo.findByUser(user.id).orElseThrow(
-      new Error("No notifications found"),
-    );
+    const notification = await NotificationRepo.findByUser(user.id);
+
+    if (notification.length === 0) throw new Error("No notifications found.");
+
+    return notification;
   },
 
   async getNotification(id, context) {
     const { user } = context;
 
-    const notification = await NotificationRepo.findById(id).orElseThrow(
-      new Error("Notification not found"),
-    );
+    const notification = await NotificationRepo.findById(id);
+
+    if (!notification) throw new Error("Notification not found.");
 
     if (notification.user.toString() !== user.id) {
       throw new Error("You do not have access to this notification");
@@ -35,9 +37,9 @@ export const NotificationService = {
   async markAsRead(id, context) {
     const { user } = context;
 
-    const notification = await NotificationRepo.findById(id).orElseThrow(
-      new Error("Notification not found"),
-    );
+    const notification = await NotificationRepo.findById(id);
+
+    if (!notification) throw new Error("Notification not found.");
 
     if (notification.user.toString() !== user.id) {
       throw new Error("You do not have access to this notification");
@@ -49,9 +51,9 @@ export const NotificationService = {
   async markAllAsRead(context) {
     const { user } = context;
 
-    const notifications = await NotificationRepo.findByUser(
-      user.id,
-    ).orElseThrow(new Error("No notifications found"));
+    const notifications = await NotificationRepo.findByUser(user.id);
+
+    if (notifications.length === 0) throw new Error("No notifications found.");
 
     const unread = notifications.filter((n) => n.status === "UNREAD");
     if (!unread.length) throw new Error("No unread notifications found");
@@ -66,9 +68,9 @@ export const NotificationService = {
   async deleteNotification(id, context) {
     const { user } = context;
 
-    const notification = await NotificationRepo.findById(id).orElseThrow(
-      new Error("Notification not found"),
-    );
+    const notification = await NotificationRepo.findById(id);
+
+    if (!notification) throw new Error("Notification not found.");
 
     if (
       notification.user.toString() !== user.id &&
@@ -83,9 +85,9 @@ export const NotificationService = {
   async deleteAllNotifications(context) {
     const { user } = context;
 
-    const notifications = await NotificationRepo.findByUser(
-      user.id,
-    ).orElseThrow(new Error("No notifications found"));
+    const notifications = await NotificationRepo.findByUser(user.id);
+
+    if (notifications.length === 0) throw new Error("No notifications found.");
 
     await Promise.all(notifications.map((n) => NotificationRepo.delete(n._id)));
 
