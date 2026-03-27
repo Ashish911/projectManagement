@@ -1,3 +1,4 @@
+import { NotFoundError } from "../errors/errors.js";
 import { PreferenceRepo } from "../repositories/import.repo.js";
 
 export const PreferenceService = {
@@ -6,7 +7,7 @@ export const PreferenceService = {
 
     const preference = await PreferenceRepo.findByUser(user.id);
 
-    if (!preference) throw new Error("Preference not found");
+    if (!preference) throw new NotFoundError("Preference not found");
 
     return preference;
   },
@@ -16,7 +17,7 @@ export const PreferenceService = {
 
     const preference = await PreferenceRepo.findByUser(user.id);
 
-    if (!preference) throw new Error("Preference not found");
+    if (!preference) throw new NotFoundError("Preference not found");
 
     return await PreferenceRepo.update(preference._id, {
       ...(data.theme && { theme: data.theme }),

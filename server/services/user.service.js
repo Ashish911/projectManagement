@@ -1,6 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { UserRepo, PreferenceRepo } from "../repositories/import.repo.js";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors/errors.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;
@@ -9,12 +15,14 @@ export const UserService = {
   async login(email, password) {
     const user = await UserRepo.findByEmail(email);
 
-    if (!user) throw new Error("User not found");
+    if (!user) throw new NotFoundError("User not found");
 
     if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS && user.lastFailedLogin) {
       const elapsed = Date.now() - new Date(user.lastFailedLogin).getTime();
       if (elapsed < LOCKOUT_MS) {
-        throw new Error("Too many failed login attempts. Try again later.");
+        throw new UnauthorizedError(
+          "Too many failed login attempts. Try again later.",
+        );
       }
     }
 
@@ -24,7 +32,7 @@ export const UserService = {
         loginAttempts: user.loginAttempts + 1,
         lastFailedLogin: new Date().toISOString(),
       });
-      throw new Error("Invalid password");
+      throw new UnauthorizedError("Invalid password");
     }
 
     await UserRepo.update(user.id, {
@@ -48,7 +56,9 @@ export const UserService = {
   async register(data) {
     const existing = await UserRepo.findByEmail(data.email);
     if (existing)
-      throw new Error("Email already exists please use a different email");
+      throw new ConflictError(
+        "Email already exists please use a different email",
+      );
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await UserRepo.create({
@@ -69,7 +79,7 @@ export const UserService = {
 
   async getProfile(id) {
     const user = await UserRepo.findById(id);
-    if (!user) throw new Error("User not found");
+    if (!user) throw new NotFoundError("User not found");
     return user;
   },
 
@@ -77,20 +87,20 @@ export const UserService = {
     const { user } = context;
 
     if (user.role !== "SUPER_ADMIN") {
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to promote users to admin",
       );
     }
 
     const userToPromote = await UserRepo.findById(userId).orElseThrow(
-      new Error("User not found"),
+      new NotFoundError("User not found"),
     );
 
     if (
       userToPromote.role == "CLIENT_ADMIN" ||
       userToPromote.role == "SUPER_ADMIN"
     ) {
-      throw new Error("User is already a admin.");
+      throw new ConflictError("User is already a admin.");
     }
     return await UserRepo.update(userId, { role: "CLIENT_ADMIN" });
   },

@@ -43,3 +43,39 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           NODE_ENV: test
         run: npm run test:auth
+
+      - name: Run Client Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+          run: npm run test:client
+
+      - name: Run Project Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+        run: npm run test:project
+
+      - name: Run Task Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+        run: npm run test:task
+
+      - name: Run SubTask Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+        run: npm run test:subTask
+
+      - name: Run Notification Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+        run: npm run test:notification
+
+      - name: Run Preference Tests
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NODE_ENV: test
+        run: npm run test:preference

@@ -1,5 +1,6 @@
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
+import { unwrapResolverError } from "@apollo/server/errors";
 import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
 
@@ -11,7 +12,34 @@ const PUBLIC_OPERATIONS = [
 ];
 
 export const createServer = async () => {
-  const server = new ApolloServer({ schema });
+  const server = new ApolloServer({
+    schema,
+    formatError: (formattedError, error) => {
+      const originalError = unwrapResolverError(error);
+
+      // If it's our custom AppError return structured response
+      if (originalError instanceof AppError) {
+        return {
+          message: originalError.message,
+          extensions: {
+            code: originalError.code,
+            statusCode: originalError.statusCode,
+          },
+        };
+      }
+
+      // Hide internal errors in production
+      if (process.env.NODE_ENV === "production") {
+        return {
+          message: "Internal server error",
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        };
+      }
+
+      // In development return full error
+      return formattedError;
+    },
+  });
 
   return server;
 };

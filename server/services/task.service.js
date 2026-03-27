@@ -1,3 +1,4 @@
+import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import {
   TaskRepo,
   ProjectRepo,
@@ -11,14 +12,15 @@ export const TaskService = {
 
     const project = await ProjectRepo.findById(projectId);
 
-    if (!project) throw new Error("Project not found.");
+    if (!project) throw new NotFoundError("Project not found.");
 
     // Check user has access to this project
     if (user.role === "USER") {
       const isAssigned = project.assignedUser
         .map((id) => id.toString())
         .includes(user.id);
-      if (!isAssigned) throw new Error("You are not assigned to this project");
+      if (!isAssigned)
+        throw new ForbiddenError("You are not assigned to this project");
     }
 
     return await TaskRepo.findByProject(projectId);
@@ -28,14 +30,15 @@ export const TaskService = {
     const { user } = context;
 
     const task = await TaskRepo.findById(id);
-    if (!task) throw new Error("Task not found");
+    if (!task) throw new NotFoundError("Task not found");
 
     if (user.role === "USER") {
       const isAssigned =
         task.assignedTo?.toString() === user.id ||
         task.createdBy?.toString() === user.id;
 
-      if (!isAssigned) throw new Error("You do not have access to this task");
+      if (!isAssigned)
+        throw new ForbiddenError("You do not have access to this task");
     }
 
     return task;
@@ -45,11 +48,13 @@ export const TaskService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error("Current role does not have permission to create tasks");
+      throw new ForbiddenError(
+        "Current role does not have permission to create tasks",
+      );
     }
 
     const project = await ProjectRepo.findById(data.projectId);
-    if (!project) throw new Error("Project not found");
+    if (!project) throw new NotFoundError("Project not found");
 
     const task = await TaskRepo.create({
       title: data.title,
@@ -77,11 +82,13 @@ export const TaskService = {
 
     const task = await TaskRepo.findById(data.id);
 
-    if (!task) throw new Error("Task not found");
+    if (!task) throw new NotFoundError("Task not found");
 
     // USER can only update tasks assigned to them
     if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
-      throw new Error("You do not have permission to update this task");
+      throw new ForbiddenError(
+        "You do not have permission to update this task",
+      );
     }
 
     // If reassigning to someone new notify them
@@ -106,11 +113,13 @@ export const TaskService = {
 
     const task = await TaskRepo.findById(id);
 
-    if (!task) throw new Error("Task not found");
+    if (!task) throw new NotFoundError("Task not found");
 
     // Only assigned user or admin can update status
     if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
-      throw new Error("You do not have permission to update this task status");
+      throw new ForbiddenError(
+        "You do not have permission to update this task status",
+      );
     }
 
     const updatedTask = await TaskRepo.update(id, { currentStatus: status });
@@ -146,11 +155,13 @@ export const TaskService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error("Current role does not have permission to delete tasks");
+      throw new ForbiddenError(
+        "Current role does not have permission to delete tasks",
+      );
     }
 
     const task = await TaskRepo.findById(id);
-    if (!task) throw new Error("Task not found");
+    if (!task) throw new NotFoundError("Task not found");
 
     // Delete all subtasks associated with this task
     const subTasks = await SubTaskRepo.findByTask(id);

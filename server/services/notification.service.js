@@ -1,3 +1,4 @@
+import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { NotificationRepo } from "../repositories/import.repo.js";
 
 export const NotificationService = {
@@ -15,7 +16,8 @@ export const NotificationService = {
 
     const notification = await NotificationRepo.findByUser(user.id);
 
-    if (notification.length === 0) throw new Error("No notifications found.");
+    if (notification.length === 0)
+      throw new NotFoundError("No notifications found.");
 
     return notification;
   },
@@ -25,10 +27,10 @@ export const NotificationService = {
 
     const notification = await NotificationRepo.findById(id);
 
-    if (!notification) throw new Error("Notification not found.");
+    if (!notification) throw new NotFoundError("Notification not found.");
 
     if (notification.user.toString() !== user.id) {
-      throw new Error("You do not have access to this notification");
+      throw new ForbiddenError("You do not have access to this notification");
     }
 
     return notification;
@@ -39,10 +41,10 @@ export const NotificationService = {
 
     const notification = await NotificationRepo.findById(id);
 
-    if (!notification) throw new Error("Notification not found.");
+    if (!notification) throw new NotFoundError("Notification not found.");
 
     if (notification.user.toString() !== user.id) {
-      throw new Error("You do not have access to this notification");
+      throw new ForbiddenError("You do not have access to this notification");
     }
 
     return await NotificationRepo.update(id, { status: "READ" });
@@ -53,10 +55,12 @@ export const NotificationService = {
 
     const notifications = await NotificationRepo.findByUser(user.id);
 
-    if (notifications.length === 0) throw new Error("No notifications found.");
+    if (notifications.length === 0)
+      throw new NotFoundError("No notifications found.");
 
     const unread = notifications.filter((n) => n.status === "UNREAD");
-    if (!unread.length) throw new Error("No unread notifications found");
+    if (!unread.length)
+      throw new NotFoundError("No unread notifications found");
 
     await Promise.all(
       unread.map((n) => NotificationRepo.update(n._id, { status: "READ" })),
@@ -70,13 +74,15 @@ export const NotificationService = {
 
     const notification = await NotificationRepo.findById(id);
 
-    if (!notification) throw new Error("Notification not found.");
+    if (!notification) throw new NotFoundError("Notification not found.");
 
     if (
       notification.user.toString() !== user.id &&
       user.role !== "SUPER_ADMIN"
     ) {
-      throw new Error("You do not have permission to delete this notification");
+      throw new ForbiddenError(
+        "You do not have permission to delete this notification",
+      );
     }
 
     return await NotificationRepo.delete(id);
@@ -87,7 +93,8 @@ export const NotificationService = {
 
     const notifications = await NotificationRepo.findByUser(user.id);
 
-    if (notifications.length === 0) throw new Error("No notifications found.");
+    if (notifications.length === 0)
+      throw new NotFoundError("No notifications found.");
 
     await Promise.all(notifications.map((n) => NotificationRepo.delete(n._id)));
 

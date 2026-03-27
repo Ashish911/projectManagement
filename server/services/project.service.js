@@ -1,3 +1,4 @@
+import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { ProjectRepo } from "../repositories/import.repo.js";
 import { ClientRepo } from "../repositories/import.repo.js";
 
@@ -13,7 +14,7 @@ export const ProjectService = {
     // CLIENT_ADMIN sees only their client's projects
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findByUser(user.id);
-      if (!client) throw new Error("No client assigned to this admin");
+      if (!client) throw new NotFoundError("No client assigned to this admin");
 
       return await ProjectRepo.findByClient(client._id);
     }
@@ -26,16 +27,16 @@ export const ProjectService = {
 
     const project = await ProjectRepo.findById(id);
 
-    if (!project) throw new Error("Project not found.");
+    if (!project) throw new NotFoundError("Project not found.");
 
     if (user.role === "SUPER_ADMIN") return project;
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findByUser(user.id);
-      if (!client) throw new Error("No client assigned to this admin");
+      if (!client) throw new NotFoundError("No client assigned to this admin");
 
       if (project.clientId.toString() !== client._id.toString()) {
-        throw new Error("You do not have access to this project");
+        throw new ForbiddenError("You do not have access to this project");
       }
       return project;
     }
@@ -45,7 +46,8 @@ export const ProjectService = {
       .map((id) => id.toString())
       .includes(user.id);
 
-    if (!isAssigned) throw new Error("You are not assigned to this project");
+    if (!isAssigned)
+      throw new ForbiddenError("You are not assigned to this project");
 
     return project;
   },
@@ -53,18 +55,18 @@ export const ProjectService = {
     const { user } = context;
 
     if (user.role === "USER")
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to add Projects",
       );
 
     const client = await ClientRepo.findById(data.clientId);
 
-    if (!client) throw new Error("Client not found");
+    if (!client) throw new NotFoundError("Client not found");
 
     // CLIENT_ADMIN can only add projects for their own client
     if (user.role === "CLIENT_ADMIN") {
       if (client.assignedAdmin.toString() !== user.id) {
-        throw new Error("You are not the admin of this client");
+        throw new ForbiddenError("You are not the admin of this client");
       }
     }
 
@@ -79,19 +81,19 @@ export const ProjectService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to update Projects",
       );
     }
 
     const project = await ProjectRepo.findById(data.id);
 
-    if (!project) throw new Error("Project not found.");
+    if (!project) throw new NotFoundError("Project not found.");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
-        throw new Error("You are not the admin of this client");
+        throw new ForbiddenError("You are not the admin of this client");
       }
     }
 
@@ -105,19 +107,19 @@ export const ProjectService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to delete Projects",
       );
     }
 
     const project = await ProjectRepo.findById(id);
 
-    if (!project) throw new Error("Project not found");
+    if (!project) throw new NotFoundError("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
-        throw new Error("You are not the admin of this client");
+        throw new ForbiddenError("You are not the admin of this client");
       }
     }
 
@@ -127,19 +129,19 @@ export const ProjectService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to add users to Projects",
       );
     }
 
     const project = await ProjectRepo.findById(data.id);
 
-    if (!project) throw new Error("Project not found");
+    if (!project) throw new NotFoundError("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
-        throw new Error("You are not the admin of this client");
+        throw new ForbiddenError("You are not the admin of this client");
       }
     }
 
@@ -157,19 +159,19 @@ export const ProjectService = {
     const { user } = context;
 
     if (user.role === "USER") {
-      throw new Error(
+      throw new ForbiddenError(
         "Current role does not have the permission to remove users from Projects",
       );
     }
 
     const project = await ProjectRepo.findById(data.id);
 
-    if (!project) throw new Error("Project not found");
+    if (!project) throw new NotFoundError("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
-        throw new Error("You are not the admin of this client");
+        throw new ForbiddenError("You are not the admin of this client");
       }
     }
 

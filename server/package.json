@@ -18,7 +18,8 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "transform": {}
+    "transform": {},
+    "forceExit": true
   },
   "author": "",
   "license": "ISC",
