@@ -48,7 +48,7 @@ jobs:
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           NODE_ENV: test
-          run: npm run test:client
+        run: npm run test:client
 
       - name: Run Project Tests
         env:
