@@ -1,6 +1,8 @@
+import { validate } from "graphql";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { ProjectRepo } from "../repositories/import.repo.js";
 import { ClientRepo } from "../repositories/import.repo.js";
+import { addProjectSchema, updateProjectSchema } from "../validation/schema.js";
 
 export const ProjectService = {
   async getProjects(context) {
@@ -52,6 +54,8 @@ export const ProjectService = {
     return project;
   },
   async addProject(data, context) {
+    validate(addProjectSchema, data);
+
     const { user } = context;
 
     if (user.role === "USER")
@@ -78,6 +82,7 @@ export const ProjectService = {
     });
   },
   async updateProject(data, context) {
+    validate(updateProjectSchema, data);
     const { user } = context;
 
     if (user.role === "USER") {

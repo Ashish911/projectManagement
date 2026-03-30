@@ -3,6 +3,7 @@ import { startStandaloneServer } from "@apollo/server/standalone";
 import { unwrapResolverError } from "@apollo/server/errors";
 import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
+import { AppError } from "./errors/AppError.js";
 
 const PUBLIC_OPERATIONS = [
   "LoginMutation",

@@ -4,6 +4,8 @@ import {
   ProjectRepo,
   SubTaskRepo,
 } from "../repositories/import.repo.js";
+import { createTaskSchema, updateTaskSchema } from "../validation/schema.js";
+import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
 export const TaskService = {
@@ -45,6 +47,8 @@ export const TaskService = {
   },
 
   async createTask(data, context) {
+    validate(createTaskSchema, data);
+
     const { user } = context;
 
     if (user.role === "USER") {
@@ -78,6 +82,8 @@ export const TaskService = {
   },
 
   async updateTask(data, context) {
+    validate(updateTaskSchema, data);
+
     const { user } = context;
 
     const task = await TaskRepo.findById(data.id);

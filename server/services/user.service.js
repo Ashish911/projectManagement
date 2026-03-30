@@ -7,12 +7,16 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from "../errors/errors.js";
+import { validate } from "../validation/validate.js";
+import { registerSchema, loginSchema } from "../validation/schema.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;
 
 export const UserService = {
   async login(email, password) {
+    validate(loginSchema, { email, password });
+
     const user = await UserRepo.findByEmail(email);
 
     if (!user) throw new NotFoundError("User not found");
@@ -54,6 +58,8 @@ export const UserService = {
     };
   },
   async register(data) {
+    validate(registerSchema, data);
+
     const existing = await UserRepo.findByEmail(data.email);
     if (existing)
       throw new ConflictError(

@@ -1,3 +1,4 @@
+import { validate } from "graphql";
 import {
   ConflictError,
   ForbiddenError,
@@ -45,6 +46,8 @@ export const ClientService = {
     );
   },
   async addClient(data, context) {
+    validate(addClientSchema, data);
+
     const { user } = context;
 
     // SUPER_ADMIN can access everything
@@ -129,6 +132,8 @@ export const ClientService = {
     return await ClientRepo.delete(data.id);
   },
   async updateClient(data, context) {
+    validate(updateClientSchema, data);
+
     const { user } = context;
 
     if (user.role == "USER") {
