@@ -8,12 +8,21 @@ import {
   UnauthorizedError,
 } from "../errors/errors.js";
 import { validate } from "../validation/validate.js";
-import { registerSchema, loginSchema } from "../validation/schema.js";
+import { registerSchema, loginSchema, idSchema } from "../validation/schema.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;
 
 export const UserService = {
+  /**
+   * Login a user and return a JWT token.
+   * @param {string} email The user's email address.
+   * @param {string} password The user's password.
+   * @returns {Promise<object>} A promise that resolves to an object containing the user's ID, email, JWT token, and token expiration time in hours.
+   * @throws {UnauthorizedError} If the user has attempted to login too many times within the lockout period.
+   * @throws {UnauthorizedError} If the user's password is invalid.
+   * @throws {NotFoundError} If the user is not found.
+   */
   async login(email, password) {
     validate(loginSchema, { email, password });
 
@@ -57,6 +66,20 @@ export const UserService = {
       tokenExpiration: 1,
     };
   },
+
+  /**
+   * Register a new user.
+   * @param {Object} data - The user data to register.
+   * @property {string} data.email - The email of the user.
+   * @property {string} data.name - The name of the user.
+   * @property {string} data.number - The phone number of the user.
+   * @property {string} data.dob - The date of birth of the user.
+   * @property {string} data.password - The password of the user.
+   * @property {string} data.gender - The gender of the user.
+   * @property {string} data.role - The role of the user.
+   * @throws {ConflictError} - If the email already exists.
+   * @returns {Promise<UserDocument>} - The registered user.
+   */
   async register(data) {
     validate(registerSchema, data);
 
@@ -83,12 +106,29 @@ export const UserService = {
     return user;
   },
 
+  /**
+   * Get the user profile based on the user id.
+   * @param {string} id - The id of the user.
+   * @throws {NotFoundError} - If the user is not found.
+   * @returns {Promise<UserDocument>} - The user profile.
+   */
   async getProfile(id) {
+    validate(idSchema, { id });
+
     const user = await UserRepo.findById(id);
     if (!user) throw new NotFoundError("User not found");
     return user;
   },
 
+  /**
+   * Promote a user to admin.
+   * @param {string} userId - The id of the user to promote.
+   * @param {object} context - The context object containing the user info.
+   * @throws {ForbiddenError} - If the current role does not have the permission to promote users to admin.
+   * @throws {NotFoundError} - If the user to promote is not found.
+   * @throws {ConflictError} - If the user is already an admin.
+   * @returns {Promise<UserDocument>} - The updated user profile.
+   */
   async promoteToAdmin(userId, context) {
     const { user } = context;
 

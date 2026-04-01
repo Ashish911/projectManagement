@@ -232,8 +232,16 @@ describe("UserService", () => {
       mockFindByEmail.mockResolvedValue(null);
 
       await expect(UserService.login("", plainPassword)).rejects.toThrow(
-        "User not found",
+        "Invalid email format",
       );
+    });
+
+    it("🔴 should throw if email is wrong", async () => {
+      mockFindByEmail.mockResolvedValue(null);
+
+      await expect(
+        UserService.login("asd@gmail.com", plainPassword),
+      ).rejects.toThrow("User not found");
     });
 
     it("🔴 should throw if password is empty", async () => {
@@ -241,8 +249,17 @@ describe("UserService", () => {
       mockUpdate.mockResolvedValue(mockUser);
 
       await expect(UserService.login("test@example.com", "")).rejects.toThrow(
-        "Invalid password",
+        "Password must be at least 8 characters",
       );
+    });
+
+    it("🔴 should throw if password is wrong", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+
+      await expect(
+        UserService.login("test@example.com", "wrongpassword"),
+      ).rejects.toThrow("Invalid password");
     });
   });
 
