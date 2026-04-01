@@ -1,10 +1,15 @@
-import { validate } from "graphql";
 import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
 } from "../errors/errors.js";
 import { ClientRepo, UserRepo } from "../repositories/import.repo.js";
+import {
+  addClientSchema,
+  idSchema,
+  updateClientSchema,
+} from "../validation/schema.js";
+import { validate } from "../validation/validate.js";
 
 export const ClientService = {
   async getClients(context) {
@@ -19,6 +24,8 @@ export const ClientService = {
     return await ClientRepo.find();
   },
   async getClient(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const client = await ClientRepo.findById(id);
@@ -86,19 +93,24 @@ export const ClientService = {
 
     return client;
   },
-  async deleteClientRequest(data, context) {
+  async deleteClientRequest(id, context) {
+    console.log("deleteClientRequest called with id:", id);
+    validate(idSchema, { id });
+
     const { user } = context;
 
     // Only the Client admin itself can delete client_admin
     if (user.role == "CLIENT_ADMIN") {
-      return await ClientRepo.update(data.id, { set: { deleteRequest: true } });
+      return await ClientRepo.update(id, { set: { deleteRequest: true } });
     } else {
       throw new ForbiddenError(
         "Current role does not have the permission to request client deletion.",
       );
     }
   },
-  async deleteClientBySuperAdmin(data, context) {
+  async deleteClientBySuperAdmin(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     // SUPER_ADMIN can access everything
@@ -108,16 +120,18 @@ export const ClientService = {
       );
     }
 
-    const client = await ClientRepo.findById(data.id);
+    const client = await ClientRepo.findById(id);
     if (!client) throw new NotFoundError("Client not found");
 
     if (!client.deleteRequest)
       throw new ConflictError("Delete request not found for this client.");
 
-    return await ClientRepo.delete(data.id);
+    return await ClientRepo.delete(id);
   },
 
-  async forceDeleteClientBySuperAdmin(data, context) {
+  async forceDeleteClientBySuperAdmin(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     if (user.role !== "SUPER_ADMIN") {
@@ -126,10 +140,10 @@ export const ClientService = {
       );
     }
 
-    const client = await ClientRepo.findById(data.id);
+    const client = await ClientRepo.findById(id);
     if (!client) throw new NotFoundError("Client not found");
 
-    return await ClientRepo.delete(data.id);
+    return await ClientRepo.delete(id);
   },
   async updateClient(data, context) {
     validate(updateClientSchema, data);

@@ -32,7 +32,8 @@ export const addClientSchema = z.object({
   name: name,
   email: email,
   phone: z.string().min(1, "Phone is required"),
-  user: objectId,
+  assignedAdmin: objectId.optional(),
+  deleteRequest: z.boolean().default(false),
 });
 
 export const updateClientSchema = z.object({
@@ -40,7 +41,8 @@ export const updateClientSchema = z.object({
   name: name,
   email: email,
   phone: z.string().optional(),
-  user: objectId.optional(),
+  assignedAdmin: objectId.optional(),
+  deleteRequest: z.boolean().optional(),
 });
 
 // ─── Project ──────────────────────────────────────────────────────
