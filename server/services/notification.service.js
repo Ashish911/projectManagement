@@ -1,5 +1,7 @@
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { NotificationRepo } from "../repositories/import.repo.js";
+import { idSchema } from "../validation/schema.js";
+import { validate } from "../validation/validate.js";
 
 export const NotificationService = {
   // Internal method, called by other services not by resolvers
@@ -23,6 +25,8 @@ export const NotificationService = {
   },
 
   async getNotification(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const notification = await NotificationRepo.findById(id);
@@ -37,6 +41,8 @@ export const NotificationService = {
   },
 
   async markAsRead(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const notification = await NotificationRepo.findById(id);
@@ -70,6 +76,8 @@ export const NotificationService = {
   },
 
   async deleteNotification(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const notification = await NotificationRepo.findById(id);

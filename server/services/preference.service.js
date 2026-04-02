@@ -1,5 +1,7 @@
 import { NotFoundError } from "../errors/errors.js";
 import { PreferenceRepo } from "../repositories/import.repo.js";
+import { updatePreferenceSchema } from "../validation/schema.js";
+import { validate } from "../validation/validate.js";
 
 export const PreferenceService = {
   async getPreference(context) {
@@ -13,6 +15,8 @@ export const PreferenceService = {
   },
 
   async updatePreference(data, context) {
+    validate(updatePreferenceSchema, data);
+
     const { user } = context;
 
     const preference = await PreferenceRepo.findByUser(user.id);

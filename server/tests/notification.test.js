@@ -146,8 +146,18 @@ describe("NotificationService", () => {
       mockFindById.mockResolvedValue(null);
 
       await expect(
-        NotificationService.getNotification("nonexistent", { user: mockUser }),
+        NotificationService.getNotification("748a1b2c3d4e5f6a7b8c9d01", {
+          user: mockUser,
+        }),
       ).rejects.toThrow("Notification not found.");
+    });
+
+    it("🔴 should throw if notification id is invalid", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      await expect(
+        NotificationService.getNotification("nonexistent", { user: mockUser }),
+      ).rejects.toThrow("Invalid ID format");
     });
 
     it("🔴 should throw if notification belongs to another user", async () => {
@@ -187,8 +197,18 @@ describe("NotificationService", () => {
       mockFindById.mockResolvedValue(null);
 
       await expect(
-        NotificationService.markAsRead("nonexistent", { user: mockUser }),
+        NotificationService.markAsRead("748a1b2c3d4e5f6a7b8c9d01", {
+          user: mockUser,
+        }),
       ).rejects.toThrow("Notification not found.");
+    });
+
+    it("🔴 should throw if notification id is invalid", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      await expect(
+        NotificationService.markAsRead("nonexistent", { user: mockUser }),
+      ).rejects.toThrow("Invalid ID format");
     });
 
     it("🔴 should throw if notification belongs to another user", async () => {
@@ -302,10 +322,20 @@ describe("NotificationService", () => {
       mockFindById.mockResolvedValue(null);
 
       await expect(
-        NotificationService.deleteNotification("nonexistent", {
+        NotificationService.deleteNotification("648a1b2c3d4e5f6a7b8c9d0f", {
           user: mockUser,
         }),
       ).rejects.toThrow("Notification not found.");
+    });
+
+    it("🔴 should throw if notification id is invalid", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      await expect(
+        NotificationService.deleteNotification("nonexistent", {
+          user: mockUser,
+        }),
+      ).rejects.toThrow("Invalid ID format");
     });
 
     it("🔴 user should not delete another user's notification", async () => {
