@@ -4,6 +4,7 @@ import { unwrapResolverError } from "@apollo/server/errors";
 import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
 import { AppError } from "./errors/AppError.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 
 const PUBLIC_OPERATIONS = [
   "LoginMutation",
@@ -11,6 +12,8 @@ const PUBLIC_OPERATIONS = [
   "ForgotPasswordMutation",
   "ResetPasswordMutation",
 ];
+
+const isDev = process.env.NODE_ENV === "development";
 
 export const createServer = async () => {
   const server = new ApolloServer({
@@ -51,6 +54,11 @@ export const startServer = async (port = 8000) => {
   // API routes
   const { url } = await startStandaloneServer(server, {
     context: async ({ req }) => {
+      const ip =
+        req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+        req.socket.remoteAddress ||
+        "unknown";
+
       let user = null;
       const auth = req.headers.authorization || "";
 
@@ -61,6 +69,10 @@ export const startServer = async (port = 8000) => {
 
       const operation =
         req.body?.operationName || extractOperationName(req.body?.query);
+
+      if (isDev) {
+        apiLimiter(ip, operation);
+      }
 
       if (!PUBLIC_OPERATIONS.includes(operation || "")) {
         if (auth.startsWith("Bearer ")) {
