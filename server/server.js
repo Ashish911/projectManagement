@@ -5,6 +5,8 @@ import schema from "./graphql/schema.js";
 import jwt from "jsonwebtoken";
 import { AppError } from "./errors/AppError.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
+import depthLimit from "graphql-depth-limit";
+import { createComplexityRule } from "graphql-query-complexity";
 
 const PUBLIC_OPERATIONS = [
   "LoginMutation",
@@ -18,6 +20,12 @@ const isDev = process.env.NODE_ENV === "development";
 export const createServer = async () => {
   const server = new ApolloServer({
     schema,
+    validationRules: [
+      depthLimit(7),
+      createComplexityRule(1000, {
+        onCost: (cost) => console.log("Query complexity:", cost),
+      }),
+    ],
     formatError: (formattedError, error) => {
       const originalError = unwrapResolverError(error);
 
@@ -43,6 +51,8 @@ export const createServer = async () => {
       // In development return full error
       return formattedError;
     },
+    introspection: process.env.NODE_ENV !== "production",
+    includeStacktraceInErrorResponses: process.env.NODE_ENV !== "production",
   });
 
   return server;
