@@ -198,11 +198,21 @@ describe("ProjectService", () => {
       ).rejects.toThrow("You are not assigned to this project");
     });
 
-    it("🔴 should throw if project not found", async () => {
+    it("🔴 should throw if project id is wrong", async () => {
       mockProjectFindById.mockResolvedValue(null);
 
       await expect(
         ProjectService.getProject("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should throw if project not found when incorrect id is sent", async () => {
+      mockProjectFindById.mockResolvedValue(null);
+
+      await expect(
+        ProjectService.getProject("648a1b2c3d4e5f6a7b8c9d00", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Project not found");
     });
   });
@@ -390,11 +400,21 @@ describe("ProjectService", () => {
       );
     });
 
-    it("🔴 should throw if project not found", async () => {
+    it("🔴 should throw if project id is wrong", async () => {
       mockProjectFindById.mockResolvedValue(null);
 
       await expect(
         ProjectService.deleteProject("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should throw if project not found", async () => {
+      mockProjectFindById.mockResolvedValue(null);
+
+      await expect(
+        ProjectService.deleteProject("648a1b2c3d4e5f6a7b8c9d0f", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Project not found");
     });
 

@@ -1,8 +1,12 @@
-import { validate } from "graphql";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { ProjectRepo } from "../repositories/import.repo.js";
 import { ClientRepo } from "../repositories/import.repo.js";
-import { addProjectSchema, updateProjectSchema } from "../validation/schema.js";
+import {
+  addProjectSchema,
+  idSchema,
+  updateProjectSchema,
+} from "../validation/schema.js";
+import { validate } from "../validation/validate.js";
 
 export const ProjectService = {
   async getProjects(context) {
@@ -25,6 +29,8 @@ export const ProjectService = {
     return await ProjectRepo.findByAssignedUser(user.id);
   },
   async getProject(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const project = await ProjectRepo.findById(id);
@@ -109,6 +115,8 @@ export const ProjectService = {
     });
   },
   async deleteProject(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     if (user.role === "USER") {
