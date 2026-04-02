@@ -148,8 +148,18 @@ describe("TaskService", () => {
       mockProjectFindById.mockResolvedValue(null);
 
       await expect(
-        TaskService.getTasks("nonexistent", { user: mockSuperAdmin }),
+        TaskService.getTasks("648a1b2c3d4e5f6a7b8c9d0f", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Project not found");
+    });
+
+    it("🔴 should throw if project id is incorrect", async () => {
+      mockProjectFindById.mockResolvedValue(null);
+
+      await expect(
+        TaskService.getTasks("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -209,8 +219,18 @@ describe("TaskService", () => {
       mockTaskFindById.mockResolvedValue(null);
 
       await expect(
-        TaskService.getTask("nonexistent", { user: mockSuperAdmin }),
+        TaskService.getTask("648a1b2c3d4e5f6a7b8c9d0f", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Task not found");
+    });
+
+    it("🔴 should throw if task id is incorrect", async () => {
+      mockTaskFindById.mockResolvedValue(null);
+
+      await expect(
+        TaskService.getTask("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -282,6 +302,13 @@ describe("TaskService", () => {
     });
 
     it("🟢 should not notify if no user assigned", async () => {
+      let createTaskData = {
+        title: "New Task",
+        priority: "HIGH",
+        deadline: "2026-12-31",
+        projectId: "748a1b2c3d4e5f6a7b8c9d0e",
+      };
+
       mockProjectFindById.mockResolvedValue(mockProject);
       mockTaskCreate.mockResolvedValue({
         ...createTaskData,
@@ -289,7 +316,7 @@ describe("TaskService", () => {
       });
 
       await TaskService.createTask(
-        { ...createTaskData, assignedTo: null },
+        { ...createTaskData },
         { user: mockSuperAdmin },
       );
 
@@ -468,10 +495,24 @@ describe("TaskService", () => {
       mockTaskFindById.mockResolvedValue(null);
 
       await expect(
+        TaskService.updateTaskStatus(
+          "648a1b2c3d4e5f6a7b8c9d0f",
+          "IN_PROGRESS",
+          {
+            user: mockSuperAdmin,
+          },
+        ),
+      ).rejects.toThrow("Task not found");
+    });
+
+    it("🔴 should throw if task id is invalid", async () => {
+      mockTaskFindById.mockResolvedValue(null);
+
+      await expect(
         TaskService.updateTaskStatus("nonexistent", "IN_PROGRESS", {
           user: mockSuperAdmin,
         }),
-      ).rejects.toThrow("Task not found");
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -534,8 +575,20 @@ describe("TaskService", () => {
       mockTaskFindById.mockResolvedValue(null);
 
       await expect(
-        TaskService.deleteTask("nonexistent", { user: mockSuperAdmin }),
+        TaskService.deleteTask("648a1b2c3d4e5f6a7b8c9d0f", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Task not found");
+    });
+
+    it("🔴 should throw if task id is invalid", async () => {
+      mockTaskFindById.mockResolvedValue(null);
+
+      await expect(
+        TaskService.deleteTask("nonexistent", {
+          user: mockSuperAdmin,
+        }),
+      ).rejects.toThrow("Invalid ID format");
     });
 
     it("🔴 should not call delete if task not found", async () => {

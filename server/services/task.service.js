@@ -4,12 +4,19 @@ import {
   ProjectRepo,
   SubTaskRepo,
 } from "../repositories/import.repo.js";
-import { createTaskSchema, updateTaskSchema } from "../validation/schema.js";
+import {
+  createTaskSchema,
+  idSchema,
+  updateSubTaskStatusSchema,
+  updateTaskSchema,
+} from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
 export const TaskService = {
   async getTasks(projectId, context) {
+    validate(idSchema, { id: projectId });
+
     const { user } = context;
 
     const project = await ProjectRepo.findById(projectId);
@@ -29,6 +36,8 @@ export const TaskService = {
   },
 
   async getTask(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const task = await TaskRepo.findById(id);
@@ -115,6 +124,8 @@ export const TaskService = {
   },
 
   async updateTaskStatus(id, status, context) {
+    validate(updateSubTaskStatusSchema, { id, status });
+
     const { user } = context;
 
     const task = await TaskRepo.findById(id);
@@ -158,6 +169,8 @@ export const TaskService = {
   },
 
   async deleteTask(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     if (user.role === "USER") {

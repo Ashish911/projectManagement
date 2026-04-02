@@ -2,13 +2,17 @@ import { NotFoundError, ForbiddenError } from "../errors/errors.js";
 import { SubTaskRepo, TaskRepo } from "../repositories/import.repo.js";
 import {
   createSubTaskSchema,
+  idSchema,
   updateSubTaskSchema,
+  updateSubTaskStatusSchema,
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
 export const SubTaskService = {
   async getSubTasks(taskId, context) {
+    validate(idSchema, { id: taskId });
+
     const { user } = context;
 
     const task = await TaskRepo.findById(taskId);
@@ -27,6 +31,8 @@ export const SubTaskService = {
   },
 
   async getSubTask(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const subTask = await SubTaskRepo.findById(id);
@@ -113,6 +119,8 @@ export const SubTaskService = {
   },
 
   async updateSubTaskStatus(id, status, context) {
+    validate(updateSubTaskStatusSchema, { id, status });
+
     const { user } = context;
 
     const subTask = await SubTaskRepo.findById(id);
@@ -155,6 +163,8 @@ export const SubTaskService = {
   },
 
   async deleteSubTask(id, context) {
+    validate(idSchema, { id });
+
     const { user } = context;
 
     const subTask = await SubTaskRepo.findById(id);

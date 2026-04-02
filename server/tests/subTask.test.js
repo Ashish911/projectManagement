@@ -145,8 +145,18 @@ describe("SubTaskService", () => {
       mockTaskFindById.mockResolvedValue(null);
 
       await expect(
-        SubTaskService.getSubTasks("nonexistent", { user: mockSuperAdmin }),
+        SubTaskService.getSubTasks("848a1b2c3d4e5f6a7b8c9d0f", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("Task not found");
+    });
+
+    it("🔴 should throw if task id is invalid", async () => {
+      mockTaskFindById.mockResolvedValue(null);
+
+      await expect(
+        SubTaskService.getSubTasks("non existent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -206,8 +216,18 @@ describe("SubTaskService", () => {
       mockSubTaskFindById.mockResolvedValue(null);
 
       await expect(
-        SubTaskService.getSubTask("nonexistent", { user: mockSuperAdmin }),
+        SubTaskService.getSubTask("848a1b2c3d4e5f6a7b8c9d01", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("SubTask not found");
+    });
+
+    it("🔴 should throw if subtask id is invalid", async () => {
+      mockSubTaskFindById.mockResolvedValue(null);
+
+      await expect(
+        SubTaskService.getSubTask("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -291,6 +311,13 @@ describe("SubTaskService", () => {
     });
 
     it("🟢 should not notify if no user assigned", async () => {
+      let createSubTaskData = {
+        title: "New SubTask",
+        priority: "HIGH",
+        deadline: "2026-12-31",
+        taskId: "748a1b2c3d4e5f6a7b8c9d0e",
+      };
+
       mockTaskFindById.mockResolvedValue(mockTask);
       mockSubTaskCreate.mockResolvedValue({
         ...createSubTaskData,
@@ -298,7 +325,7 @@ describe("SubTaskService", () => {
       });
 
       await SubTaskService.createSubTask(
-        { ...createSubTaskData, assignedTo: null },
+        { ...createSubTaskData },
         { user: mockSuperAdmin },
       );
 
@@ -453,10 +480,24 @@ describe("SubTaskService", () => {
       mockSubTaskFindById.mockResolvedValue(null);
 
       await expect(
+        SubTaskService.updateSubTaskStatus(
+          "848a1b2c3d4e5f6a7b8c9d0e",
+          "IN_PROGRESS",
+          {
+            user: mockSuperAdmin,
+          },
+        ),
+      ).rejects.toThrow("SubTask not found");
+    });
+
+    it("🔴 should throw if subtask id is invalid", async () => {
+      mockSubTaskFindById.mockResolvedValue(null);
+
+      await expect(
         SubTaskService.updateSubTaskStatus("nonexistent", "IN_PROGRESS", {
           user: mockSuperAdmin,
         }),
-      ).rejects.toThrow("SubTask not found");
+      ).rejects.toThrow("Invalid ID format");
     });
   });
 
@@ -519,8 +560,18 @@ describe("SubTaskService", () => {
       mockSubTaskFindById.mockResolvedValue(null);
 
       await expect(
-        SubTaskService.deleteSubTask("nonexistent", { user: mockSuperAdmin }),
+        SubTaskService.deleteSubTask("848a1b2c3d4e5f6a7b8c9d0e", {
+          user: mockSuperAdmin,
+        }),
       ).rejects.toThrow("SubTask not found");
+    });
+
+    it("🔴 should throw if subtask is invalid", async () => {
+      mockSubTaskFindById.mockResolvedValue(null);
+
+      await expect(
+        SubTaskService.deleteSubTask("nonexistent", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
     });
 
     it("🔴 should not call delete if subtask not found", async () => {
