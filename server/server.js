@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
 import { unwrapResolverError } from "@apollo/server/errors";
@@ -6,7 +7,11 @@ import jwt from "jsonwebtoken";
 import { AppError } from "./errors/AppError.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import depthLimit from "graphql-depth-limit";
-import { createComplexityRule } from "graphql-query-complexity";
+import {
+  createComplexityRule,
+  simpleEstimator,
+} from "graphql-query-complexity";
+import logger from "./config/logger.js";
 
 const PUBLIC_OPERATIONS = [
   "LoginMutation",
@@ -22,8 +27,13 @@ export const createServer = async () => {
     schema,
     validationRules: [
       depthLimit(7),
-      createComplexityRule(1000, {
-        onCost: (cost) => console.log("Query complexity:", cost),
+      createComplexityRule({
+        maximumComplexity: 1000,
+        estimators: [
+          simpleEstimator({ defaultComplexity: 1 }), // each field costs 1 by default
+        ],
+        onComplete: (complexity) =>
+          console.log("Query complexity:", complexity),
       }),
     ],
     formatError: (formattedError, error) => {
@@ -31,6 +41,14 @@ export const createServer = async () => {
 
       // If it's our custom AppError return structured response
       if (originalError instanceof AppError) {
+        logger.warn(
+          {
+            code: originalError.code,
+            statusCode: originalError.statusCode,
+            message: originalError.message,
+          },
+          "App error",
+        );
         return {
           message: originalError.message,
           extensions: {
@@ -42,6 +60,7 @@ export const createServer = async () => {
 
       // Hide internal errors in production
       if (process.env.NODE_ENV === "production") {
+        logger.error({ err: error }, "Unhandled internal error");
         return {
           message: "Internal server error",
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -64,6 +83,8 @@ export const startServer = async (port = 8000) => {
   // API routes
   const { url } = await startStandaloneServer(server, {
     context: async ({ req }) => {
+      const reqId = randomUUID();
+
       const ip =
         req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
         req.socket.remoteAddress ||
@@ -79,6 +100,10 @@ export const startServer = async (port = 8000) => {
 
       const operation =
         req.body?.operationName || extractOperationName(req.body?.query);
+
+      const reqLogger = logger.child({ reqId, operation, ip });
+
+      reqLogger.info("Incoming request");
 
       if (isDev) {
         apiLimiter(ip, operation);

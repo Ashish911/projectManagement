@@ -58,7 +58,7 @@ export const TaskService = {
   async createTask(data, context) {
     validate(createTaskSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -87,6 +87,15 @@ export const TaskService = {
       );
     }
 
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "CREATE_TASK",
+      },
+      "AUDIT",
+    );
+
     return task;
   },
 
@@ -114,13 +123,25 @@ export const TaskService = {
       );
     }
 
-    return await TaskRepo.update(data.id, {
+    const updated = await TaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
       ...(data.deadline && { deadline: data.deadline }),
       ...(data.assignedTo && { assignedTo: data.assignedTo }),
       ...(data.currentStatus && { currentStatus: data.currentStatus }),
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetTaskId: data.id,
+        action: "UPDATE_TASK",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
 
   async updateTaskStatus(id, status, context) {
@@ -165,6 +186,16 @@ export const TaskService = {
       );
     }
 
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetTaskId: data.id,
+        action: "UPDATE_TASK_STATUS",
+      },
+      "AUDIT",
+    );
+
     return updatedTask;
   },
 
@@ -196,6 +227,18 @@ export const TaskService = {
       );
     }
 
-    return await TaskRepo.delete(id);
+    const deleted = await TaskRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetTaskId: data.id,
+        action: "DELETE_TASK",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
 };

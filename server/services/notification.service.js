@@ -78,7 +78,7 @@ export const NotificationService = {
   async deleteNotification(id, context) {
     validate(idSchema, { id });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const notification = await NotificationRepo.findById(id);
 
@@ -93,11 +93,23 @@ export const NotificationService = {
       );
     }
 
-    return await NotificationRepo.delete(id);
+    const deleted = await NotificationRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: id,
+        action: "DELETE_NOTIFICATION",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
 
   async deleteAllNotifications(context) {
-    const { user } = context;
+    const { user, logger } = context;
 
     const notifications = await NotificationRepo.findByUser(user.id);
 
@@ -105,6 +117,15 @@ export const NotificationService = {
       throw new NotFoundError("No notifications found.");
 
     await Promise.all(notifications.map((n) => NotificationRepo.delete(n._id)));
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "DELETE_ALL_NOTIFICATIONS",
+      },
+      "AUDIT",
+    );
 
     return notifications;
   },

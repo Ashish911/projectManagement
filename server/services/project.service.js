@@ -1,3 +1,4 @@
+import { ta } from "zod/v4/locales";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { ProjectRepo } from "../repositories/import.repo.js";
 import { ClientRepo } from "../repositories/import.repo.js";
@@ -62,7 +63,7 @@ export const ProjectService = {
   async addProject(data, context) {
     validate(addProjectSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role === "USER")
       throw new ForbiddenError(
@@ -80,16 +81,27 @@ export const ProjectService = {
       }
     }
 
-    return await ProjectRepo.create({
+    const project = await ProjectRepo.create({
       name: data.name,
       description: data.description,
       status: data.status || "NOT_STARTED",
       clientId: data.clientId,
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "ADD_PROJECT",
+      },
+      "AUDIT",
+    );
+
+    return project;
   },
   async updateProject(data, context) {
     validate(updateProjectSchema, data);
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -108,16 +120,27 @@ export const ProjectService = {
       }
     }
 
-    return await ProjectRepo.update(data.id, {
+    const updated = await ProjectRepo.update(data.id, {
       name: data.name,
       description: data.description,
       status: data.status,
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "UPDATE_PROJECT",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
   async deleteProject(id, context) {
     validate(idSchema, { id });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -136,10 +159,22 @@ export const ProjectService = {
       }
     }
 
-    return await ProjectRepo.delete(id);
+    const deleted = await ProjectRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetProjectId: id,
+        action: "DELETE_PROJECT",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
   async addUserToProject(data, context) {
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -164,9 +199,21 @@ export const ProjectService = {
         !project.assignedUser.map((id) => id.toString()).includes(userId),
     );
 
-    return await ProjectRepo.update(data.id, {
+    const updated = await ProjectRepo.update(data.id, {
       assignedUser: [...project.assignedUser, ...newUsers],
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetProjectId: id,
+        action: "ADD_USER_TO_PROJECT",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
   async removeUserFromProject(data, context) {
     const { user } = context;
@@ -192,6 +239,20 @@ export const ProjectService = {
       (userId) => !data.users.includes(userId.toString()),
     );
 
-    return await ProjectRepo.update(data.id, { assignedUser: updatedUsers });
+    const updated = await ProjectRepo.update(data.id, {
+      assignedUser: updatedUsers,
+    });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetProjectId: id,
+        action: "REMOVE_USER_FROM_PROJECT",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
 };

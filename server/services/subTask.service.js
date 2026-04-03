@@ -54,7 +54,7 @@ export const SubTaskService = {
   async createSubTask(data, context) {
     validate(createSubTaskSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const task = await TaskRepo.findById(data.taskId);
     if (!task) throw new NotFoundError("Task not found");
@@ -84,13 +84,22 @@ export const SubTaskService = {
       );
     }
 
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "CREATE_SUBTASK",
+      },
+      "AUDIT",
+    );
+
     return subTask;
   },
 
   async updateSubTask(data, context) {
     validate(updateSubTaskSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const subTask = await SubTaskRepo.findById(data.id);
     if (!subTask) throw new NotFoundError("SubTask not found");
@@ -109,19 +118,31 @@ export const SubTaskService = {
       );
     }
 
-    return await SubTaskRepo.update(data.id, {
+    const updated = await SubTaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
       ...(data.deadline && { deadline: data.deadline }),
       ...(data.assignedTo && { assignedTo: data.assignedTo }),
       ...(data.currentStatus && { currentStatus: data.currentStatus }),
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetSubtaskId: id,
+        action: "UPDATE_SUBTASK",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
 
   async updateSubTaskStatus(id, status, context) {
     validate(updateSubTaskStatusSchema, { id, status });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
@@ -159,13 +180,23 @@ export const SubTaskService = {
       );
     }
 
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetSubtaskId: id,
+        action: "UPDATE_SUBTASK_STATUS",
+      },
+      "AUDIT",
+    );
+
     return updatedSubTask;
   },
 
   async deleteSubTask(id, context) {
     validate(idSchema, { id });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
@@ -183,6 +214,18 @@ export const SubTaskService = {
       );
     }
 
-    return await SubTaskRepo.delete(id);
+    const deleted = await SubTaskRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetSubtaskId: id,
+        action: "DELETE_SUBTASK",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
 };

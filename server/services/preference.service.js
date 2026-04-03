@@ -17,15 +17,26 @@ export const PreferenceService = {
   async updatePreference(data, context) {
     validate(updatePreferenceSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     const preference = await PreferenceRepo.findByUser(user.id);
 
     if (!preference) throw new NotFoundError("Preference not found");
 
-    return await PreferenceRepo.update(preference._id, {
+    const updated = await PreferenceRepo.update(preference._id, {
       ...(data.theme && { theme: data.theme }),
       ...(data.language && { language: data.language }),
     });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "UPDATE_PREFERENCE",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
 };

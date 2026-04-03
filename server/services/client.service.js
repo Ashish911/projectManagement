@@ -55,7 +55,7 @@ export const ClientService = {
   async addClient(data, context) {
     validate(addClientSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     // SUPER_ADMIN can access everything
     if (user.role !== "SUPER_ADMIN") {
@@ -91,17 +91,39 @@ export const ClientService = {
       ...data,
     });
 
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        action: "CLIENT_CREATED",
+      },
+      "AUDIT",
+    );
+
     return client;
   },
   async deleteClientRequest(id, context) {
     console.log("deleteClientRequest called with id:", id);
     validate(idSchema, { id });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     // Only the Client admin itself can delete client_admin
     if (user.role == "CLIENT_ADMIN") {
-      return await ClientRepo.update(id, { set: { deleteRequest: true } });
+      const updatedClient = await ClientRepo.update(id, {
+        set: { deleteRequest: true },
+      });
+
+      logger.info(
+        {
+          audit: true,
+          userId: user.id,
+          action: "CLIENT_DELETE_REQUESTED",
+        },
+        "AUDIT",
+      );
+
+      return updatedClient;
     } else {
       throw new ForbiddenError(
         "Current role does not have the permission to request client deletion.",
@@ -111,7 +133,7 @@ export const ClientService = {
   async deleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
-    const { user } = context;
+    const { user, logger } = context;
 
     // SUPER_ADMIN can access everything
     if (user.role !== "SUPER_ADMIN") {
@@ -126,7 +148,19 @@ export const ClientService = {
     if (!client.deleteRequest)
       throw new ConflictError("Delete request not found for this client.");
 
-    return await ClientRepo.delete(id);
+    const deleted = await ClientRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: id,
+        action: "CLIENT_DELETED",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
 
   async forceDeleteClientBySuperAdmin(id, context) {
@@ -143,12 +177,24 @@ export const ClientService = {
     const client = await ClientRepo.findById(id);
     if (!client) throw new NotFoundError("Client not found");
 
-    return await ClientRepo.delete(id);
+    const deleted = await ClientRepo.delete(id);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: id,
+        action: "FORCE_CLIENT_DELETED",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
   },
   async updateClient(data, context) {
     validate(updateClientSchema, data);
 
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role == "USER") {
       throw new ForbiddenError(
@@ -161,7 +207,19 @@ export const ClientService = {
     if (!client) throw new NotFoundError("Client not found");
 
     if (user.id == client.assignedAdmin || user.role == "SUPER_ADMIN") {
-      return await ClientRepo.update(data.id, data);
+      const updated = await ClientRepo.update(data.id, data);
+
+      logger.info(
+        {
+          audit: true,
+          userId: user.id,
+          targetClientId: id,
+          action: "CLIENT_UPDATED",
+        },
+        "AUDIT",
+      );
+
+      return updated;
     }
 
     throw new ConflictError("Client error");

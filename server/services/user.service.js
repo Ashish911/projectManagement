@@ -130,7 +130,7 @@ export const UserService = {
    * @returns {Promise<UserDocument>} - The updated user profile.
    */
   async promoteToAdmin(userId, context) {
-    const { user } = context;
+    const { user, logger } = context;
 
     if (user.role !== "SUPER_ADMIN") {
       throw new ForbiddenError(
@@ -148,6 +148,19 @@ export const UserService = {
     ) {
       throw new ConflictError("User is already a admin.");
     }
-    return await UserRepo.update(userId, { role: "CLIENT_ADMIN" });
+
+    const updated = await UserRepo.update(userId, { role: "CLIENT_ADMIN" });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: userId,
+        action: "PROMOTE_TO_ADMIN",
+      },
+      "AUDIT",
+    );
+
+    return updated;
   },
 };
