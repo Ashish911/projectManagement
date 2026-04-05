@@ -12,6 +12,10 @@ import {
   simpleEstimator,
 } from "graphql-query-complexity";
 import logger from "./config/logger.js";
+import {
+  graphqlRequestCounter,
+  graphqlRequestDuration,
+} from "./config/metrics.js";
 
 const PUBLIC_OPERATIONS = [
   "LoginMutation",
@@ -22,9 +26,29 @@ const PUBLIC_OPERATIONS = [
 
 const isDev = process.env.NODE_ENV === "development";
 
+const metricsPlugin = {
+  async requestDidStart() {
+    return {
+      async willSendResponse({ contextValue, errors }) {
+        const { operation, startTime, logger } = contextValue ?? {};
+        if (!startTime || !operation) return;
+
+        const duration = Date.now() - startTime;
+        const status = errors?.length ? "error" : "success";
+
+        graphqlRequestCounter.inc({ operation, status });
+        graphqlRequestDuration.observe({ operation }, duration);
+
+        logger?.info({ duration, status }, "Request completed");
+      },
+    };
+  },
+};
+
 export const createServer = async () => {
   const server = new ApolloServer({
     schema,
+    plugins: [metricsPlugin],
     validationRules: [
       depthLimit(7),
       createComplexityRule({
@@ -83,6 +107,7 @@ export const startServer = async (port = 8000) => {
   // API routes
   const { url } = await startStandaloneServer(server, {
     context: async ({ req }) => {
+      const start = Date.now();
       const reqId = randomUUID();
 
       const ip =
@@ -124,7 +149,7 @@ export const startServer = async (port = 8000) => {
           );
         }
 
-        return { user };
+        return { user, reqId, logger: reqLogger, operation, startTime: start };
       }
     },
     listen: { port, path: "/graphql" },
