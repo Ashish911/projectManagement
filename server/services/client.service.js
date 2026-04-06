@@ -1,3 +1,4 @@
+import { cache } from "../config/cache.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -21,16 +22,38 @@ export const ClientService = {
       );
     }
 
-    return await ClientRepo.find();
+    const cacheKey = "clients:all";
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+
+    const clients = await ClientRepo.find();
+    await cache.set(cacheKey, clients);
+    return clients;
   },
   async getClient(id, context) {
     validate(idSchema, { id });
 
     const { user } = context;
 
+    const cacheKey = `clients:${id}`;
+    const cached = await cache.get(cacheKey);
+
+    if (cached) {
+      // Still enforce access control on cached data
+      if (user.role === "SUPER_ADMIN") return cached;
+      if (user.role === "CLIENT_ADMIN") {
+        if (cached.assignedAdmin?.id != user.id)
+          throw new ForbiddenError("You are not assigned to this client");
+        return cached;
+      }
+      throw new ForbiddenError("...");
+    }
+
     const client = await ClientRepo.findById(id);
 
     if (!client) throw new Error("Client not found");
+
+    await cache.set(cacheKey, client);
 
     // SUPER_ADMIN can access everything
     if (user.role === "SUPER_ADMIN") {
@@ -100,6 +123,8 @@ export const ClientService = {
       "AUDIT",
     );
 
+    await cache.invalidate("clients:all");
+
     return client;
   },
   async deleteClientRequest(id, context) {
@@ -122,6 +147,9 @@ export const ClientService = {
         },
         "AUDIT",
       );
+
+      await cache.invalidate(`clients:${id}`);
+      await cache.invalidate("clients:all");
 
       return updatedClient;
     } else {
@@ -160,6 +188,9 @@ export const ClientService = {
       "AUDIT",
     );
 
+    await cache.invalidate(`clients:${id}`);
+    await cache.invalidate("clients:all");
+
     return deleted;
   },
 
@@ -188,6 +219,9 @@ export const ClientService = {
       },
       "AUDIT",
     );
+
+    await cache.invalidate(`clients:${id}`);
+    await cache.invalidate("clients:all");
 
     return deleted;
   },
@@ -218,6 +252,9 @@ export const ClientService = {
         },
         "AUDIT",
       );
+
+      await cache.invalidate(`clients:${data.id}`);
+      await cache.invalidate("clients:all");
 
       return updated;
     }
