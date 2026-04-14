@@ -14,7 +14,7 @@
     "test:subTask": "node --experimental-vm-modules node_modules/.bin/jest tests/subTask.test.js --verbose",
     "test:task": "node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbose",
     "dev": "env-cmd -f .env.local nodemon app.js",
-    "start": "env-cmd -f .env.production node app.js"
+    "start": "env-cmd -f .env.prod node app.js"
   },
   "jest": {
     "testEnvironment": "node",

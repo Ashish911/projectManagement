@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import logger from "./logger";
+import logger from "./logger.js";
 
 const isDev = process.env.NODE_ENV === "development";
 

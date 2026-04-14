@@ -114,6 +114,8 @@ export const ClientService = {
       ...data,
     });
 
+    console.log(logger);
+
     logger.info(
       {
         audit: true,

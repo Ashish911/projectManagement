@@ -1,0 +1,114 @@
+version: "1.0"
+
+# ── Shared network so all services can talk to each other ──
+networks:
+  app-network:
+    driver: bridge
+
+# ── Named volumes for persistence ──
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # ════════════════════════════════
+  # APP - DEV
+  # ════════════════════════════════
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    profiles: ["dev"]
+    container_name: "ProjoMan-GraphQl"
+    env_file:
+      - .env.local
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ════════════════════════════════
+  # APP - PROD
+  # ════════════════════════════════
+
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["prod"]
+    container_name: "ProjoMan-GraphQl-Prod"
+    env_file:
+      - .env.prod
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ════════════════════════════════
+  # CACHE
+  # ════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    profiles: ["dev", "prod"]
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+  # ════════════════════════════════
+  # OBSERVABILITY
+  # ════════════════════════════════
+  prometheus:
+    image: prom/prometheus
+    profiles: ["dev"]
+    container_name: prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana
+    profiles: ["dev"]
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
