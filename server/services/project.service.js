@@ -1,4 +1,5 @@
-import { ta } from "zod/v4/locales";
+import { cache } from "../config/cache.js";
+import { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { ProjectRepo } from "../repositories/import.repo.js";
 import { ClientRepo } from "../repositories/import.repo.js";
@@ -63,7 +64,8 @@ export const ProjectService = {
   async addProject(data, context) {
     validate(addProjectSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER")
       throw new ForbiddenError(
@@ -101,7 +103,9 @@ export const ProjectService = {
   },
   async updateProject(data, context) {
     validate(updateProjectSchema, data);
-    const { user, logger } = context;
+
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -140,7 +144,8 @@ export const ProjectService = {
   async deleteProject(id, context) {
     validate(idSchema, { id });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -174,7 +179,8 @@ export const ProjectService = {
     return deleted;
   },
   async addUserToProject(data, context) {
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -207,7 +213,7 @@ export const ProjectService = {
       {
         audit: true,
         userId: user.id,
-        targetProjectId: id,
+        targetProjectId: data.id,
         action: "ADD_USER_TO_PROJECT",
       },
       "AUDIT",
@@ -217,6 +223,7 @@ export const ProjectService = {
   },
   async removeUserFromProject(data, context) {
     const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -247,7 +254,7 @@ export const ProjectService = {
       {
         audit: true,
         userId: user.id,
-        targetProjectId: id,
+        targetProjectId: data.id,
         action: "REMOVE_USER_FROM_PROJECT",
       },
       "AUDIT",

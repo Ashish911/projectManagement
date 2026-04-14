@@ -130,7 +130,8 @@ export const UserService = {
    * @returns {Promise<UserDocument>} - The updated user profile.
    */
   async promoteToAdmin(userId, context) {
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role !== "SUPER_ADMIN") {
       throw new ForbiddenError(

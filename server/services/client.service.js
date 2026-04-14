@@ -11,6 +11,7 @@ import {
   updateClientSchema,
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
+import { createLogger } from "../config/logger.js";
 
 export const ClientService = {
   async getClients(context) {
@@ -78,7 +79,8 @@ export const ClientService = {
   async addClient(data, context) {
     validate(addClientSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     // SUPER_ADMIN can access everything
     if (user.role !== "SUPER_ADMIN") {
@@ -114,8 +116,6 @@ export const ClientService = {
       ...data,
     });
 
-    console.log(logger);
-
     logger.info(
       {
         audit: true,
@@ -133,7 +133,8 @@ export const ClientService = {
     console.log("deleteClientRequest called with id:", id);
     validate(idSchema, { id });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     // Only the Client admin itself can delete client_admin
     if (user.role == "CLIENT_ADMIN") {
@@ -163,7 +164,8 @@ export const ClientService = {
   async deleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     // SUPER_ADMIN can access everything
     if (user.role !== "SUPER_ADMIN") {
@@ -200,6 +202,7 @@ export const ClientService = {
     validate(idSchema, { id });
 
     const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role !== "SUPER_ADMIN") {
       throw new ForbiddenError(
@@ -230,7 +233,8 @@ export const ClientService = {
   async updateClient(data, context) {
     validate(updateClientSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role == "USER") {
       throw new ForbiddenError(
@@ -249,7 +253,7 @@ export const ClientService = {
         {
           audit: true,
           userId: user.id,
-          targetClientId: id,
+          targetClientId: data.id,
           action: "CLIENT_UPDATED",
         },
         "AUDIT",

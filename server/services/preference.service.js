@@ -1,3 +1,5 @@
+import { cache } from "../config/cache.js";
+import { createLogger } from "../config/logger.js";
 import { NotFoundError } from "../errors/errors.js";
 import { PreferenceRepo } from "../repositories/import.repo.js";
 import { updatePreferenceSchema } from "../validation/schema.js";
@@ -7,9 +9,14 @@ export const PreferenceService = {
   async getPreference(context) {
     const { user } = context;
 
-    const preference = await PreferenceRepo.findByUser(user.id);
+    const cacheKey = `preference:${user.id}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
 
+    const preference = await PreferenceRepo.findByUser(user.id);
     if (!preference) throw new NotFoundError("Preference not found");
+
+    await cache.set(cacheKey, preference);
 
     return preference;
   },
@@ -17,7 +24,8 @@ export const PreferenceService = {
   async updatePreference(data, context) {
     validate(updatePreferenceSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const preference = await PreferenceRepo.findByUser(user.id);
 
@@ -36,6 +44,8 @@ export const PreferenceService = {
       },
       "AUDIT",
     );
+
+    await cache.invalidate(`preference:${user.id}`);
 
     return updated;
   },

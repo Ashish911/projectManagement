@@ -1,3 +1,4 @@
+import { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { NotificationRepo } from "../repositories/import.repo.js";
 import { idSchema } from "../validation/schema.js";
@@ -78,7 +79,8 @@ export const NotificationService = {
   async deleteNotification(id, context) {
     validate(idSchema, { id });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const notification = await NotificationRepo.findById(id);
 
@@ -109,7 +111,8 @@ export const NotificationService = {
   },
 
   async deleteAllNotifications(context) {
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const notifications = await NotificationRepo.findByUser(user.id);
 

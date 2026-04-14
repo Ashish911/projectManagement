@@ -1,3 +1,4 @@
+import { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import {
   TaskRepo,
@@ -58,7 +59,8 @@ export const TaskService = {
   async createTask(data, context) {
     validate(createTaskSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -103,6 +105,7 @@ export const TaskService = {
     validate(updateTaskSchema, data);
 
     const { user } = context;
+    const logger = createLogger(context);
 
     const task = await TaskRepo.findById(data.id);
 
@@ -148,6 +151,7 @@ export const TaskService = {
     validate(updateSubTaskStatusSchema, { id, status });
 
     const { user } = context;
+    const logger = createLogger(context);
 
     const task = await TaskRepo.findById(id);
 
@@ -190,7 +194,7 @@ export const TaskService = {
       {
         audit: true,
         userId: user.id,
-        targetTaskId: data.id,
+        targetTaskId: id,
         action: "UPDATE_TASK_STATUS",
       },
       "AUDIT",
@@ -203,6 +207,7 @@ export const TaskService = {
     validate(idSchema, { id });
 
     const { user } = context;
+    const logger = createLogger(context);
 
     if (user.role === "USER") {
       throw new ForbiddenError(
@@ -233,7 +238,7 @@ export const TaskService = {
       {
         audit: true,
         userId: user.id,
-        targetTaskId: data.id,
+        targetTaskId: id,
         action: "DELETE_TASK",
       },
       "AUDIT",

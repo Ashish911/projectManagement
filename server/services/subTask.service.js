@@ -1,3 +1,4 @@
+import { createLogger } from "../config/logger.js";
 import { NotFoundError, ForbiddenError } from "../errors/errors.js";
 import { SubTaskRepo, TaskRepo } from "../repositories/import.repo.js";
 import {
@@ -54,7 +55,8 @@ export const SubTaskService = {
   async createSubTask(data, context) {
     validate(createSubTaskSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const task = await TaskRepo.findById(data.taskId);
     if (!task) throw new NotFoundError("Task not found");
@@ -99,7 +101,8 @@ export const SubTaskService = {
   async updateSubTask(data, context) {
     validate(updateSubTaskSchema, data);
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const subTask = await SubTaskRepo.findById(data.id);
     if (!subTask) throw new NotFoundError("SubTask not found");
@@ -130,7 +133,7 @@ export const SubTaskService = {
       {
         audit: true,
         userId: user.id,
-        targetSubtaskId: id,
+        targetSubtaskId: data.id,
         action: "UPDATE_SUBTASK",
       },
       "AUDIT",
@@ -142,7 +145,8 @@ export const SubTaskService = {
   async updateSubTaskStatus(id, status, context) {
     validate(updateSubTaskStatusSchema, { id, status });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
@@ -196,7 +200,8 @@ export const SubTaskService = {
   async deleteSubTask(id, context) {
     validate(idSchema, { id });
 
-    const { user, logger } = context;
+    const { user } = context;
+    const logger = createLogger(context);
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
