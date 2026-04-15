@@ -47,7 +47,26 @@ const SubTaskSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true, versionKey: false },
+  {
+    toObject: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    toJSON: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    timestamps: true,
+    versionKey: false,
+  },
 );
 
 const SubTask = mongoose.model("SubTask", SubTaskSchema);

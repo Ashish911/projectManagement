@@ -1,14 +1,17 @@
 import { User } from "../models/import.js";
 
 export const UserRepo = {
-  findById: (id) => User.findById(id).lean(),
-  findByEmail: (email) => User.findOne({ email }),
-  create: async (user) => await new User(user).save(),
-  update: (id, user) =>
-    User.findByIdAndUpdate(
-      id,
-      { $set: user },
-      { new: true, runValidators: true },
-    ).lean(),
-  delete: (id) => User.findByIdAndDelete(id).lean(),
+  findById: async (id) => (await User.findById(id))?.toObject() ?? null,
+  findByEmail: async (email) =>
+    (await User.findOne({ email }))?.toObject() ?? null,
+  create: async (data) => (await new User(data).save()).toObject(),
+  update: async (id, data) =>
+    (
+      await User.findByIdAndUpdate(
+        id,
+        { $set: data },
+        { new: true, runValidators: true },
+      )
+    )?.toObject() ?? null,
+  delete: async (id) => (await User.findByIdAndDelete(id))?.toObject() ?? null,
 };

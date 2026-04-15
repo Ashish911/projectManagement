@@ -29,7 +29,26 @@ const NotificationSchema = new mongoose.Schema(
       default: "UNREAD",
     },
   },
-  { timestamps: true, versionKey: false },
+  {
+    toObject: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    toJSON: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    timestamps: true,
+    versionKey: false,
+  },
 );
 
 const Notification = mongoose.model("Notification", NotificationSchema);

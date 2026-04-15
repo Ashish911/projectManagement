@@ -1,14 +1,17 @@
 import { Project } from "../models/import.js";
 
 export const ProjectRepo = {
-  find: () => Project.find().lean(),
-  findById: (id) => Project.findById(id).lean(),
-  create: async (project) => await new Project(project).save(),
-  update: (id, project) =>
-    Project.findByIdAndUpdate(
-      id,
-      { $set: project },
-      { new: true, runValidators: true },
-    ).lean(),
-  delete: (id) => Project.findByIdAndDelete(id).lean(),
+  find: async () => (await Project.find()).map((p) => p.toObject()),
+  findById: async (id) => (await Project.findById(id))?.toObject() ?? null,
+  create: async (data) => (await new Project(data).save()).toObject(),
+  update: async (id, data) =>
+    (
+      await Project.findByIdAndUpdate(
+        id,
+        { $set: data },
+        { new: true, runValidators: true },
+      )
+    )?.toObject() ?? null,
+  delete: async (id) =>
+    (await Project.findByIdAndDelete(id))?.toObject() ?? null,
 };

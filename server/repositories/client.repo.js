@@ -1,16 +1,21 @@
 import { Client } from "../models/import.js";
 
 export const ClientRepo = {
-  find: () => Client.find().lean(),
-  findById: (id) => Client.findById(id).lean(),
-  findByUser: (userId) => Client.find({ user: userId }).lean(),
-  findByEmail: (email) => Client.findOne({ email }).lean(),
-  create: async (client) => await new Client(client).save(),
-  update: (id, client) =>
-    Client.findByIdAndUpdate(
-      id,
-      { $set: client },
-      { new: true, runValidators: true },
-    ).lean(),
-  delete: (id) => Client.findByIdAndDelete(id).lean(),
+  find: async () => (await Client.find()).map((c) => c.toObject()),
+  findById: async (id) => (await Client.findById(id))?.toObject() ?? null,
+  findByUser: async (userId) =>
+    (await Client.find({ user: userId })).map((c) => c.toObject()),
+  findByEmail: async (email) =>
+    (await Client.findOne({ email }))?.toObject() ?? null,
+  create: async (data) => (await new Client(data).save()).toObject(),
+  update: async (id, data) =>
+    (
+      await Client.findByIdAndUpdate(
+        id,
+        { $set: data },
+        { new: true, runValidators: true },
+      )
+    )?.toObject() ?? null,
+  delete: async (id) =>
+    (await Client.findByIdAndDelete(id))?.toObject() ?? null,
 };

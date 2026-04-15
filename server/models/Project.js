@@ -43,7 +43,26 @@ const ProjectSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true, versionKey: false },
+  {
+    toObject: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    toJSON: {
+      virtuals: true,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+    timestamps: true,
+    versionKey: false,
+  },
 );
 
 const Project = mongoose.model("Project", ProjectSchema);
