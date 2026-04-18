@@ -66,6 +66,26 @@ services:
         condition: service_healthy
 
   # ════════════════════════════════
+  # WORKER APP
+  # ════════════════════════════════
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: notification-worker
+    command: npx nodemon ./worker/notification.worker.js
+    env_file:
+      - .env.local
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # ════════════════════════════════
   # CACHE
   # ════════════════════════════════
   redis:

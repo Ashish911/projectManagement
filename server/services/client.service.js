@@ -12,6 +12,7 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { createLogger } from "../config/logger.js";
+import { notificationQueue } from "../queues/notification.queue.js";
 
 export const ClientService = {
   async getClients(context) {
@@ -23,12 +24,18 @@ export const ClientService = {
       );
     }
 
+    await notificationQueue.add("notify", {
+      user: user.id,
+      content: "Client list asdas",
+    });
+
     const cacheKey = "clients:all";
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
 
     const clients = await ClientRepo.find();
     await cache.set(cacheKey, clients);
+
     return clients;
   },
   async getClient(id, context) {
