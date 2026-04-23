@@ -7,6 +7,7 @@ import http from "http";
 import { client } from "./config/metrics.js";
 import { createIndexes } from "./config/logger.js";
 import { startWithCluster } from "./cluster.js";
+import logger from "./config/logger.js";
 
 // dotenv.config();
 
@@ -29,10 +30,19 @@ const port = process.env.PORT || 8000;
 
 async function startApp() {
   try {
-    // Connect DB first
     const db = await connectDB();
     await createIndexes(db);
-    await startServer(port);
+    const { apolloServer } = await startServer(port);
+
+    const shutdown = async (signal) => {
+      logger.info({ signal }, "Shutdown signal received");
+      await apolloServer.stop(); // drains HTTP + WebSocket via plugins
+      metricsServer.close();
+      process.exit(0);
+    };
+
+    process.once("SIGTERM", () => shutdown("SIGTERM"));
+    process.once("SIGINT", () => shutdown("SIGINT"));
   } catch (err) {
     console.error("Failed to start application:", err);
     process.exit(1);

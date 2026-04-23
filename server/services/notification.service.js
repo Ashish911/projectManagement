@@ -1,17 +1,27 @@
-import { createLogger } from "../config/logger.js";
+import logger, { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { NotificationRepo } from "../repositories/import.repo.js";
 import { idSchema } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
+import pubsub, { NOTIFICATION_CREATED } from "../config/pubsub.js";
 
 export const NotificationService = {
   // Internal method, called by other services not by resolvers
   async notify(userId, content) {
-    return await NotificationRepo.create({
+    const notification = await NotificationRepo.create({
       content,
       status: "UNREAD",
       user: userId,
     });
+
+    // Fire-and-forget: notification is persisted regardless of Redis availability
+    pubsub
+      .publish(`${NOTIFICATION_CREATED}:${userId}`, {
+        notificationCreated: notification,
+      })
+      .catch((err) => logger.error({ err }, "PubSub publish failed"));
+
+    return notification;
   },
 
   async getNotifications(context) {

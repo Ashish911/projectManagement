@@ -16,5 +16,10 @@ export const clientResolvers = {
       await ClientService.deleteClientRequest(id, context),
     deleteClientBySuperAdmin: async (_, { id }, context) =>
       await ClientService.deleteClientBySuperAdmin(id, context),
+
+    forceDeleteClient: async (_, { id }, context) =>
+      await ClientService.forceDeleteClientBySuperAdmin(id, context),
+    assignAdmin: async (_, args, context) =>
+      await ClientService.assignAdmin(args, context),
   },
 };

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // ─── Reusable validators ──────────────────────────────────────────
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid ID format");
+const nullableObjectId = objectId.optional().nullable();
 const email = z.string().email("Invalid email format");
 const password = z.string().min(8, "Password must be at least 8 characters");
 const name = z.string().min(1).max(100);
@@ -32,8 +33,13 @@ export const addClientSchema = z.object({
   name: name,
   email: email,
   phone: z.string().min(1, "Phone is required"),
-  assignedAdmin: objectId.optional(),
+  assignedAdmin: nullableObjectId,
   deleteRequest: z.boolean().default(false),
+});
+
+export const assignAdminSchema = z.object({
+  clientId: objectId,
+  adminId: objectId,
 });
 
 export const updateClientSchema = z.object({
@@ -41,7 +47,7 @@ export const updateClientSchema = z.object({
   name: name,
   email: email,
   phone: z.string().optional(),
-  assignedAdmin: objectId.optional(),
+  assignedAdmin: nullableObjectId,
   deleteRequest: z.boolean().optional(),
 });
 
@@ -75,7 +81,7 @@ export const projectUserSchema = z.object({
 export const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   projectId: objectId,
-  assignedTo: objectId.optional(),
+  assignedTo: nullableObjectId,
   deadline: z.string().optional(),
   priority: z.enum(["URGENT", "HIGH", "NORMAL", "BACKLOG"]).default("NORMAL"),
 });
@@ -83,7 +89,7 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z.object({
   id: objectId,
   title: z.string().max(200).optional(),
-  assignedTo: objectId.optional(),
+  assignedTo: nullableObjectId,
   deadline: z.string().optional(),
   priority: z.enum(["URGENT", "HIGH", "NORMAL", "BACKLOG"]).optional(),
 });
@@ -101,7 +107,7 @@ export const deleteTaskSchema = z.object({
 export const createSubTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   taskId: objectId,
-  assignedTo: objectId.optional(),
+  assignedTo: nullableObjectId,
   deadline: z.string().optional(),
   priority: z.enum(["URGENT", "HIGH", "NORMAL", "BACKLOG"]).default("NORMAL"),
 });
@@ -109,7 +115,7 @@ export const createSubTaskSchema = z.object({
 export const updateSubTaskSchema = z.object({
   id: objectId,
   title: z.string().max(200).optional(),
-  assignedTo: objectId.optional(),
+  assignedTo: nullableObjectId,
   deadline: z.string().optional(),
   priority: z.enum(["URGENT", "HIGH", "NORMAL", "BACKLOG"]).optional(),
 });

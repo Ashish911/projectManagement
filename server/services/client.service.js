@@ -7,6 +7,7 @@ import {
 import { ClientRepo, UserRepo } from "../repositories/import.repo.js";
 import {
   addClientSchema,
+  assignAdminSchema,
   idSchema,
   updateClientSchema,
 } from "../validation/schema.js";
@@ -23,11 +24,6 @@ export const ClientService = {
         "Current role does not have the permission to get Clients",
       );
     }
-
-    await notificationQueue.add("notify", {
-      user: user.id,
-      content: "Client list asdas",
-    });
 
     const cacheKey = "clients:all";
     const cached = await cache.get(cacheKey);
@@ -236,6 +232,50 @@ export const ClientService = {
     await cache.invalidate("clients:all");
 
     return deleted;
+  },
+  async assignAdmin(data, context) {
+    validate(assignAdminSchema, data);
+
+    const { user } = context;
+    const logger = createLogger(context);
+
+    if (user.role !== "SUPER_ADMIN") {
+      throw new ForbiddenError(
+        "Current role does not have the permission to assign admin to Clients",
+      );
+    }
+
+    const client = await ClientRepo.findById(data.clientId);
+    if (!client) throw new NotFoundError("Client not found");
+
+    const adminUser = await UserRepo.findById(data.adminId);
+    if (!adminUser) throw new NotFoundError("User not found");
+
+    if (adminUser.role !== "CLIENT_ADMIN") {
+      throw new ForbiddenError("User does not have CLIENT_ADMIN role");
+    }
+
+    const alreadyAssigned = await ClientRepo.findByUser(data.adminId);
+    if (alreadyAssigned) throw new ConflictError("User is already assigned to a client");
+
+    const updated = await ClientRepo.update(data.clientId, {
+      set: { assignedAdmin: data.adminId },
+    });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: data.clientId,
+        action: "CLIENT_ADMIN_ASSIGNED",
+      },
+      "AUDIT",
+    );
+
+    await cache.invalidate(`clients:${data.clientId}`);
+    await cache.invalidate("clients:all");
+
+    return updated;
   },
   async updateClient(data, context) {
     validate(updateClientSchema, data);

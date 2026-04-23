@@ -21,6 +21,11 @@ jest.unstable_mockModule("../repositories/notification.repo.js", () => ({
   },
 }));
 
+jest.unstable_mockModule("../config/pubsub.js", () => ({
+  default: { publish: jest.fn().mockResolvedValue(true) },
+  NOTIFICATION_CREATED: "NOTIFICATION_CREATED",
+}));
+
 // ─── Import AFTER mocking ─────────────────────────────────────────
 const { NotificationService } =
   await import("../services/notification.service.js");

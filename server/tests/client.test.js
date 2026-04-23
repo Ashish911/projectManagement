@@ -466,4 +466,127 @@ describe("ClientService", () => {
       expect(mockClientDelete).not.toHaveBeenCalled();
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // ASSIGN ADMIN
+  // ════════════════════════════════════════════════════════════════
+  describe("assignAdmin", () => {
+    const assignAdminData = {
+      clientId: "748a1b2c3d4e5f6a7b8c9d0e",
+      adminId: "648a1b2c3d4e5f6a7b8c9d1a",
+    };
+
+    const mockClientWithAdmin = {
+      ...mockClient,
+      assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a",
+    };
+
+    it("🟢 SUPER_ADMIN should assign a CLIENT_ADMIN to a client", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+      mockClientFindByUser.mockResolvedValue(null);
+      mockClientUpdate.mockResolvedValue(mockClientWithAdmin);
+
+      const result = await ClientService.assignAdmin(assignAdminData, {
+        user: mockSuperAdmin,
+      });
+
+      expect(result.assignedAdmin).toBe("648a1b2c3d4e5f6a7b8c9d1a");
+      expect(mockClientUpdate).toHaveBeenCalledWith(assignAdminData.clientId, {
+        set: { assignedAdmin: assignAdminData.adminId },
+      });
+    });
+
+    it("🟢 should not call update if validation fails", async () => {
+      try {
+        await ClientService.assignAdmin(
+          { clientId: "invalid", adminId: "invalid" },
+          { user: mockSuperAdmin },
+        );
+      } catch (e) {}
+      expect(mockClientUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 CLIENT_ADMIN should not assign an admin", async () => {
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockClientAdmin }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to assign admin to Clients",
+      );
+    });
+
+    it("🔴 USER should not assign an admin", async () => {
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockUser }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to assign admin to Clients",
+      );
+    });
+
+    it("🔴 should throw if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin }),
+      ).rejects.toThrow("Client not found");
+    });
+
+    it("🔴 should throw if admin user not found", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      mockUserFindById.mockResolvedValue(null);
+
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User not found");
+    });
+
+    it("🔴 should throw if user does not have CLIENT_ADMIN role", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      mockUserFindById.mockResolvedValue(mockUser);
+
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User does not have CLIENT_ADMIN role");
+    });
+
+    it("🔴 should throw if admin is already assigned to another client", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+      mockClientFindByUser.mockResolvedValue(mockClient);
+
+      await expect(
+        ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User is already assigned to a client");
+    });
+
+    it("🔴 should throw if clientId is invalid", async () => {
+      await expect(
+        ClientService.assignAdmin(
+          { clientId: "invalid", adminId: "648a1b2c3d4e5f6a7b8c9d1a" },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should throw if adminId is invalid", async () => {
+      await expect(
+        ClientService.assignAdmin(
+          { clientId: "748a1b2c3d4e5f6a7b8c9d0e", adminId: "invalid" },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should not call update if client not found", async () => {
+      mockClientFindById.mockResolvedValue(null);
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+      try {
+        await ClientService.assignAdmin(assignAdminData, {
+          user: mockSuperAdmin,
+        });
+      } catch (e) {}
+      expect(mockClientUpdate).not.toHaveBeenCalled();
+    });
+  });
 });

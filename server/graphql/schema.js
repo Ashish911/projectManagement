@@ -151,10 +151,12 @@ const Mutation = new GraphQLObjectType({
     updateClient: {
       type: ClientType,
       args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
         name: { type: new GraphQLNonNull(GraphQLString) },
         email: { type: new GraphQLNonNull(GraphQLString) },
         phone: { type: new GraphQLNonNull(GraphQLString) },
-        assignedUser: { type: new GraphQLNonNull(GraphQLID) },
+        assignedAdmin: { type: GraphQLID },
+        deleteRequest: { type: GraphQLBoolean },
       },
       resolve: clientResolvers.Mutation.updateClient,
     },
@@ -171,6 +173,21 @@ const Mutation = new GraphQLObjectType({
         id: { type: new GraphQLNonNull(GraphQLID) },
       },
       resolve: clientResolvers.Mutation.deleteClientBySuperAdmin,
+    },
+    forceDeleteClient: {
+      type: ClientType,
+      args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: clientResolvers.Mutation.forceDeleteClient,
+    },
+    assignAdmin: {
+      type: ClientType,
+      args: {
+        clientId: { type: new GraphQLNonNull(GraphQLID) },
+        adminId: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: clientResolvers.Mutation.assignAdmin,
     },
     addProject: {
       type: ProjectType,
@@ -424,9 +441,22 @@ const Mutation = new GraphQLObjectType({
   },
 });
 
+const Subscription = new GraphQLObjectType({
+  name: "Subscription",
+  fields: {
+    notificationCreated: {
+      type: NotificationType,
+      subscribe:
+        notificationResolvers.Subscription.notificationCreated.subscribe,
+      resolve: notificationResolvers.Subscription.notificationCreated.resolve,
+    },
+  },
+});
+
 const schema = new GraphQLSchema({
   query: RootQuery,
   mutation: Mutation,
+  subscription: Subscription,
 });
 
 export default schema;
