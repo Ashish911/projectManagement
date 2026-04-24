@@ -104,6 +104,13 @@ const Mutation = new GraphQLObjectType({
       },
       resolve: userResolvers.Mutation.login,
     },
+    promoteToAdmin: {
+      type: UserType,
+      args: {
+        userId: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: userResolvers.Mutation.promoteToAdmin,
+    },
     register: {
       type: UserType,
       args: {
@@ -184,8 +191,8 @@ const Mutation = new GraphQLObjectType({
     assignAdmin: {
       type: ClientType,
       args: {
-        clientId: { type: new GraphQLNonNull(GraphQLID) },
-        adminId: { type: new GraphQLNonNull(GraphQLID) },
+        id: { type: new GraphQLNonNull(GraphQLID) },
+        assignedAdmin: { type: new GraphQLNonNull(GraphQLID) },
       },
       resolve: clientResolvers.Mutation.assignAdmin,
     },

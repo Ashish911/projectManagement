@@ -245,34 +245,35 @@ export const ClientService = {
       );
     }
 
-    const client = await ClientRepo.findById(data.clientId);
+    const client = await ClientRepo.findById(data.id);
     if (!client) throw new NotFoundError("Client not found");
 
-    const adminUser = await UserRepo.findById(data.adminId);
+    const adminUser = await UserRepo.findById(data.assignedAdmin);
     if (!adminUser) throw new NotFoundError("User not found");
 
     if (adminUser.role !== "CLIENT_ADMIN") {
       throw new ForbiddenError("User does not have CLIENT_ADMIN role");
     }
 
-    const alreadyAssigned = await ClientRepo.findByUser(data.adminId);
-    if (alreadyAssigned) throw new ConflictError("User is already assigned to a client");
+    const alreadyAssigned = await ClientRepo.findByUser(data.assignedAdmin);
+    if (alreadyAssigned)
+      throw new ConflictError("User is already assigned to a client");
 
-    const updated = await ClientRepo.update(data.clientId, {
-      set: { assignedAdmin: data.adminId },
+    const updated = await ClientRepo.update(data.id, {
+      set: { assignedAdmin: data.assignedAdmin },
     });
 
     logger.info(
       {
         audit: true,
         userId: user.id,
-        targetClientId: data.clientId,
+        targetClientId: data.id,
         action: "CLIENT_ADMIN_ASSIGNED",
       },
       "AUDIT",
     );
 
-    await cache.invalidate(`clients:${data.clientId}`);
+    await cache.invalidate(`clients:${data.id}`);
     await cache.invalidate("clients:all");
 
     return updated;

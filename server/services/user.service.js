@@ -9,6 +9,7 @@ import {
 } from "../errors/errors.js";
 import { validate } from "../validation/validate.js";
 import { registerSchema, loginSchema, idSchema } from "../validation/schema.js";
+import { createLogger } from "../config/logger.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 60 * 1000;
@@ -130,6 +131,8 @@ export const UserService = {
    * @returns {Promise<UserDocument>} - The updated user profile.
    */
   async promoteToAdmin(userId, context) {
+    validate(idSchema, { id: userId });
+
     const { user } = context;
     const logger = createLogger(context);
 
@@ -139,13 +142,12 @@ export const UserService = {
       );
     }
 
-    const userToPromote = await UserRepo.findById(userId).orElseThrow(
-      new NotFoundError("User not found"),
-    );
+    const userToPromote = await UserRepo.findById(userId);
+    if (!userToPromote) throw new NotFoundError("User not found");
 
     if (
-      userToPromote.role == "CLIENT_ADMIN" ||
-      userToPromote.role == "SUPER_ADMIN"
+      userToPromote.role === "CLIENT_ADMIN" ||
+      userToPromote.role === "SUPER_ADMIN"
     ) {
       throw new ConflictError("User is already a admin.");
     }
@@ -156,7 +158,7 @@ export const UserService = {
       {
         audit: true,
         userId: user.id,
-        targetClientId: userId,
+        targetUserId: userId,
         action: "PROMOTE_TO_ADMIN",
       },
       "AUDIT",

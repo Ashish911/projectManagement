@@ -472,8 +472,8 @@ describe("ClientService", () => {
   // ════════════════════════════════════════════════════════════════
   describe("assignAdmin", () => {
     const assignAdminData = {
-      clientId: "748a1b2c3d4e5f6a7b8c9d0e",
-      adminId: "648a1b2c3d4e5f6a7b8c9d1a",
+      id: "748a1b2c3d4e5f6a7b8c9d0e",
+      assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a",
     };
 
     const mockClientWithAdmin = {
@@ -492,15 +492,15 @@ describe("ClientService", () => {
       });
 
       expect(result.assignedAdmin).toBe("648a1b2c3d4e5f6a7b8c9d1a");
-      expect(mockClientUpdate).toHaveBeenCalledWith(assignAdminData.clientId, {
-        set: { assignedAdmin: assignAdminData.adminId },
+      expect(mockClientUpdate).toHaveBeenCalledWith(assignAdminData.id, {
+        set: { assignedAdmin: assignAdminData.assignedAdmin },
       });
     });
 
     it("🟢 should not call update if validation fails", async () => {
       try {
         await ClientService.assignAdmin(
-          { clientId: "invalid", adminId: "invalid" },
+          { id: "invalid", assignedAdmin: "invalid" },
           { user: mockSuperAdmin },
         );
       } catch (e) {}
@@ -560,19 +560,19 @@ describe("ClientService", () => {
       ).rejects.toThrow("User is already assigned to a client");
     });
 
-    it("🔴 should throw if clientId is invalid", async () => {
+    it("🔴 should throw if id is invalid", async () => {
       await expect(
         ClientService.assignAdmin(
-          { clientId: "invalid", adminId: "648a1b2c3d4e5f6a7b8c9d1a" },
+          { id: "invalid", assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a" },
           { user: mockSuperAdmin },
         ),
       ).rejects.toThrow("Invalid ID format");
     });
 
-    it("🔴 should throw if adminId is invalid", async () => {
+    it("🔴 should throw if assignedAdmin is invalid", async () => {
       await expect(
         ClientService.assignAdmin(
-          { clientId: "748a1b2c3d4e5f6a7b8c9d0e", adminId: "invalid" },
+          { id: "748a1b2c3d4e5f6a7b8c9d0e", assignedAdmin: "invalid" },
           { user: mockSuperAdmin },
         ),
       ).rejects.toThrow("Invalid ID format");

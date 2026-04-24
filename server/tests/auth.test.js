@@ -405,40 +405,81 @@ describe("UserService", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  // Promote to Client Admin
+  // PROMOTE TO ADMIN
   // ════════════════════════════════════════════════════════════════
-  // describe("promoteToAdmin", () => {
-  //   it("🟢 should return user profile", async () => {
-  //     mockFindById.mockResolvedValue(mockUser);
+  describe("promoteToAdmin", () => {
+    const mockPromotedUser = { ...mockUser, role: "CLIENT_ADMIN" };
 
-  //     const result = await UserService.getProfile(mockUser.id);
+    it("🟢 SUPER_ADMIN should promote a USER to CLIENT_ADMIN", async () => {
+      mockFindById.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockPromotedUser);
 
-  //     expect(result).toEqual(mockUser);
-  //     expect(mockFindById).toHaveBeenCalledWith(mockUser.id);
-  //   });
+      const result = await UserService.promoteToAdmin(mockUser.id, {
+        user: mockSuperAdmin,
+      });
 
-  //   it("🟢 should return SUPER_ADMIN profile", async () => {
-  //     mockFindById.mockResolvedValue(mockSuperAdmin);
+      expect(result.role).toBe("CLIENT_ADMIN");
+      expect(mockUpdate).toHaveBeenCalledWith(mockUser.id, {
+        role: "CLIENT_ADMIN",
+      });
+    });
 
-  //     const result = await UserService.getProfile(mockSuperAdmin.id);
+    it("🟢 should not call update if user is not found", async () => {
+      mockFindById.mockResolvedValue(null);
 
-  //     expect(result.role).toBe("SUPER_ADMIN");
-  //   });
+      try {
+        await UserService.promoteToAdmin(mockUser.id, {
+          user: mockSuperAdmin,
+        });
+      } catch (e) {}
 
-  //   it("🟢 should return CLIENT_ADMIN profile", async () => {
-  //     mockFindById.mockResolvedValue(mockClientAdmin);
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
 
-  //     const result = await UserService.getProfile(mockClientAdmin.id);
+    it("🔴 CLIENT_ADMIN should not promote a user", async () => {
+      await expect(
+        UserService.promoteToAdmin(mockUser.id, { user: mockClientAdmin }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to promote users to admin",
+      );
+    });
 
-  //     expect(result.role).toBe("CLIENT_ADMIN");
-  //   });
+    it("🔴 USER should not promote a user", async () => {
+      await expect(
+        UserService.promoteToAdmin(mockUser.id, { user: mockUser }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to promote users to admin",
+      );
+    });
 
-  //   it("🔴 should throw if user not found", async () => {
-  //     mockFindById.mockResolvedValue(null);
+    it("🔴 should throw if target user is not found", async () => {
+      mockFindById.mockResolvedValue(null);
 
-  //     await expect(UserService.getProfile(mockUser.id)).rejects.toThrow(
-  //       "User not found",
-  //     );
-  //   });
-  // });
+      await expect(
+        UserService.promoteToAdmin(mockUser.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User not found");
+    });
+
+    it("🔴 should throw if target user is already CLIENT_ADMIN", async () => {
+      mockFindById.mockResolvedValue(mockClientAdmin);
+
+      await expect(
+        UserService.promoteToAdmin(mockClientAdmin.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User is already a admin.");
+    });
+
+    it("🔴 should throw if target user is already SUPER_ADMIN", async () => {
+      mockFindById.mockResolvedValue(mockSuperAdmin);
+
+      await expect(
+        UserService.promoteToAdmin(mockSuperAdmin.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User is already a admin.");
+    });
+
+    it("🔴 should throw if userId is invalid", async () => {
+      await expect(
+        UserService.promoteToAdmin("invalid-id", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
+    });
+  });
 });

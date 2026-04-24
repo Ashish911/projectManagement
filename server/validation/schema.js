@@ -38,8 +38,8 @@ export const addClientSchema = z.object({
 });
 
 export const assignAdminSchema = z.object({
-  clientId: objectId,
-  adminId: objectId,
+  id: objectId,
+  assignedAdmin: objectId,
 });
 
 export const updateClientSchema = z.object({
