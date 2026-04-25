@@ -12,7 +12,7 @@ import mongoose from "mongoose";
  *   description: string,
  *   status: string,
  *   clientId: import('mongoose').Types.ObjectId,
- *   assignedUser: Array<import('mongoose').Types.ObjectId>
+ *   assignedUsers: Array<import('mongoose').Types.ObjectId>
  * }} ProjectDocument
  */
 const ProjectSchema = new mongoose.Schema(

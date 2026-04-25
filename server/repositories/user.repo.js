@@ -1,6 +1,9 @@
 import { User } from "../models/import.js";
 
 export const UserRepo = {
+  find: async () => (await User.find()).map((u) => u.toObject()),
+  findByIds: async (ids) =>
+    (await User.find({ _id: { $in: ids } })).map((u) => u.toObject()),
   findById: async (id) => (await User.findById(id))?.toObject() ?? null,
   findByEmail: async (email) =>
     (await User.findOne({ email }))?.toObject() ?? null,

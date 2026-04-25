@@ -1,6 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { UserRepo, PreferenceRepo } from "../repositories/import.repo.js";
+import {
+  UserRepo,
+  PreferenceRepo,
+  ClientRepo,
+  ProjectRepo,
+} from "../repositories/import.repo.js";
+import { cache } from "../config/cache.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -101,7 +107,7 @@ export const UserService = {
     await PreferenceRepo.create({
       theme: "LIGHT",
       language: "ENGLISH",
-      user: user,
+      user: user._id,
     });
 
     return user;
@@ -119,6 +125,76 @@ export const UserService = {
     const user = await UserRepo.findById(id);
     if (!user) throw new NotFoundError("User not found");
     return user;
+  },
+
+  async getUsers(context) {
+    const { user } = context;
+
+    if (user.role === "SUPER_ADMIN") {
+      const cacheKey = "users:all";
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+
+      const users = await UserRepo.find();
+      await cache.set(cacheKey, users);
+      return users;
+    }
+
+    if (user.role === "CLIENT_ADMIN") {
+      const client = await ClientRepo.findByAssignedAdmin(user.id);
+      if (!client)
+        throw new ForbiddenError("You are not assigned to any client");
+
+      const projects = await ProjectRepo.findByClientId(client.id);
+      const userIds = [
+        ...new Set(projects.flatMap((p) => p.assignedUsers.map(String))),
+      ];
+
+      if (userIds.length === 0) return [];
+      return await UserRepo.findByIds(userIds);
+    }
+
+    throw new ForbiddenError(
+      "Current role does not have the permission to get users",
+    );
+  },
+
+  async getUser(id, context) {
+    validate(idSchema, { id });
+
+    const { user } = context;
+
+    if (user.role === "SUPER_ADMIN") {
+      const cacheKey = `users:${id}`;
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+
+      const targetUser = await UserRepo.findById(id);
+      if (!targetUser) throw new NotFoundError("User not found");
+
+      await cache.set(cacheKey, targetUser);
+      return targetUser;
+    }
+
+    if (user.role === "CLIENT_ADMIN") {
+      const client = await ClientRepo.findByAssignedAdmin(user.id);
+      if (!client)
+        throw new ForbiddenError("You are not assigned to any client");
+
+      const projects = await ProjectRepo.findByClientId(client.id);
+      const userIds = projects.flatMap((p) => p.assignedUsers.map(String));
+
+      if (!userIds.includes(id))
+        throw new ForbiddenError("You do not have access to this user");
+
+      const targetUser = await UserRepo.findById(id);
+      if (!targetUser) throw new NotFoundError("User not found");
+      return targetUser;
+    }
+
+    throw new ForbiddenError(
+      "Current role does not have the permission to get users",
+    );
   },
 
   /**

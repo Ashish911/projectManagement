@@ -26,7 +26,7 @@ export const TaskService = {
 
     // Check user has access to this project
     if (user.role === "USER") {
-      const isAssigned = project.assignedUser
+      const isAssigned = project.assignedUsers
         .map((id) => id.toString())
         .includes(user.id);
       if (!isAssigned)

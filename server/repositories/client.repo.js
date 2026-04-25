@@ -3,6 +3,8 @@ import { Client } from "../models/import.js";
 export const ClientRepo = {
   find: async () => (await Client.find()).map((c) => c.toObject()),
   findById: async (id) => (await Client.findById(id))?.toObject() ?? null,
+  findByAssignedAdmin: async (adminId) =>
+    (await Client.findOne({ assignedAdmin: adminId }))?.toObject() ?? null,
   findByUser: async (userId) =>
     (await Client.find({ user: userId })).map((c) => c.toObject()),
   findByEmail: async (email) =>

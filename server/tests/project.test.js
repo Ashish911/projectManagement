@@ -13,6 +13,8 @@ const mockProjectDelete = jest.fn();
 const mockClientFindById = jest.fn();
 const mockClientFindByUser = jest.fn();
 
+const mockUserFindByIds = jest.fn();
+
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   ProjectRepo: {
@@ -27,6 +29,17 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   ClientRepo: {
     findById: mockClientFindById,
     findByUser: mockClientFindByUser,
+  },
+  UserRepo: {
+    findByIds: mockUserFindByIds,
+  },
+}));
+
+jest.unstable_mockModule("../config/cache.js", () => ({
+  cache: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    invalidate: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -61,7 +74,7 @@ const mockProject = {
   description: "Test Description",
   status: "NOT_STARTED",
   clientId: "748a1b2c3d4e5f6a7b8c9d0e",
-  assignedUser: ["648a1b2c3d4e5f6a7b8c9d0e"],
+  assignedUsers: ["648a1b2c3d4e5f6a7b8c9d0e"],
 };
 
 const addProjectData = {
@@ -177,7 +190,7 @@ describe("ProjectService", () => {
     it("🟢 USER should get project they are assigned to", async () => {
       mockProjectFindById.mockResolvedValue({
         ...mockProject,
-        assignedUser: [mockUser.id],
+        assignedUsers: [mockUser.id],
       });
 
       const result = await ProjectService.getProject(mockProject._id, {
@@ -190,7 +203,7 @@ describe("ProjectService", () => {
     it("🔴 USER should not get project they are not assigned to", async () => {
       mockProjectFindById.mockResolvedValue({
         ...mockProject,
-        assignedUser: ["differentuser1234567"],
+        assignedUsers: ["differentuser1234567"],
       });
 
       await expect(
@@ -454,14 +467,17 @@ describe("ProjectService", () => {
       users: ["748a1b2c3d4e5f6a7b8c9d1f"],
     };
 
+    const mockNewUser = { id: "748a1b2c3d4e5f6a7b8c9d1f", role: "USER" };
+
     it("🟢 SUPER_ADMIN should add users to any project", async () => {
       mockProjectFindById.mockResolvedValue(mockProject);
+      mockUserFindByIds.mockResolvedValue([mockNewUser]);
       mockProjectUpdate.mockResolvedValue({
         ...mockProject,
-        assignedUser: [...mockProject.assignedUser, ...addUserData.users],
+        assignedUsers: [...mockProject.assignedUsers, ...addUserData.users],
       });
 
-      const result = await ProjectService.addUserToProject(addUserData, {
+      await ProjectService.addUserToProject(addUserData, {
         user: mockSuperAdmin,
       });
 
@@ -474,16 +490,49 @@ describe("ProjectService", () => {
         ...mockClient,
         assignedAdmin: mockClientAdmin.id,
       });
+      mockUserFindByIds.mockResolvedValue([mockNewUser]);
       mockProjectUpdate.mockResolvedValue({
         ...mockProject,
-        assignedUser: [...mockProject.assignedUser, ...addUserData.users],
+        assignedUsers: [...mockProject.assignedUsers, ...addUserData.users],
       });
 
-      const result = await ProjectService.addUserToProject(addUserData, {
+      await ProjectService.addUserToProject(addUserData, {
         user: mockClientAdmin,
       });
 
       expect(mockProjectUpdate).toHaveBeenCalled();
+    });
+
+    it("🟢 should not add duplicate users", async () => {
+      mockProjectFindById.mockResolvedValue({
+        ...mockProject,
+        assignedUsers: [addUserData.users[0]],
+      });
+      mockUserFindByIds.mockResolvedValue([mockNewUser]);
+      mockProjectUpdate.mockResolvedValue(mockProject);
+
+      await ProjectService.addUserToProject(addUserData, {
+        user: mockSuperAdmin,
+      });
+
+      const updateCall = mockProjectUpdate.mock.calls[0][1];
+      const uniqueUsers = new Set(updateCall.assignedUsers);
+      expect(uniqueUsers.size).toBe(updateCall.assignedUsers.length);
+    });
+
+    it("🟢 should invalidate project cache after adding users", async () => {
+      const { cache } = await import("../config/cache.js");
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockUserFindByIds.mockResolvedValue([mockNewUser]);
+      mockProjectUpdate.mockResolvedValue(mockProject);
+
+      await ProjectService.addUserToProject(addUserData, {
+        user: mockSuperAdmin,
+      });
+
+      expect(cache.invalidate).toHaveBeenCalledWith(
+        `projects:${addUserData.id}`,
+      );
     });
 
     it("🔴 USER should not add users to a project", async () => {
@@ -494,6 +543,33 @@ describe("ProjectService", () => {
       );
     });
 
+    it("🔴 should throw if project id is invalid", async () => {
+      await expect(
+        ProjectService.addUserToProject(
+          { id: "invalid", users: addUserData.users },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should throw if users array is empty", async () => {
+      await expect(
+        ProjectService.addUserToProject(
+          { id: addUserData.id, users: [] },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("At least one user is required");
+    });
+
+    it("🔴 should throw if a user id in the array is invalid", async () => {
+      await expect(
+        ProjectService.addUserToProject(
+          { id: addUserData.id, users: ["invalid-id"] },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
     it("🔴 should throw if project not found", async () => {
       mockProjectFindById.mockResolvedValue(null);
 
@@ -502,20 +578,37 @@ describe("ProjectService", () => {
       ).rejects.toThrow("Project not found");
     });
 
-    it("🟢 should not add duplicate users", async () => {
-      mockProjectFindById.mockResolvedValue({
-        ...mockProject,
-        assignedUser: [addUserData.users[0]], // user already in project
-      });
-      mockProjectUpdate.mockResolvedValue(mockProject);
+    it("🔴 should throw if one or more users do not exist", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockUserFindByIds.mockResolvedValue([]); // none found
 
-      await ProjectService.addUserToProject(addUserData, {
-        user: mockSuperAdmin,
+      await expect(
+        ProjectService.addUserToProject(addUserData, { user: mockSuperAdmin }),
+      ).rejects.toThrow("One or more users not found");
+    });
+
+    it("🔴 CLIENT_ADMIN should not add users to another client's project", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockClientFindById.mockResolvedValue({
+        ...mockClient,
+        assignedAdmin: "differentadmin1234567",
       });
 
-      const updateCall = mockProjectUpdate.mock.calls[0][1];
-      const uniqueUsers = new Set(updateCall.assignedUser);
-      expect(uniqueUsers.size).toBe(updateCall.assignedUser.length);
+      await expect(
+        ProjectService.addUserToProject(addUserData, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not the admin of this client");
+    });
+
+    it("🔴 should not call update if project not found", async () => {
+      mockProjectFindById.mockResolvedValue(null);
+
+      try {
+        await ProjectService.addUserToProject(addUserData, {
+          user: mockSuperAdmin,
+        });
+      } catch (e) {}
+
+      expect(mockProjectUpdate).not.toHaveBeenCalled();
     });
   });
 
@@ -532,13 +625,12 @@ describe("ProjectService", () => {
       mockProjectFindById.mockResolvedValue(mockProject);
       mockProjectUpdate.mockResolvedValue({
         ...mockProject,
-        assignedUser: [],
+        assignedUsers: [],
       });
 
-      const result = await ProjectService.removeUserFromProject(
-        removeUserData,
-        { user: mockSuperAdmin },
-      );
+      await ProjectService.removeUserFromProject(removeUserData, {
+        user: mockSuperAdmin,
+      });
 
       expect(mockProjectUpdate).toHaveBeenCalled();
     });
@@ -551,7 +643,7 @@ describe("ProjectService", () => {
       });
       mockProjectUpdate.mockResolvedValue({
         ...mockProject,
-        assignedUser: [],
+        assignedUsers: [],
       });
 
       await ProjectService.removeUserFromProject(removeUserData, {
@@ -559,6 +651,43 @@ describe("ProjectService", () => {
       });
 
       expect(mockProjectUpdate).toHaveBeenCalled();
+    });
+
+    it("🟢 should only remove specified users", async () => {
+      const extraUser = "748a1b2c3d4e5f6a7b8c9d1f";
+      mockProjectFindById.mockResolvedValue({
+        ...mockProject,
+        assignedUsers: [mockUser.id, extraUser],
+      });
+      mockProjectUpdate.mockResolvedValue({
+        ...mockProject,
+        assignedUsers: [extraUser],
+      });
+
+      await ProjectService.removeUserFromProject(removeUserData, {
+        user: mockSuperAdmin,
+      });
+
+      const updateCall = mockProjectUpdate.mock.calls[0][1];
+      expect(updateCall.assignedUsers).not.toContain(mockUser.id);
+      expect(updateCall.assignedUsers).toContain(extraUser);
+    });
+
+    it("🟢 should invalidate project cache after removing users", async () => {
+      const { cache } = await import("../config/cache.js");
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockProjectUpdate.mockResolvedValue({
+        ...mockProject,
+        assignedUsers: [],
+      });
+
+      await ProjectService.removeUserFromProject(removeUserData, {
+        user: mockSuperAdmin,
+      });
+
+      expect(cache.invalidate).toHaveBeenCalledWith(
+        `projects:${removeUserData.id}`,
+      );
     });
 
     it("🔴 USER should not remove users from a project", async () => {
@@ -571,6 +700,33 @@ describe("ProjectService", () => {
       );
     });
 
+    it("🔴 should throw if project id is invalid", async () => {
+      await expect(
+        ProjectService.removeUserFromProject(
+          { id: "invalid", users: removeUserData.users },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should throw if users array is empty", async () => {
+      await expect(
+        ProjectService.removeUserFromProject(
+          { id: removeUserData.id, users: [] },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("At least one user is required");
+    });
+
+    it("🔴 should throw if a user id in the array is invalid", async () => {
+      await expect(
+        ProjectService.removeUserFromProject(
+          { id: removeUserData.id, users: ["invalid-id"] },
+          { user: mockSuperAdmin },
+        ),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
     it("🔴 should throw if project not found", async () => {
       mockProjectFindById.mockResolvedValue(null);
 
@@ -581,24 +737,43 @@ describe("ProjectService", () => {
       ).rejects.toThrow("Project not found");
     });
 
-    it("🟢 should only remove specified users", async () => {
-      const extraUser = "748a1b2c3d4e5f6a7b8c9d1f";
+    it("🔴 should throw if none of the specified users are in the project", async () => {
       mockProjectFindById.mockResolvedValue({
         ...mockProject,
-        assignedUser: [mockUser.id, extraUser],
-      });
-      mockProjectUpdate.mockResolvedValue({
-        ...mockProject,
-        assignedUser: [extraUser],
+        assignedUsers: ["differentuser123456789a"],
       });
 
-      await ProjectService.removeUserFromProject(removeUserData, {
-        user: mockSuperAdmin,
+      await expect(
+        ProjectService.removeUserFromProject(removeUserData, {
+          user: mockSuperAdmin,
+        }),
+      ).rejects.toThrow("None of the specified users are assigned to this project");
+    });
+
+    it("🔴 CLIENT_ADMIN should not remove users from another client's project", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockClientFindById.mockResolvedValue({
+        ...mockClient,
+        assignedAdmin: "differentadmin1234567",
       });
 
-      const updateCall = mockProjectUpdate.mock.calls[0][1];
-      expect(updateCall.assignedUser).not.toContain(mockUser.id);
-      expect(updateCall.assignedUser).toContain(extraUser);
+      await expect(
+        ProjectService.removeUserFromProject(removeUserData, {
+          user: mockClientAdmin,
+        }),
+      ).rejects.toThrow("You are not the admin of this client");
+    });
+
+    it("🔴 should not call update if project not found", async () => {
+      mockProjectFindById.mockResolvedValue(null);
+
+      try {
+        await ProjectService.removeUserFromProject(removeUserData, {
+          user: mockSuperAdmin,
+        });
+      } catch (e) {}
+
+      expect(mockProjectUpdate).not.toHaveBeenCalled();
     });
   });
 });

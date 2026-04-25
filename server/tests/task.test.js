@@ -64,7 +64,7 @@ const mockUser = {
 const mockProject = {
   _id: "748a1b2c3d4e5f6a7b8c9d0e",
   name: "Test Project",
-  assignedUser: ["648a1b2c3d4e5f6a7b8c9d0e"],
+  assignedUsers: ["648a1b2c3d4e5f6a7b8c9d0e"],
 };
 
 const mockTask = {
@@ -122,7 +122,7 @@ describe("TaskService", () => {
     it("🟢 USER should get tasks if assigned to project", async () => {
       mockProjectFindById.mockResolvedValue({
         ...mockProject,
-        assignedUser: [mockUser.id],
+        assignedUsers: [mockUser.id],
       });
       mockTaskFindByProject.mockResolvedValue([mockTask]);
 
@@ -136,7 +136,7 @@ describe("TaskService", () => {
     it("🔴 USER should not get tasks if not assigned to project", async () => {
       mockProjectFindById.mockResolvedValue({
         ...mockProject,
-        assignedUser: ["differentuser1234567"],
+        assignedUsers: ["differentuser1234567"],
       });
 
       await expect(

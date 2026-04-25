@@ -12,6 +12,8 @@ export const userResolvers = {
 
       return await UserService.getProfile(user.id);
     },
+    users: async (_, args, context) => await UserService.getUsers(context),
+    user: async (_, { id }, context) => await UserService.getUser(id, context),
   },
   Mutation: {
     login: async (_, { email, password }) =>

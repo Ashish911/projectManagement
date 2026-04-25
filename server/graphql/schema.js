@@ -38,9 +38,18 @@ const RootQuery = new GraphQLObjectType({
       type: UserType,
       resolve: userResolvers.Query.profile,
     },
+    users: {
+      type: new GraphQLList(UserType),
+      resolve: userResolvers.Query.users,
+    },
+    user: {
+      type: UserType,
+      args: { id: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: userResolvers.Query.user,
+    },
     projects: {
       type: new GraphQLList(ProjectType),
-      resolve: projectResolvers.Query.getProjects,
+      resolve: projectResolvers.Query.projects,
     },
     project: {
       type: ProjectType,

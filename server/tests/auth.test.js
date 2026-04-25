@@ -9,8 +9,12 @@ let mockUser;
 let mockSuperAdmin;
 let mockClientAdmin;
 let registerData;
+let mockClient;
+let mockProject;
 
 // ─── Mock functions ───────────────────────────────────────────────
+const mockFind = jest.fn();
+const mockFindByIds = jest.fn();
 const mockFindByEmail = jest.fn();
 const mockFindById = jest.fn();
 const mockCreate = jest.fn();
@@ -18,9 +22,14 @@ const mockUpdate = jest.fn();
 const mockDelete = jest.fn();
 const mockPreferenceCreate = jest.fn();
 
+const mockProjectFindByClientId = jest.fn();
+const mockClientFindByAssignedAdmin = jest.fn();
+
 // ─── Mock the modules using unstable_mockModule ───────────────────
 jest.unstable_mockModule("../repositories/user.repo.js", () => ({
   UserRepo: {
+    find: mockFind,
+    findByIds: mockFindByIds,
     findByEmail: mockFindByEmail,
     findById: mockFindById,
     create: mockCreate,
@@ -32,6 +41,26 @@ jest.unstable_mockModule("../repositories/user.repo.js", () => ({
 jest.unstable_mockModule("../repositories/preference.repo.js", () => ({
   PreferenceRepo: {
     create: mockPreferenceCreate,
+  },
+}));
+
+jest.unstable_mockModule("../repositories/project.repo.js", () => ({
+  ProjectRepo: {
+    findByClientId: mockProjectFindByClientId,
+  },
+}));
+
+jest.unstable_mockModule("../repositories/client.repo.js", () => ({
+  ClientRepo: {
+    findByAssignedAdmin: mockClientFindByAssignedAdmin,
+  },
+}));
+
+jest.unstable_mockModule("../config/cache.js", () => ({
+  cache: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    invalidate: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -83,6 +112,18 @@ beforeAll(async () => {
     dob: "1990-01-01",
     role: "USER",
     gender: "MALE",
+  };
+
+  mockClient = {
+    id: "748a1b2c3d4e5f6a7b8c9d0e",
+    name: "Test Client",
+    assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a",
+  };
+
+  mockProject = {
+    id: "848a1b2c3d4e5f6a7b8c9d0e",
+    clientId: "748a1b2c3d4e5f6a7b8c9d0e",
+    assignedUsers: ["648a1b2c3d4e5f6a7b8c9d0e"],
   };
 });
 
@@ -479,6 +520,128 @@ describe("UserService", () => {
     it("🔴 should throw if userId is invalid", async () => {
       await expect(
         UserService.promoteToAdmin("invalid-id", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // GET USERS
+  // ════════════════════════════════════════════════════════════════
+  describe("getUsers", () => {
+    it("🟢 SUPER_ADMIN should get all users", async () => {
+      mockFind.mockResolvedValue([mockUser, mockSuperAdmin, mockClientAdmin]);
+
+      const result = await UserService.getUsers({ user: mockSuperAdmin });
+
+      expect(result).toHaveLength(3);
+      expect(mockFind).toHaveBeenCalled();
+    });
+
+    it("🟢 CLIENT_ADMIN should get users assigned to their client's projects", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindByClientId.mockResolvedValue([mockProject]);
+      mockFindByIds.mockResolvedValue([mockUser]);
+
+      const result = await UserService.getUsers({ user: mockClientAdmin });
+
+      expect(result).toHaveLength(1);
+      expect(mockFindByIds).toHaveBeenCalledWith(mockProject.assignedUsers);
+    });
+
+    it("🟢 CLIENT_ADMIN should return empty array if no users assigned to projects", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindByClientId.mockResolvedValue([
+        { ...mockProject, assignedUsers: [] },
+      ]);
+
+      const result = await UserService.getUsers({ user: mockClientAdmin });
+
+      expect(result).toEqual([]);
+      expect(mockFindByIds).not.toHaveBeenCalled();
+    });
+
+    it("🔴 USER should not get users", async () => {
+      await expect(
+        UserService.getUsers({ user: mockUser }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to get users",
+      );
+    });
+
+    it("🔴 CLIENT_ADMIN should throw if not assigned to any client", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+
+      await expect(
+        UserService.getUsers({ user: mockClientAdmin }),
+      ).rejects.toThrow("You are not assigned to any client");
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // GET USER
+  // ════════════════════════════════════════════════════════════════
+  describe("getUser", () => {
+    it("🟢 SUPER_ADMIN should get any user by id", async () => {
+      mockFindById.mockResolvedValue(mockUser);
+
+      const result = await UserService.getUser(mockUser.id, {
+        user: mockSuperAdmin,
+      });
+
+      expect(result).toEqual(mockUser);
+      expect(mockFindById).toHaveBeenCalledWith(mockUser.id);
+    });
+
+    it("🟢 CLIENT_ADMIN should get a user assigned to their project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindByClientId.mockResolvedValue([mockProject]);
+      mockFindById.mockResolvedValue(mockUser);
+
+      const result = await UserService.getUser(mockUser.id, {
+        user: mockClientAdmin,
+      });
+
+      expect(result).toEqual(mockUser);
+    });
+
+    it("🔴 USER should not get a user", async () => {
+      await expect(
+        UserService.getUser(mockUser.id, { user: mockUser }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to get users",
+      );
+    });
+
+    it("🔴 SUPER_ADMIN should throw if user not found", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      await expect(
+        UserService.getUser(mockUser.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User not found");
+    });
+
+    it("🔴 CLIENT_ADMIN should throw if user is not in their projects", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindByClientId.mockResolvedValue([
+        { ...mockProject, assignedUsers: [] },
+      ]);
+
+      await expect(
+        UserService.getUser(mockUser.id, { user: mockClientAdmin }),
+      ).rejects.toThrow("You do not have access to this user");
+    });
+
+    it("🔴 CLIENT_ADMIN should throw if not assigned to any client", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+
+      await expect(
+        UserService.getUser(mockUser.id, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not assigned to any client");
+    });
+
+    it("🔴 should throw if id is invalid", async () => {
+      await expect(
+        UserService.getUser("invalid-id", { user: mockSuperAdmin }),
       ).rejects.toThrow("Invalid ID format");
     });
   });

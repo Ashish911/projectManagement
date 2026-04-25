@@ -1,11 +1,19 @@
 import { cache } from "../config/cache.js";
 import { createLogger } from "../config/logger.js";
-import { ForbiddenError, NotFoundError } from "../errors/errors.js";
-import { ProjectRepo } from "../repositories/import.repo.js";
-import { ClientRepo } from "../repositories/import.repo.js";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../errors/errors.js";
+import {
+  ProjectRepo,
+  ClientRepo,
+  UserRepo,
+} from "../repositories/import.repo.js";
 import {
   addProjectSchema,
   idSchema,
+  projectUserSchema,
   updateProjectSchema,
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
@@ -52,7 +60,7 @@ export const ProjectService = {
     }
 
     // USER — check if assigned to this project
-    const isAssigned = project.assignedUser
+    const isAssigned = project.assignedUsers
       .map((id) => id.toString())
       .includes(user.id);
 
@@ -179,6 +187,8 @@ export const ProjectService = {
     return deleted;
   },
   async addUserToProject(data, context) {
+    validate(projectUserSchema, data);
+
     const { user } = context;
     const logger = createLogger(context);
 
@@ -189,7 +199,6 @@ export const ProjectService = {
     }
 
     const project = await ProjectRepo.findById(data.id);
-
     if (!project) throw new NotFoundError("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
@@ -199,14 +208,15 @@ export const ProjectService = {
       }
     }
 
-    // Only add users not already in the project
-    const newUsers = data.users.filter(
-      (userId) =>
-        !project.assignedUser.map((id) => id.toString()).includes(userId),
-    );
+    const foundUsers = await UserRepo.findByIds(data.users);
+    if (foundUsers.length !== data.users.length)
+      throw new NotFoundError("One or more users not found");
+
+    const existingIds = project.assignedUsers.map((id) => id.toString());
+    const newUsers = data.users.filter((id) => !existingIds.includes(id));
 
     const updated = await ProjectRepo.update(data.id, {
-      assignedUser: [...project.assignedUser, ...newUsers],
+      assignedUsers: [...project.assignedUsers, ...newUsers],
     });
 
     logger.info(
@@ -219,9 +229,13 @@ export const ProjectService = {
       "AUDIT",
     );
 
+    await cache.invalidate(`projects:${data.id}`);
+
     return updated;
   },
   async removeUserFromProject(data, context) {
+    validate(projectUserSchema, data);
+
     const { user } = context;
     const logger = createLogger(context);
 
@@ -232,7 +246,6 @@ export const ProjectService = {
     }
 
     const project = await ProjectRepo.findById(data.id);
-
     if (!project) throw new NotFoundError("Project not found");
 
     if (user.role === "CLIENT_ADMIN") {
@@ -242,12 +255,19 @@ export const ProjectService = {
       }
     }
 
-    const updatedUsers = project.assignedUser.filter(
-      (userId) => !data.users.includes(userId.toString()),
+    const existingIds = project.assignedUsers.map((id) => id.toString());
+    const hasMatch = data.users.some((id) => existingIds.includes(id));
+    if (!hasMatch)
+      throw new ConflictError(
+        "None of the specified users are assigned to this project",
+      );
+
+    const updatedUsers = project.assignedUsers.filter(
+      (id) => !data.users.includes(id.toString()),
     );
 
     const updated = await ProjectRepo.update(data.id, {
-      assignedUser: updatedUsers,
+      assignedUsers: updatedUsers,
     });
 
     logger.info(
@@ -259,6 +279,8 @@ export const ProjectService = {
       },
       "AUDIT",
     );
+
+    await cache.invalidate(`projects:${data.id}`);
 
     return updated;
   },

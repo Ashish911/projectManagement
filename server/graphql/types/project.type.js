@@ -17,14 +17,14 @@ export const ProjectType = new GraphQLObjectType({
     status: { type: new GraphQLNonNull(GraphQLString) },
     client: {
       type: ClientType,
-      resolve: (parent, args) => {
-        return Client.findById(parent.clientId);
+      resolve: async (parent) => {
+        return await Client.findById(parent.clientId);
       },
     },
     user: {
       type: new GraphQLList(UserType),
-      resolve: (parent) => {
-        return User.find({ _id: { $in: parent.assignedUser } });
+      resolve: async (parent) => {
+        return await User.find({ _id: { $in: parent.assignedUsers } });
       },
     },
   }),
