@@ -645,4 +645,67 @@ describe("UserService", () => {
       ).rejects.toThrow("Invalid ID format");
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // DELETE USER
+  // ════════════════════════════════════════════════════════════════
+  describe("deleteUser", () => {
+    it("🟢 SUPER_ADMIN should delete a user", async () => {
+      mockFindById.mockResolvedValue(mockUser);
+      mockDelete.mockResolvedValue(mockUser);
+
+      const result = await UserService.deleteUser(mockUser.id, {
+        user: mockSuperAdmin,
+      });
+
+      expect(result).toEqual(mockUser);
+      expect(mockDelete).toHaveBeenCalledWith(mockUser.id);
+    });
+
+    it("🔴 CLIENT_ADMIN should not delete a user", async () => {
+      await expect(
+        UserService.deleteUser(mockUser.id, { user: mockClientAdmin }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete users",
+      );
+    });
+
+    it("🔴 USER should not delete a user", async () => {
+      await expect(
+        UserService.deleteUser(mockUser.id, { user: mockUser }),
+      ).rejects.toThrow(
+        "Current role does not have the permission to delete users",
+      );
+    });
+
+    it("🔴 SUPER_ADMIN should not delete themselves", async () => {
+      await expect(
+        UserService.deleteUser(mockSuperAdmin.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("You cannot delete your own account");
+    });
+
+    it("🔴 should throw if user not found", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      await expect(
+        UserService.deleteUser(mockUser.id, { user: mockSuperAdmin }),
+      ).rejects.toThrow("User not found");
+    });
+
+    it("🔴 should throw if userId is invalid", async () => {
+      await expect(
+        UserService.deleteUser("invalid-id", { user: mockSuperAdmin }),
+      ).rejects.toThrow("Invalid ID format");
+    });
+
+    it("🔴 should not call delete if user not found", async () => {
+      mockFindById.mockResolvedValue(null);
+
+      try {
+        await UserService.deleteUser(mockUser.id, { user: mockSuperAdmin });
+      } catch (e) {}
+
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+  });
 });

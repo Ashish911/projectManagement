@@ -120,6 +120,13 @@ const Mutation = new GraphQLObjectType({
       },
       resolve: userResolvers.Mutation.promoteToAdmin,
     },
+    deleteUser: {
+      type: UserType,
+      args: {
+        userId: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: userResolvers.Mutation.deleteUser,
+    },
     register: {
       type: UserType,
       args: {

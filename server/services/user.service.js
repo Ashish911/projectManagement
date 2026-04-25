@@ -197,6 +197,40 @@ export const UserService = {
     );
   },
 
+  async deleteUser(userId, context) {
+    validate(idSchema, { id: userId });
+
+    const { user } = context;
+    const logger = createLogger(context);
+
+    if (user.role !== "SUPER_ADMIN") {
+      throw new ForbiddenError(
+        "Current role does not have the permission to delete users",
+      );
+    }
+
+    if (user.id === userId) {
+      throw new ForbiddenError("You cannot delete your own account");
+    }
+
+    const target = await UserRepo.findById(userId);
+    if (!target) throw new NotFoundError("User not found");
+
+    const deleted = await UserRepo.delete(userId);
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetUserId: userId,
+        action: "DELETE_USER",
+      },
+      "AUDIT",
+    );
+
+    return deleted;
+  },
+
   /**
    * Promote a user to admin.
    * @param {string} userId - The id of the user to promote.

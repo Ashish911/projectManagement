@@ -21,6 +21,8 @@ export const userResolvers = {
     register: async (_, args) => await UserService.register(args),
     promoteToAdmin: async (_, { userId }, context) =>
       await UserService.promoteToAdmin(userId, context),
+    deleteUser: async (_, { userId }, context) =>
+      await UserService.deleteUser(userId, context),
     // resetPassword
     // forgotPassword
     // loginViaOauth
