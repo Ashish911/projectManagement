@@ -14,4 +14,6 @@ export const SubTaskRepo = {
     )?.toObject() ?? null,
   delete: async (id) =>
     (await SubTask.findByIdAndDelete(id))?.toObject() ?? null,
+  findByTask: async (taskId) =>
+    (await SubTask.find({ task: taskId })).map((s) => s.toObject()),
 };

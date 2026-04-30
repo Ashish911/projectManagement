@@ -17,20 +17,20 @@ export const TaskType = new GraphQLObjectType({
     currentStatus: { type: new GraphQLNonNull(GraphQLString) },
     assignedTo: {
       type: UserType,
-      resolve: (parent) => {
-        return User.findById(parent.assignedTo);
+      resolve: async (parent) => {
+        return await User.findById(parent.assignedTo);
       },
     },
     createdBy: {
       type: UserType,
-      resolve: (parent) => {
-        return User.findById(parent.createdBy);
+      resolve: async (parent) => {
+        return await User.findById(parent.createdBy);
       },
     },
     project: {
       type: ProjectType,
-      resolve: (parent) => {
-        return Project.findById(parent.project);
+      resolve: async (parent) => {
+        return await Project.findById(parent.project);
       },
     },
   },

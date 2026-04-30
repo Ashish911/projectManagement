@@ -13,4 +13,6 @@ export const TaskRepo = {
       )
     )?.toObject() ?? null,
   delete: async (id) => (await Task.findByIdAndDelete(id))?.toObject() ?? null,
+  findByProject: async (projectId) =>
+    (await Task.find({ project: projectId })).map((t) => t.toObject()),
 };

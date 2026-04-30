@@ -15,8 +15,8 @@ export const NotificationType = new GraphQLObjectType({
     status: { type: new GraphQLNonNull(GraphQLString) },
     user: {
       type: UserType,
-      resolve: (parent) => {
-        return User.findById(parent.user);
+      resolve: async (parent) => {
+        return await User.findById(parent.user);
       },
     },
   },
