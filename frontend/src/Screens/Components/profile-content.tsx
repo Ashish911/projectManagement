@@ -1,265 +1,144 @@
-import { Shield, Key, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { savePreference } from "@/redux/actions/preferenceActions";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const GENDER_LABELS: Record<string, string> = {
+    MALE: "Male",
+    FEMALE: "Female",
+    OTHERS: "Others",
+};
 
 export default function ProfileContent() {
+    const dispatch = useDispatch();
+    const { profile } = useSelector((state: any) => state.profile);
+    const { preference, loading: prefLoading, saving: prefSaving } = useSelector((state: any) => state.preference);
+
+    const [theme, setTheme] = useState<"LIGHT" | "DARK">("LIGHT");
+    const [language, setLanguage] = useState<"ENGLISH" | "JAPANESE" | "KOREAN">("ENGLISH");
+    const [prefSaved, setPrefSaved] = useState(false);
+
+    useEffect(() => {
+        if (preference) {
+            setTheme(preference.theme);
+            setLanguage(preference.language);
+        }
+    }, [preference]);
+
+    const handleSave = async () => {
+        const success = await (dispatch as any)(savePreference({ theme, language }));
+        if (success) {
+            setPrefSaved(true);
+            setTimeout(() => setPrefSaved(false), 2500);
+        }
+    };
+
     return (
-        <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="personal">Personal</TabsTrigger>
-                <TabsTrigger value="account">Account</TabsTrigger>
-                <TabsTrigger value="security">Security</TabsTrigger>
-                <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        <Tabs defaultValue="profile" className="space-y-4">
+            <TabsList className="grid w-full max-w-xs grid-cols-2">
+                <TabsTrigger value="profile">Profile</TabsTrigger>
+                <TabsTrigger value="preferences">Preferences</TabsTrigger>
             </TabsList>
 
-            {/* Personal Information */}
-            <TabsContent value="personal" className="space-y-6">
+            {/* ── Profile ──────────────────────────────────────────────────────── */}
+            <TabsContent value="profile">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Personal Information</CardTitle>
-                        <CardDescription>Update your personal details and profile information.</CardDescription>
+                        <CardTitle>Profile Information</CardTitle>
+                        <CardDescription>
+                            Your personal details pulled from your account.
+                            Profile editing will be available in a future update.
+                        </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="firstName">First Name</Label>
-                                <Input id="firstName" defaultValue="John" />
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="name">Full Name</Label>
+                                <Input id="name" value={profile?.name ?? ""} readOnly disabled />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="lastName">Last Name</Label>
-                                <Input id="lastName" defaultValue="Doe" />
-                            </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <Label htmlFor="email">Email</Label>
-                                <Input id="email" type="email" defaultValue="john.doe@example.com" />
+                                <Input id="email" type="email" value={profile?.email ?? ""} readOnly disabled />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <Label htmlFor="phone">Phone</Label>
-                                <Input id="phone" defaultValue="+1 (555) 123-4567" />
+                                <Input id="phone" value={profile?.number ?? ""} readOnly disabled />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="jobTitle">Job Title</Label>
-                                <Input id="jobTitle" defaultValue="Senior Product Designer" />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="dob">Date of Birth</Label>
+                                <Input id="dob" value={profile?.dob ?? ""} readOnly disabled />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="company">Company</Label>
-                                <Input id="company" defaultValue="Acme Inc." />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="gender">Gender</Label>
+                                <Input
+                                    id="gender"
+                                    value={GENDER_LABELS[profile?.gender] ?? profile?.gender ?? ""}
+                                    readOnly
+                                    disabled
+                                />
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bio">Bio</Label>
-                            <Textarea
-                                id="bio"
-                                placeholder="Tell us about yourself..."
-                                defaultValue="Passionate product designer with 8+ years of experience creating user-centered digital experiences. I love solving complex problems and turning ideas into beautiful, functional products."
-                                rows={4}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="location">Location</Label>
-                            <Input id="location" defaultValue="San Francisco, CA" />
                         </div>
                     </CardContent>
                 </Card>
             </TabsContent>
 
-            {/* Account Settings */}
-            <TabsContent value="account" className="space-y-6">
+            {/* ── Preferences ──────────────────────────────────────────────────── */}
+            <TabsContent value="preferences">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Account Settings</CardTitle>
-                        <CardDescription>Manage your account preferences and subscription.</CardDescription>
+                        <CardTitle>Preferences</CardTitle>
+                        <CardDescription>
+                            Control how ProjoMan looks and feels for you.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <Label className="text-base">Account Status</Label>
-                                <p className="text-muted-foreground text-sm">Your account is currently active</p>
-                            </div>
-                            <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
-                                Active
-                            </Badge>
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <Label className="text-base">Subscription Plan</Label>
-                                <p className="text-muted-foreground text-sm">Pro Plan - $29/month</p>
-                            </div>
-                            <Button variant="outline">Manage Subscription</Button>
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <Label className="text-base">Account Visibility</Label>
-                                <p className="text-muted-foreground text-sm">
-                                    Make your profile visible to other users
-                                </p>
-                            </div>
-                            <Switch defaultChecked />
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <Label className="text-base">Data Export</Label>
-                                <p className="text-muted-foreground text-sm">Download a copy of your data</p>
-                            </div>
-                            <Button variant="outline">Export Data</Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-destructive/50">
-                    <CardHeader>
-                        <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                        <CardDescription>Irreversible and destructive actions</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <Label className="text-base">Delete Account</Label>
-                                <p className="text-muted-foreground text-sm">
-                                    Permanently delete your account and all data
-                                </p>
-                            </div>
-                            <Button variant="destructive">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Account
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-            {/* Security Settings */}
-            <TabsContent value="security" className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Security Settings</CardTitle>
-                        <CardDescription>Manage your account security and authentication.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Password</Label>
-                                    <p className="text-muted-foreground text-sm">Last changed 3 months ago</p>
+                        {prefLoading ? (
+                            <p className="text-sm text-muted-foreground">Loading preferences…</p>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                    <div className="space-y-1.5">
+                                        <Label>Theme</Label>
+                                        <Select value={theme} onValueChange={(v) => setTheme(v as "LIGHT" | "DARK")}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="LIGHT">Light</SelectItem>
+                                                <SelectItem value="DARK">Dark</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Language</Label>
+                                        <Select value={language} onValueChange={(v) => setLanguage(v as "ENGLISH" | "JAPANESE" | "KOREAN")}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ENGLISH">English</SelectItem>
+                                                <SelectItem value="JAPANESE">Japanese</SelectItem>
+                                                <SelectItem value="KOREAN">Korean</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
-                                <Button variant="outline">
-                                    <Key className="mr-2 h-4 w-4" />
-                                    Change Password
-                                </Button>
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Two-Factor Authentication</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Add an extra layer of security to your account
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
-                                        Enabled
-                                    </Badge>
-                                    <Button variant="outline" size="sm">
-                                        Configure
+                                <div className="flex items-center gap-3">
+                                    <Button onClick={handleSave} disabled={prefSaving}>
+                                        {prefSaving ? "Saving…" : "Save Preferences"}
                                     </Button>
+                                    {prefSaved && (
+                                        <span className="text-sm text-green-600">Saved successfully</span>
+                                    )}
                                 </div>
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Login Notifications</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Get notified when someone logs into your account
-                                    </p>
-                                </div>
-                                <Switch defaultChecked />
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Active Sessions</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Manage devices that are logged into your account
-                                    </p>
-                                </div>
-                                <Button variant="outline">
-                                    <Shield className="mr-2 h-4 w-4" />
-                                    View Sessions
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-            {/* Notification Settings */}
-            <TabsContent value="notifications" className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Notification Preferences</CardTitle>
-                        <CardDescription>Choose what notifications you want to receive.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Email Notifications</Label>
-                                    <p className="text-muted-foreground text-sm">Receive notifications via email</p>
-                                </div>
-                                <Switch defaultChecked />
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Push Notifications</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Receive push notifications in your browser
-                                    </p>
-                                </div>
-                                <Switch />
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Marketing Emails</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Receive emails about new features and updates
-                                    </p>
-                                </div>
-                                <Switch defaultChecked />
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Weekly Summary</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Get a weekly summary of your activity
-                                    </p>
-                                </div>
-                                <Switch defaultChecked />
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-base">Security Alerts</Label>
-                                    <p className="text-muted-foreground text-sm">
-                                        Important security notifications (always enabled)
-                                    </p>
-                                </div>
-                                <Switch checked disabled />
-                            </div>
-                        </div>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             </TabsContent>

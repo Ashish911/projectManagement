@@ -2,26 +2,16 @@
 
 import * as React from "react"
 import {
-    // IconCamera,
     IconChartBar,
     IconDashboard,
-    // IconDatabase,
-    // IconFileAi,
-    // IconFileDescription,
-    // IconFileWord,
     IconFolder,
-    IconHelp,
     IconInnerShadowTop,
     IconListDetails,
-    // IconReport,
-    // IconSearch,
-    IconSettings,
     IconUsers,
+    IconBuilding,
 } from "@tabler/icons-react"
 
-// import { NavDocuments } from "@/Screens/Components/nav-documents"
 import { NavMain } from "@/Screens/Components/nav-main"
-import { NavSecondary } from "@/Screens/Components/nav-secondary"
 import { NavUser } from "@/Screens/Components/nav-user"
 import {
     Sidebar,
@@ -32,113 +22,43 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import {useDispatch, useSelector} from "react-redux";
-import {useEffect} from "react";
-import {fetchProfile} from "@/redux/actions/userActions.ts";
+import { useDispatch, useSelector } from "react-redux";
+import { useEffect } from "react";
+import { fetchProfile } from "@/redux/actions/userActions.ts";
+import { fetchPreference } from "@/redux/actions/preferenceActions.ts";
 
-const data = {
-    user: {
-        name: "shadcn",
-        email: "m@example.com",
-        avatar: "https://github.com/shadcn.png",
-    },
-    navMain: [
-        {
-            title: "Dashboard",
-            url: "#",
-            icon: IconDashboard,
-        },
-        {
-            title: "Tasks",
-            url: "#",
-            icon: IconListDetails,
-        },
-        {
-            title: "Analytics",
-            url: "#",
-            icon: IconChartBar,
-        },
-        {
-            title: "Projects",
-            url: "#",
-            icon: IconFolder,
-        },
-        {
-            title: "Team",
-            url: "#",
-            icon: IconUsers,
-        },
+const NAV_BY_ROLE = {
+    SUPER_ADMIN: [
+        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Users",     url: "/users",     icon: IconUsers },
+        { title: "Clients",   url: "/clients",   icon: IconBuilding },
+        { title: "Projects",  url: "/projects",  icon: IconFolder },
+        { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
     ],
-    // navClouds: [
-    //     {
-    //         title: "Capture",
-    //         icon: IconCamera,
-    //         isActive: true,
-    //         url: "#",
-    //         items: [
-    //             {
-    //                 title: "Active Proposals",
-    //                 url: "#",
-    //             },
-    //             {
-    //                 title: "Archived",
-    //                 url: "#",
-    //             },
-    //         ],
-    //     },
-    //     {
-    //         title: "Proposal",
-    //         icon: IconFileDescription,
-    //         url: "#",
-    //         items: [
-    //             {
-    //                 title: "Active Proposals",
-    //                 url: "#",
-    //             },
-    //             {
-    //                 title: "Archived",
-    //                 url: "#",
-    //             },
-    //         ],
-    //     },
-    //     {
-    //         title: "Prompts",
-    //         icon: IconFileAi,
-    //         url: "#",
-    //         items: [
-    //             {
-    //                 title: "Active Proposals",
-    //                 url: "#",
-    //             },
-    //             {
-    //                 title: "Archived",
-    //                 url: "#",
-    //             },
-    //         ],
-    //     },
-    // ],
-    navSecondary: [
-        {
-            title: "Settings",
-            url: "#",
-            icon: IconSettings,
-        },
-        {
-            title: "Get Help",
-            url: "#",
-            icon: IconHelp,
-        }
-    ]
+    CLIENT_ADMIN: [
+        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Projects",  url: "/projects",  icon: IconFolder },
+        { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
+        { title: "Analytics", url: "/analytics", icon: IconChartBar },
+    ],
+    USER: [
+        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Projects",  url: "/projects",  icon: IconFolder },
+        { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
+    ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-
     const dispatch = useDispatch();
+    const { profile } = useSelector((state: any) => state.profile);
 
     useEffect(() => {
-        dispatch(fetchProfile())
-    },[])
+        dispatch(fetchProfile() as any);
+        dispatch(fetchPreference() as any);
+    }, [dispatch])
 
+    const role = profile?.role ?? "USER"
+    const navItems = NAV_BY_ROLE[role as keyof typeof NAV_BY_ROLE] ?? NAV_BY_ROLE.USER
 
     return (
         <Sidebar collapsible="offcanvas" {...props}>
@@ -149,20 +69,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             asChild
                             className="data-[slot=sidebar-menu-button]:!p-1.5"
                         >
-                            <a href="#">
+                            <a href="/dashboard">
                                 <IconInnerShadowTop className="!size-5" />
-                                <span className="text-base font-semibold">Acme Inc.</span>
+                                <span className="text-base font-semibold">ProjoMan</span>
                             </a>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                <NavMain items={data.navMain} />
-                <NavSecondary items={data.navSecondary} className="mt-auto" />
+                <NavMain items={navItems} />
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={data.user} />
+                <NavUser />
             </SidebarFooter>
         </Sidebar>
     )

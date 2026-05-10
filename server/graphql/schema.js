@@ -443,8 +443,8 @@ const Mutation = new GraphQLObjectType({
           type: new GraphQLEnumType({
             name: "Theme",
             values: {
-              light: { value: "LIGHT" },
-              dark: { value: "DARK" },
+              LIGHT: { value: "LIGHT" },
+              DARK: { value: "DARK" },
             },
           }),
         },
@@ -452,9 +452,9 @@ const Mutation = new GraphQLObjectType({
           type: new GraphQLEnumType({
             name: "Language",
             values: {
-              english: { value: "ENGLISH" },
-              japanese: { value: "JAPANESE" },
-              korean: { value: "KOREAN" },
+              ENGLISH: { value: "ENGLISH" },
+              JAPANESE: { value: "JAPANESE" },
+              KOREAN: { value: "KOREAN" },
             },
           }),
         },

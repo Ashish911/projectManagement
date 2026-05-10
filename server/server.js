@@ -13,10 +13,9 @@ import jwt from "jsonwebtoken";
 import { AppError } from "./errors/AppError.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import depthLimit from "graphql-depth-limit";
-import {
-  createComplexityRule,
-  simpleEstimator,
-} from "graphql-query-complexity";
+// graphql-query-complexity disabled: causes dual-module ESM/CJS conflict in Docker
+// (GraphQLScalarType from .mjs vs .js — fix: npm overrides + docker rebuild)
+// import { createComplexityRule, simpleEstimator } from "graphql-query-complexity";
 import logger from "./config/logger.js";
 import {
   graphqlRequestCounter,
@@ -78,12 +77,6 @@ export const createServer = async (httpServer) => {
     ],
     validationRules: [
       depthLimit(7),
-      createComplexityRule({
-        maximumComplexity: 1000,
-        estimators: [simpleEstimator({ defaultComplexity: 1 })],
-        onComplete: (complexity) =>
-          console.log("Query complexity:", complexity),
-      }),
     ],
     formatError: (formattedError, error) => {
       const originalError = unwrapResolverError(error);

@@ -1,52 +1,45 @@
 import axios, { AxiosResponse } from "axios";
-import {LOGIN, REGISTER} from "../mutations/authMutations";
-
-const BASE_URL = "http://localhost:8000/graphql";
+import { LOGIN, REGISTER } from "../mutations/authMutations";
+import type { Login, AuthResponse, Register } from "@/types/authTypes.ts";
+import type { GraphqlResponse } from "@/types/genericTypes.ts";
 
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: import.meta.env.VITE_API_URL,
   headers: {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
   },
 });
 
-export const loginUser = async (
-  credentials: Login
-): Promise<AuthResponse> => {
-  try {
-    const response: AxiosResponse<GraphqlResponse<AuthResponse>> = await api.post("", {
+export const loginUser = async (credentials: Login): Promise<AuthResponse> => {
+  const response: AxiosResponse<GraphqlResponse<AuthResponse>> = await api.post(
+    "",
+    {
       query: LOGIN,
       variables: credentials,
-    });
+    },
+  );
 
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-
-    return response.data.data;
-  } catch (error) {
-    console.log(error);
-    throw new Error("Invalid credentials");
+  if (response.data.errors) {
+    throw new Error(response.data.errors[0].message);
   }
+
+  return response.data.data;
 };
 
 export const registerUser = async (
-  userData: Register
-): Promise<Register> => {
-  try {
-    const response: AxiosResponse<GraphqlResponse<Register>> = await api.post("", {
-      query: REGISTER,
-      variables: userData,
-    });
+  userData: Register,
+): Promise<{ register: { name: string } }> => {
+  const response: AxiosResponse<
+    GraphqlResponse<{ register: { name: string } }>
+  > = await api.post("", {
+    query: REGISTER,
+    variables: userData,
+  });
 
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-
-    return response.data;
-  } catch (error) {
-    console.log(error);
-    throw new Error("Registration failed");
+  if (response.data.errors) {
+    throw new Error(response.data.errors[0].message);
   }
+
+  return response.data.data;
 };

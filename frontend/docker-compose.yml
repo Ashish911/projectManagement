@@ -1,0 +1,37 @@
+version: "1.0"
+
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  # ════════════════════════════════
+  # FRONTEND - DEV
+  # ════════════════════════════════
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    profiles: ["dev"]
+    container_name: "ProjoMan-Frontend"
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+
+  # ════════════════════════════════
+  # FRONTEND - PROD
+  # ════════════════════════════════
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["prod"]
+    container_name: "ProjoMan-Frontend-Prod"
+    ports:
+      - "80:80"
+    networks:
+      - app-network

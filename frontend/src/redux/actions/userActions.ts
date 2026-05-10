@@ -10,8 +10,6 @@ export const fetchProfile = () => async (dispatch) => {
 
         const response = await getProfile()
 
-        console.log(response);
-
         dispatch({
             type: USER_PROFILE_SUCCESS,
             payload: response.profile

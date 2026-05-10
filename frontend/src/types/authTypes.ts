@@ -1,15 +1,15 @@
-interface Login {
+export interface Login {
   email: string;
   password: string;
 }
 
-interface AuthResponse {
+export interface AuthResponse {
   login: {
     token: string;
-  }
+  };
 }
 
-interface Register {
+export interface Register {
   email: string;
   name: string;
   number: string;

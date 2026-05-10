@@ -85,7 +85,7 @@ export function UserAuthRegisterForm({
 
       dispatch({
         type: REGISTER_SUCCESS,
-        payload: response.data.register
+        payload: response.register
       });
 
 

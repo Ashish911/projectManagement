@@ -7,11 +7,7 @@ import { UserAuthRegisterForm } from "@/Screens/ui-Components/user-auth-form.tsx
 import { Link } from "react-router-dom";
 import { buttonVariants } from "@/components/ui/button.tsx";
 
-interface Props {
-  currentLanguage: String;
-}
-
-export const Register: React.FC<Props> = () => {
+export const Register: React.FC = () => {
   return (
     <>
       <div className="md:hidden">
