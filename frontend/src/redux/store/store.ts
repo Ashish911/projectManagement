@@ -3,6 +3,11 @@ import { configureStore } from "@reduxjs/toolkit";
 import { authLoginReducer, authRegisterReducer } from '../reducers/authReducers';
 import { profileReducer } from "@/redux/reducers/userReducers.ts";
 import { preferenceReducer } from "@/redux/reducers/preferenceReducer.ts";
+import { usersListReducer } from "@/redux/reducers/usersListReducer.ts";
+import { clientsReducer } from "@/redux/reducers/clientsReducer.ts";
+import { projectsReducer } from "@/redux/reducers/projectsReducer.ts";
+import { tasksReducer } from "@/redux/reducers/tasksReducer.ts";
+import { subTasksReducer } from "@/redux/reducers/subTasksReducer.ts";
 
 // Load token from localStorage when app starts
 const preloadedState = {
@@ -40,6 +45,11 @@ const rootReducer = combineReducers({
     register: authRegisterReducer,
     profile: profileReducer,
     preference: preferenceReducer,
+    usersList: usersListReducer,
+    clients: clientsReducer,
+    projects: projectsReducer,
+    tasks: tasksReducer,
+    subTasks: subTasksReducer,
 });
 
 // Configure Store
