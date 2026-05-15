@@ -18,8 +18,9 @@ export const ClientType = new GraphQLObjectType({
     deleteRequest: { type: new GraphQLNonNull(GraphQLBoolean) },
     assignedAdmin: {
       type: UserType,
-      resolve: (parent) => {
-        return User.findById(parent.assignedAdmin);
+      resolve: async (parent) => {
+        if (!parent.assignedAdmin) return null;
+        return await User.findById(parent.assignedAdmin);
       },
     },
   },
