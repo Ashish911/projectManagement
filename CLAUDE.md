@@ -1,0 +1,122 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Structure
+
+This is a full-stack project management application. Active development is in `server/` (Node.js GraphQL API). The `frontend/` directory also exists but is not covered here.
+
+All commands below are run from inside `server/`.
+
+## Commands
+
+```bash
+# Development (uses .env.local)
+npm run dev
+
+# Production (uses .env.prod)
+npm run start
+
+# Run all tests (watch mode)
+npm test
+
+# Run a single test file
+npm run test:auth
+npm run test:client
+npm run test:task
+npm run test:project
+npm run test:subTask
+npm run test:notification
+npm run test:preference
+
+# Run a specific test by name (no dedicated script — use jest directly)
+node --experimental-vm-modules node_modules/.bin/jest tests/client.test.js --verbose -t "should add a client"
+```
+
+Tests require `--experimental-vm-modules` because the project uses ES modules (`"type": "module"` in package.json).
+
+## Required Environment Variables
+
+Validated at startup via Zod in `config/env.js`. The server will exit on missing/invalid values.
+
+| Variable | Requirement |
+|---|---|
+| `NODE_ENV` | `development` \| `production` \| `test` |
+| `PORT` | defaults to `8000` |
+| `MONGO_URI` | required |
+| `SECRET_KEY` | min 32 characters |
+
+Dev env is `.env.local`, prod env is `.env.prod`.
+
+## Architecture
+
+### Request Flow
+
+```
+GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → Service → Repository → Mongoose Model
+```
+
+- **`app.js`** — bootstrap: connects DB, starts metrics HTTP server on `:9090`, starts Apollo or cluster
+- **`cluster.js`** — forks N workers (= CPU count) in production, auto-restarts crashed workers
+- **`server.js`** — Apollo Server setup: JWT context injection, query depth limit (7), complexity limit (1000), error formatting, Prometheus plugin
+
+### Key Architectural Decisions
+
+**GraphQL-only API.** No REST endpoints. Apollo Server with `startStandaloneServer`. Introspection is disabled in production.
+
+**Public operations whitelist.** JWT auth is skipped only for operations named exactly: `LoginMutation`, `RegisterMutation`, `ForgotPasswordMutation`, `ResetPasswordMutation`. All other operations require a `Bearer` token.
+
+**Roles.** Three roles: `SUPER_ADMIN`, `CLIENT_ADMIN`, `USER`. Role checks live in the service layer, not resolvers. Use strict equality (`===`) when comparing roles.
+
+| Role | Key capabilities |
+|---|---|
+| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; `assignAdmin` (assign CLIENT_ADMIN to a client); `promoteToAdmin` (USER → CLIENT_ADMIN); `deleteUser`; queries all users |
+| `CLIENT_ADMIN` | Manages their assigned client and its projects/tasks; queries users in their client's projects |
+| `USER` | Access to assigned projects only; can update own tasks |
+
+**Layered architecture.**
+- `graphql/resolvers/` — thin, delegate immediately to services
+- `services/` — all business logic and role checks
+- `repositories/` — all Mongoose access; return `.toObject()` for clean serialization
+- `models/` — Mongoose schemas only
+
+**Caching.** Redis-backed via `config/cache.js`. Cache keys follow the pattern `entity:id` or `entity:all`. Always invalidate on write. Cache is set *before* access control checks on the DB path in some services — be careful when modifying `getClient`-style methods. Always mock `../config/cache.js` in tests when Redis is running locally — otherwise `cache.get` returns real data and bleeds between tests.
+
+**Field naming.** The Mongoose `Project` model field is `assignedUsers` (plural). Services, resolvers, and tests must all use `assignedUsers` — never the singular `assignedUser`. The GraphQL field exposed to API consumers is named `user` (in `graphql/types/project.type.js`).
+
+**GraphQL type resolvers.** When returning Mongoose query results from a `resolve()` function, always use `async/await` — never return a raw Mongoose Query object. Returning a Query (a thenable) causes GraphQL's executor to call `.then()` on it, which can re-execute the query and throw `MongooseError: Query was already executed`.
+
+**Async notifications.** `NotificationService.notify()` enqueues to BullMQ (`queues/notification.queue.js`). The worker (`worker/notification.worker.js`) is a separate process. In tests, mock `../services/notification.service.js` directly.
+
+**Error handling.** Custom error classes in `errors/` extend `AppError`. Throw these in services; Apollo's `formatError` maps them to structured GraphQL responses with `extensions.code` and `extensions.statusCode`.
+
+**Validation.** All service inputs validated via Zod schemas in `validation/schema.js` using `validate()` from `validation/validate.js`. All MongoDB IDs validated with the `objectId` regex before any DB call.
+
+### Testing Conventions
+
+Tests are in `server/tests/`. They mock at the repository boundary using `jest.unstable_mockModule()` — import the service *after* setting up all mocks. Pattern:
+
+```js
+const mockFind = jest.fn();
+jest.unstable_mockModule("../repositories/foo.repo.js", () => ({ FooRepo: { find: mockFind } }));
+const { FooService } = await import("../services/foo.service.js");
+```
+
+Each test suite clears mocks in `beforeEach(() => jest.clearAllMocks())`.
+
+Test names use `🟢` for happy paths and `🔴` for failure/rejection cases.
+
+### Docker
+
+`docker-compose.yml` has two profiles: `dev` and `prod`.
+
+- **dev**: app (nodemon, ports 8000 + 9090) + redis + prometheus + grafana (port 3001)
+- **prod**: app-prod (multi-stage build) + worker + redis
+
+The `worker` service runs `worker/notification.worker.js` as a standalone process separate from the main API.
+
+### Observability
+
+- Logs: Pino, pretty-printed in dev, structured JSON in prod. Per-request child loggers via `logger.child({ reqId, operation, ip })`.
+- Metrics: Prometheus at `:9090/metrics`. Custom metrics: `graphql_requests_total` (counter) and `graphql_request_duration_ms` (histogram), both labeled by `operation`.
+- Audit logs: written in services for create/update/delete with `{ audit: true, userId, action }` fields.

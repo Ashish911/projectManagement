@@ -51,10 +51,11 @@ const NAV_BY_ROLE = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const dispatch = useDispatch();
     const { profile } = useSelector((state: any) => state.profile);
+    const { preference } = useSelector((state: any) => state.preference);
 
     useEffect(() => {
-        dispatch(fetchProfile() as any);
-        dispatch(fetchPreference() as any);
+        if (!profile) dispatch(fetchProfile() as any);
+        if (!preference) dispatch(fetchPreference() as any);
     }, [dispatch])
 
     const role = profile?.role ?? "USER"

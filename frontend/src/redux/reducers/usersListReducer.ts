@@ -4,6 +4,7 @@ import {
     USERS_LIST_FAIL,
     USERS_LIST_REMOVE,
     USERS_LIST_PROMOTE,
+    USERS_LIST_SET_FILTER,
 } from '../constants/usersListConstants';
 import type { User } from '@/types/userTypes';
 
@@ -11,12 +12,14 @@ interface UsersListState {
     loading: boolean;
     users: User[];
     error: string | null;
+    roleFilter: string | null;
 }
 
 const initialState: UsersListState = {
     loading: false,
     users: [],
     error: null,
+    roleFilter: null,
 };
 
 export const usersListReducer = (state = initialState, action: any): UsersListState => {
@@ -36,6 +39,8 @@ export const usersListReducer = (state = initialState, action: any): UsersListSt
                     u.id === action.payload ? { ...u, role: 'CLIENT_ADMIN' } : u
                 ),
             };
+        case USERS_LIST_SET_FILTER:
+            return { ...state, roleFilter: action.payload };
         default:
             return state;
     }

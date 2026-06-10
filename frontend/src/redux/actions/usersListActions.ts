@@ -4,6 +4,7 @@ import {
     USERS_LIST_FAIL,
     USERS_LIST_REMOVE,
     USERS_LIST_PROMOTE,
+    USERS_LIST_SET_FILTER,
 } from '../constants/usersListConstants';
 import { getUsers } from '@/api/userApi';
 
@@ -27,4 +28,9 @@ export const removeUserFromStore = (id: string) => ({
 export const promoteUserInStore = (id: string) => ({
     type: USERS_LIST_PROMOTE,
     payload: id,
+});
+
+export const setUsersRoleFilter = (role: string | null) => ({
+    type: USERS_LIST_SET_FILTER,
+    payload: role,
 });

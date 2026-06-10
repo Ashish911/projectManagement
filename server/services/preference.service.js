@@ -31,9 +31,9 @@ export const PreferenceService = {
 
     if (!preference) throw new NotFoundError("Preference not found");
 
-    const updated = await PreferenceRepo.update(preference._id, {
-      ...(data.theme && { theme: data.theme }),
-      ...(data.language && { language: data.language }),
+    const updated = await PreferenceRepo.update(preference.id, {
+      theme: data.theme,
+      language: data.language,
     });
 
     logger.info(

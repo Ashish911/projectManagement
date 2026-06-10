@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppLayout } from "@/Screens/Components/AppLayout";
 import { deleteUser, promoteToAdmin } from "@/api/userApi";
-import { fetchUsers, removeUserFromStore, promoteUserInStore } from "@/redux/actions/usersListActions";
+import { fetchUsers, removeUserFromStore, promoteUserInStore, setUsersRoleFilter } from "@/redux/actions/usersListActions";
 import type { User } from "@/types/userTypes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,11 +45,21 @@ const GENDER_LABELS: Record<string, string> = {
 
 export const Users: React.FC = () => {
     const dispatch = useDispatch();
-    const { users, loading, error } = useSelector((state: any) => state.usersList);
+    const { users, loading, error, roleFilter } = useSelector((state: any) => state.usersList);
 
     useEffect(() => {
         dispatch(fetchUsers() as any);
     }, [dispatch]);
+
+    const visibleUsers: User[] = roleFilter
+        ? users.filter((u: User) => u.role === roleFilter)
+        : users;
+
+    const ROLE_FILTER_LABEL: Record<string, string> = {
+        SUPER_ADMIN: "Super Admins",
+        CLIENT_ADMIN: "Client Admins",
+        USER: "Users",
+    };
 
     const [viewUser, setViewUser] = useState<User | null>(null);
     const [promoteTarget, setPromoteTarget] = useState<User | null>(null);
@@ -94,6 +104,18 @@ export const Users: React.FC = () => {
                 <p className="text-muted-foreground text-sm">Manage platform users and their roles.</p>
             </div>
 
+            {roleFilter && (
+                <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                    <span>Filtered by: <strong>{ROLE_FILTER_LABEL[roleFilter] ?? roleFilter}</strong></span>
+                    <button
+                        className="ml-auto rounded px-2 py-0.5 text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                        onClick={() => dispatch(setUsersRoleFilter(null))}
+                    >
+                        Clear filter ×
+                    </button>
+                </div>
+            )}
+
             <div className="rounded-lg border bg-card">
                 {loading ? (
                     <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
@@ -115,14 +137,14 @@ export const Users: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.length === 0 ? (
+                                {visibleUsers.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} className="py-12 text-center text-muted-foreground">
-                                            No users found.
+                                            {roleFilter ? `No ${ROLE_FILTER_LABEL[roleFilter] ?? roleFilter} found.` : "No users found."}
                                         </td>
                                     </tr>
                                 ) : (
-                                    users.map((user: User) => (
+                                    visibleUsers.map((user: User) => (
                                         <tr
                                             key={user.id}
                                             className="cursor-pointer border-b last:border-0 transition-colors duration-150 hover:bg-muted/50"
