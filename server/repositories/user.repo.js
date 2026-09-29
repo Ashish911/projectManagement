@@ -7,6 +7,7 @@ export const UserRepo = {
   findById: async (id) => (await User.findById(id))?.toObject() ?? null,
   findByEmail: async (email) =>
     (await User.findOne({ email }))?.toObject() ?? null,
+  findOne: async (query) => (await User.findOne(query))?.toObject() ?? null,
   create: async (data) => (await new User(data).save()).toObject(),
   update: async (id, data) =>
     (

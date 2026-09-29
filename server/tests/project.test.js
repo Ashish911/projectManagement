@@ -11,7 +11,7 @@ const mockProjectUpdate = jest.fn();
 const mockProjectDelete = jest.fn();
 
 const mockClientFindById = jest.fn();
-const mockClientFindByUser = jest.fn();
+const mockClientFindByAssignedAdmin = jest.fn();
 
 const mockUserFindByIds = jest.fn();
 
@@ -20,7 +20,7 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   ProjectRepo: {
     find: mockProjectFind,
     findById: mockProjectFindById,
-    findByClient: mockProjectFindByClient,
+    findByClientId: mockProjectFindByClient,
     findByAssignedUser: mockProjectFindByAssignedUser,
     create: mockProjectCreate,
     update: mockProjectUpdate,
@@ -28,10 +28,19 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   },
   ClientRepo: {
     findById: mockClientFindById,
-    findByUser: mockClientFindByUser,
+    findByAssignedAdmin: mockClientFindByAssignedAdmin,
   },
   UserRepo: {
     findByIds: mockUserFindByIds,
+  },
+  NotificationRepo: {
+    create: jest.fn().mockResolvedValue({}),
+  },
+}));
+
+jest.unstable_mockModule("../services/notification.service.js", () => ({
+  NotificationService: {
+    notify: jest.fn().mockResolvedValue({}),
   },
 }));
 

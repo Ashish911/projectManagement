@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Trash2, ShieldCheck } from "lucide-react";
+import { Trash2, ShieldCheck, Search } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = {
     SUPER_ADMIN: "Super Admin",
@@ -46,14 +46,24 @@ const GENDER_LABELS: Record<string, string> = {
 export const Users: React.FC = () => {
     const dispatch = useDispatch();
     const { users, loading, error, roleFilter } = useSelector((state: any) => state.usersList);
+    const { profile } = useSelector((state: any) => state.profile);
+    const [search, setSearch] = useState("");
 
     useEffect(() => {
         dispatch(fetchUsers() as any);
     }, [dispatch]);
 
-    const visibleUsers: User[] = roleFilter
-        ? users.filter((u: User) => u.role === roleFilter)
-        : users;
+    // Never show SUPER_ADMINs in the list and never show the current logged-in user
+    const manageableUsers: User[] = users.filter(
+        (u: User) => u.role !== "SUPER_ADMIN" && u.id !== profile?.id
+    );
+
+    const visibleUsers: User[] = (roleFilter
+        ? manageableUsers.filter((u: User) => u.role === roleFilter)
+        : manageableUsers
+    ).filter((u: User) =>
+        !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())
+    );
 
     const ROLE_FILTER_LABEL: Record<string, string> = {
         SUPER_ADMIN: "Super Admins",
@@ -115,6 +125,16 @@ export const Users: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <div className="relative w-full max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                    placeholder="Search by name or email…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                />
+            </div>
 
             <div className="rounded-lg border bg-card">
                 {loading ? (

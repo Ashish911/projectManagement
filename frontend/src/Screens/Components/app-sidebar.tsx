@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Link } from "react-router-dom"
 import {
     IconChartBar,
     IconDashboard,
@@ -9,6 +10,7 @@ import {
     IconListDetails,
     IconUsers,
     IconBuilding,
+    IconLayoutKanban,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/Screens/Components/nav-main"
@@ -37,6 +39,7 @@ const NAV_BY_ROLE = {
     ],
     CLIENT_ADMIN: [
         { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Clients",   url: "/clients",   icon: IconBuilding },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
         { title: "Analytics", url: "/analytics", icon: IconChartBar },
@@ -45,6 +48,7 @@ const NAV_BY_ROLE = {
         { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
+        { title: "Kanban",    url: "/kanban",    icon: IconLayoutKanban },
     ],
 }
 
@@ -70,10 +74,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             asChild
                             className="data-[slot=sidebar-menu-button]:!p-1.5"
                         >
-                            <a href="/dashboard">
+                            <Link to="/dashboard">
                                 <IconInnerShadowTop className="!size-5" />
                                 <span className="text-base font-semibold">ProjoMan</span>
-                            </a>
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>

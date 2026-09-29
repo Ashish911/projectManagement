@@ -8,6 +8,7 @@ import { clientsReducer } from "@/redux/reducers/clientsReducer.ts";
 import { projectsReducer } from "@/redux/reducers/projectsReducer.ts";
 import { tasksReducer } from "@/redux/reducers/tasksReducer.ts";
 import { subTasksReducer } from "@/redux/reducers/subTasksReducer.ts";
+import { LOGOUT } from "@/redux/constants/authConstants.ts";
 
 // Load token from localStorage when app starts
 const preloadedState = {
@@ -40,7 +41,7 @@ const preloadedState = {
     },
 };
 
-const rootReducer = combineReducers({
+const combinedReducer = combineReducers({
     login: authLoginReducer,
     register: authRegisterReducer,
     profile: profileReducer,
@@ -51,6 +52,14 @@ const rootReducer = combineReducers({
     tasks: tasksReducer,
     subTasks: subTasksReducer,
 });
+
+// On LOGOUT reset every slice back to its initial state
+const rootReducer = (state: any, action: any) => {
+    if (action.type === LOGOUT) {
+        return combinedReducer(undefined, action);
+    }
+    return combinedReducer(state, action);
+};
 
 // Configure Store
 const store = configureStore({

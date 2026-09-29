@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDispatch, useSelector } from 'react-redux';
-import {Navigate, useNavigate} from 'react-router-dom';
+import {Link, Navigate, useNavigate} from 'react-router-dom';
 import {useMutation} from "react-query";
 import {loginUser, registerUser} from "@/api/authApi.ts";
 import {
@@ -57,7 +57,7 @@ export function UserAuthRegisterForm({
   const navigate = useNavigate();
 
   const authInfo = useSelector((state) => state.register)
-  const { loading, success } = authInfo;
+  const { loading, success, error: registerError } = authInfo;
 
   const passwordsMatch = password === confirmPassword || confirmPassword === ""
 
@@ -237,6 +237,9 @@ export function UserAuthRegisterForm({
               </Popover>
             </div>
 
+            {registerError && (
+              <p className="text-sm text-destructive text-center">{registerError}</p>
+            )}
             <Button disabled={!passwordsMatch || !password || !confirmPassword || loading}>
               {loading && (
                   <Icons.niceSpinner className="mr-2 h-4 w-4 animate-spin" />
@@ -283,7 +286,7 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
   const [password, setPassword] = useState<string>("");
 
   const authInfo = useSelector((state) => state.login)
-  const { loading, token } = authInfo;
+  const { loading, token, error: loginError } = authInfo;
 
   const dispatch = useDispatch();
 
@@ -359,6 +362,14 @@ export function UserAuthLoginForm({ className, ...props }: UserAuthFormProps) {
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-primary">
+              Forgot password?
+            </Link>
+          </div>
+          {loginError && (
+            <p className="text-sm text-destructive text-center">{loginError}</p>
+          )}
           <Button disabled={loading}>
             {loading && (
               <Icons.niceSpinner className="mr-2 h-4 w-4 animate-spin" />

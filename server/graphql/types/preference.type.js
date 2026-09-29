@@ -16,7 +16,7 @@ export const PreferenceType = new GraphQLObjectType({
     user: {
       type: UserType,
       resolve: (parent, args) => {
-        return User.findById(parent);
+        return User.findById(parent.user);
       },
     },
   },

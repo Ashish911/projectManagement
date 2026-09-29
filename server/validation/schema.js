@@ -129,6 +129,24 @@ export const deleteSubTaskSchema = z.object({
   id: objectId,
 });
 
+// ─── Forgot / Reset Password ─────────────────────────────────────
+export const forgotPasswordSchema = z.object({
+  email: email,
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  password: password,
+});
+
+// ─── User Profile Update ──────────────────────────────────────────
+export const updateProfileSchema = z.object({
+  name: name.optional(),
+  number: z.string().min(1).optional(),
+  dob: z.string().optional(),
+  gender: z.enum(["MALE", "FEMALE", "OTHERS"]).optional(),
+});
+
 // ─── Preference ───────────────────────────────────────────────────
 export const updatePreferenceSchema = z.object({
   theme: z.enum(["LIGHT", "DARK"]).optional(),

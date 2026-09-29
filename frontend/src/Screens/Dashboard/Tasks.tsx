@@ -37,7 +37,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, Search } from "lucide-react";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,8 @@ export const Tasks: React.FC = () => {
 
     const [activeProjectId, setActiveProjectId] = useState<string>("");
     const [activeTaskId, setActiveTaskId] = useState<string>("");
+    const [taskSearch, setTaskSearch] = useState("");
+    const [subTaskSearch, setSubTaskSearch] = useState("");
 
     useEffect(() => {
         dispatch(fetchProjects() as any);
@@ -307,8 +309,17 @@ export const Tasks: React.FC = () => {
         setSubTaskEditTarget(subTask);
     };
 
-    const visibleTasks = selectedProjectId === activeProjectId ? tasks : [];
-    const visibleSubTasks = selectedTaskId === activeTaskId ? subTasks : [];
+    // Only regular users can be assigned tasks — no admins
+    const assignableUsers: User[] = users.filter((u: User) => u.role === "USER");
+
+    const allTasks = selectedProjectId === activeProjectId ? tasks : [];
+    const allSubTasks = selectedTaskId === activeTaskId ? subTasks : [];
+    const visibleTasks = allTasks.filter((t: Task) =>
+        !taskSearch || t.title.toLowerCase().includes(taskSearch.toLowerCase())
+    );
+    const visibleSubTasks = allSubTasks.filter((st: SubTask) =>
+        !subTaskSearch || st.title.toLowerCase().includes(subTaskSearch.toLowerCase())
+    );
     const activeTask = visibleTasks.find((t: Task) => t.id === activeTaskId) ?? null;
 
     return (
@@ -325,7 +336,7 @@ export const Tasks: React.FC = () => {
                 </Button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
                 <Label className="shrink-0 text-sm font-medium">Project</Label>
                 <Select value={activeProjectId} onValueChange={setActiveProjectId}>
                     <SelectTrigger className="w-64"><SelectValue placeholder="Select a project…" /></SelectTrigger>
@@ -335,6 +346,17 @@ export const Tasks: React.FC = () => {
                         ))}
                     </SelectContent>
                 </Select>
+                {activeProjectId && (
+                    <div className="relative ml-auto">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                            placeholder="Search tasks…"
+                            value={taskSearch}
+                            onChange={(e) => setTaskSearch(e.target.value)}
+                            className="pl-9 w-52"
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="rounded-lg border bg-card">
@@ -408,16 +430,27 @@ export const Tasks: React.FC = () => {
                 </Button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
                 <Label className="shrink-0 text-sm font-medium">Task</Label>
-                <Select value={activeTaskId} onValueChange={setActiveTaskId} disabled={!activeProjectId || visibleTasks.length === 0}>
+                <Select value={activeTaskId} onValueChange={setActiveTaskId} disabled={!activeProjectId || allTasks.length === 0}>
                     <SelectTrigger className="w-64"><SelectValue placeholder="Select a task…" /></SelectTrigger>
                     <SelectContent>
-                        {visibleTasks.map((t: Task) => (
+                        {allTasks.map((t: Task) => (
                             <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
+                {activeTaskId && (
+                    <div className="relative ml-auto">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                            placeholder="Search sub tasks…"
+                            value={subTaskSearch}
+                            onChange={(e) => setSubTaskSearch(e.target.value)}
+                            className="pl-9 w-52"
+                        />
+                    </div>
+                )}
                 {activeTask && (
                     <Badge variant={STATUS_VARIANT[activeTask.currentStatus] ?? "secondary"}>
                         {STATUS_LABELS[activeTask.currentStatus] ?? activeTask.currentStatus}
@@ -522,7 +555,7 @@ export const Tasks: React.FC = () => {
             <Dialog open={taskCreateOpen} onOpenChange={(open) => { if (!open) { setTaskCreateOpen(false); setActionError(null); } }}>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Create Task</DialogTitle><DialogDescription>Add a new task to this project.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={taskCreateForm} onChange={setTaskCreateForm} users={users} />
+                    <TaskFormFields form={taskCreateForm} onChange={setTaskCreateForm} users={assignableUsers} />
                     {actionError && <p className="text-sm text-destructive">{actionError}</p>}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setTaskCreateOpen(false); setActionError(null); }}>Cancel</Button>
@@ -534,7 +567,7 @@ export const Tasks: React.FC = () => {
             <Dialog open={!!taskEditTarget} onOpenChange={(open) => { if (!open) { setTaskEditTarget(null); setActionError(null); } }}>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Edit Task</DialogTitle><DialogDescription>Update details for <strong>{taskEditTarget?.title}</strong>.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={taskEditForm} onChange={setTaskEditForm} users={users} />
+                    <TaskFormFields form={taskEditForm} onChange={setTaskEditForm} users={assignableUsers} />
                     {actionError && <p className="text-sm text-destructive">{actionError}</p>}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setTaskEditTarget(null); setActionError(null); }}>Cancel</Button>
@@ -605,7 +638,7 @@ export const Tasks: React.FC = () => {
             <Dialog open={subTaskCreateOpen} onOpenChange={(open) => { if (!open) { setSubTaskCreateOpen(false); setActionError(null); } }}>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Create Sub Task</DialogTitle><DialogDescription>Add a new sub task to this task.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={subTaskCreateForm} onChange={setSubTaskCreateForm} users={users} />
+                    <TaskFormFields form={subTaskCreateForm} onChange={setSubTaskCreateForm} users={assignableUsers} />
                     {actionError && <p className="text-sm text-destructive">{actionError}</p>}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setSubTaskCreateOpen(false); setActionError(null); }}>Cancel</Button>
@@ -617,7 +650,7 @@ export const Tasks: React.FC = () => {
             <Dialog open={!!subTaskEditTarget} onOpenChange={(open) => { if (!open) { setSubTaskEditTarget(null); setActionError(null); } }}>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Edit Sub Task</DialogTitle><DialogDescription>Update details for <strong>{subTaskEditTarget?.title}</strong>.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={subTaskEditForm} onChange={setSubTaskEditForm} users={users} />
+                    <TaskFormFields form={subTaskEditForm} onChange={setSubTaskEditForm} users={assignableUsers} />
                     {actionError && <p className="text-sm text-destructive">{actionError}</p>}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setSubTaskEditTarget(null); setActionError(null); }}>Cancel</Button>

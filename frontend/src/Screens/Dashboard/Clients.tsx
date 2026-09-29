@@ -45,7 +45,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, UserPlus, Plus, ShieldOff } from "lucide-react";
+import { Pencil, Trash2, UserPlus, Plus, ShieldOff, Search } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,30 +105,49 @@ export const Clients: React.FC = () => {
     const dispatch = useDispatch();
     const { clients, loading, error, activeFilter } = useSelector((state: any) => state.clients);
     const { users } = useSelector((state: any) => state.usersList);
+    const { profile } = useSelector((state: any) => state.profile);
+    const isSuperAdmin = profile?.role === "SUPER_ADMIN";
+    const [search, setSearch] = useState("");
 
     const FILTER_LABELS: Record<string, string> = {
         pending: "Pending Deletion",
         unassigned: "Unassigned",
     };
 
-    const visibleClients: Client[] = activeFilter
+    const visibleClients: Client[] = (activeFilter
         ? activeFilter === "pending"
             ? clients.filter((c: Client) => c.deleteRequest)
             : clients.filter((c: Client) => !c.assignedAdmin)
-        : clients;
+        : clients
+    ).filter((c: Client) =>
+        !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
+    );
 
     useEffect(() => {
         dispatch(fetchClients() as any);
         dispatch(fetchUsers() as any);
     }, [dispatch]);
 
-    // Only CLIENT_ADMIN users who are not already assigned to a client
+    // For create form: CLIENT_ADMIN users not assigned to any client
     const assignedAdminIds = new Set(
         clients.map((c: Client) => c.assignedAdmin?.id).filter(Boolean)
     );
     const adminUsers: User[] = users.filter(
         (u: User) => u.role === "CLIENT_ADMIN" && !assignedAdminIds.has(u.id)
     );
+
+    // For assign dialog: exclude only admins assigned to OTHER clients so re-assignment works
+    const adminUsersForAssign = (targetClientId: string): User[] => {
+        const otherAssignedIds = new Set(
+            clients
+                .filter((c: Client) => c.id !== targetClientId)
+                .map((c: Client) => c.assignedAdmin?.id)
+                .filter(Boolean)
+        );
+        return users.filter(
+            (u: User) => u.role === "CLIENT_ADMIN" && !otherAssignedIds.has(u.id)
+        );
+    };
 
     // ── dialogs state ─────────────────────────────────────────────────────────
     const [viewClient, setViewClient] = useState<Client | null>(null);
@@ -263,13 +282,15 @@ export const Clients: React.FC = () => {
                     <h2 className="text-2xl font-semibold tracking-tight">Clients</h2>
                     <p className="text-muted-foreground text-sm">View and manage clients.</p>
                 </div>
-                <Button onClick={() => { setCreateForm(EMPTY_FORM); setActionError(null); setCreateOpen(true); }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Client
-                </Button>
+                {isSuperAdmin && (
+                    <Button onClick={() => { setCreateForm(EMPTY_FORM); setActionError(null); setCreateOpen(true); }}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Client
+                    </Button>
+                )}
             </div>
 
-            {activeFilter && (
+            {isSuperAdmin && activeFilter && (
                 <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
                     <span>Filtered by: <strong>{FILTER_LABELS[activeFilter] ?? activeFilter}</strong></span>
                     <button
@@ -280,6 +301,16 @@ export const Clients: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <div className="relative w-full max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                    placeholder="Search by name or email…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                />
+            </div>
 
             <div className="rounded-lg border bg-card">
                 {loading ? (
@@ -330,32 +361,46 @@ export const Clients: React.FC = () => {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-center gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        title="Assign admin"
-                                                        onClick={(e) => { e.stopPropagation(); openAssign(client); }}
-                                                    >
-                                                        <UserPlus className="h-4 w-4 text-blue-500" />
-                                                    </Button>
-                                                    {!client.deleteRequest && (
+                                                    {isSuperAdmin && (
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title="Assign admin"
+                                                                onClick={(e) => { e.stopPropagation(); openAssign(client); }}
+                                                            >
+                                                                <UserPlus className="h-4 w-4 text-blue-500" />
+                                                            </Button>
+                                                            {!client.deleteRequest && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    title="Request deletion"
+                                                                    onClick={(e) => { e.stopPropagation(); setDeleteRequestTarget(client); setActionError(null); }}
+                                                                >
+                                                                    <ShieldOff className="h-4 w-4 text-orange-500" />
+                                                                </Button>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title="Force delete"
+                                                                onClick={(e) => { e.stopPropagation(); setForceDeleteTarget(client); setActionError(null); }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {!isSuperAdmin && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            title="Request deletion"
-                                                            onClick={(e) => { e.stopPropagation(); setDeleteRequestTarget(client); setActionError(null); }}
+                                                            title="Edit client"
+                                                            onClick={(e) => { e.stopPropagation(); openEdit(client); }}
                                                         >
-                                                            <ShieldOff className="h-4 w-4 text-orange-500" />
+                                                            <Pencil className="h-4 w-4 text-muted-foreground" />
                                                         </Button>
                                                     )}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        title="Force delete"
-                                                        onClick={(e) => { e.stopPropagation(); setForceDeleteTarget(client); setActionError(null); }}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -465,7 +510,7 @@ export const Clients: React.FC = () => {
                                 <SelectValue placeholder="Select an admin" />
                             </SelectTrigger>
                             <SelectContent>
-                                {adminUsers.map((u) => (
+                                {adminUsersForAssign(assignTarget?.id ?? "").map((u) => (
                                     <SelectItem key={u.id} value={u.id}>
                                         {u.name} ({u.email})
                                     </SelectItem>

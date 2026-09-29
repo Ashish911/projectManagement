@@ -27,3 +27,18 @@ export const AuthType = new GraphQLObjectType({
     tokenExpiration: { type: new GraphQLNonNull(GraphQLString) },
   },
 });
+
+export const ForgotPasswordType = new GraphQLObjectType({
+  name: "ForgotPassword",
+  fields: {
+    token: { type: new GraphQLNonNull(GraphQLString) },
+    message: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});
+
+export const MessageType = new GraphQLObjectType({
+  name: "Message",
+  fields: {
+    message: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});

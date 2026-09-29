@@ -13,8 +13,10 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from "../errors/errors.js";
+import crypto from "crypto";
 import { validate } from "../validation/validate.js";
-import { registerSchema, loginSchema, idSchema } from "../validation/schema.js";
+import { registerSchema, loginSchema, idSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema } from "../validation/schema.js";
+import { NotificationService } from "./notification.service.js";
 import { createLogger } from "../config/logger.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -104,11 +106,17 @@ export const UserService = {
       lastFailedLogin: null,
     });
 
-    await PreferenceRepo.create({
-      theme: "LIGHT",
-      language: "ENGLISH",
-      user: user._id,
-    });
+    try {
+      await PreferenceRepo.create({
+        theme: "LIGHT",
+        language: "ENGLISH",
+        user: user.id,
+      });
+    } catch (err) {
+      // Roll back the user so re-registration with the same email works
+      await UserRepo.delete(user.id);
+      throw err;
+    }
 
     return user;
   },
@@ -271,6 +279,70 @@ export const UserService = {
         targetUserId: userId,
         action: "PROMOTE_TO_ADMIN",
       },
+      "AUDIT",
+    );
+
+    await NotificationService.notify(userId, "You have been promoted to Client Admin.").catch(() => {});
+
+    return updated;
+  },
+
+  /**
+   * Generate a password reset token for the given email.
+   * Returns the token directly (no email service — caller must relay it).
+   */
+  async forgotPassword(email) {
+    validate(forgotPasswordSchema, { email });
+
+    const user = await UserRepo.findByEmail(email);
+    if (!user) throw new NotFoundError("User not found");
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await UserRepo.update(user.id, { resetToken: token, resetTokenExpiry: expiry });
+
+    return { token, message: "Use this token to reset your password within 1 hour." };
+  },
+
+  /**
+   * Reset the user's password using a valid token.
+   */
+  async resetPassword(token, password) {
+    validate(resetPasswordSchema, { token, password });
+
+    const user = await UserRepo.findOne({ resetToken: token });
+    if (!user) throw new NotFoundError("Invalid or expired reset token");
+
+    if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < new Date()) {
+      throw new UnauthorizedError("Reset token has expired");
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await UserRepo.update(user.id, {
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpiry: null,
+      loginAttempts: 0,
+      lastFailedLogin: null,
+    });
+
+    return { message: "Password reset successfully" };
+  },
+
+  async updateProfile(data, context) {
+    validate(updateProfileSchema, data);
+
+    const { user } = context;
+    const logger = createLogger(context);
+
+    const updated = await UserRepo.update(user.id, data);
+    if (!updated) throw new NotFoundError("User not found");
+
+    await cache.invalidate(`users:${user.id}`);
+
+    logger.info(
+      { audit: true, userId: user.id, action: "UPDATE_PROFILE" },
       "AUDIT",
     );
 

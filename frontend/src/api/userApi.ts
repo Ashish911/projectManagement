@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from "axios";
 import { PROFILE, GET_USERS } from "@/queries/userQueries.ts";
-import { DELETE_USER, PROMOTE_TO_ADMIN } from "@/mutations/userMutations.ts";
+import { DELETE_USER, PROMOTE_TO_ADMIN, UPDATE_PROFILE } from "@/mutations/userMutations.ts";
 import type { User, ProfileResponse } from "@/types/userTypes.ts";
 import type { GraphqlResponse } from "@/types/genericTypes.ts";
 
@@ -41,6 +41,20 @@ export const deleteUser = async (userId: string): Promise<void> => {
     variables: { userId },
   });
   if (response.data.errors) throw new Error(response.data.errors[0].message);
+};
+
+export const updateProfile = async (data: {
+  name?: string;
+  number?: string;
+  dob?: string;
+  gender?: string;
+}): Promise<User> => {
+  const response: AxiosResponse<GraphqlResponse<{ updateProfile: User }>> = await api.post("", {
+    query: UPDATE_PROFILE,
+    variables: data,
+  });
+  if (response.data.errors) throw new Error(response.data.errors[0].message);
+  return response.data.data.updateProfile;
 };
 
 export const promoteToAdmin = async (userId: string): Promise<User> => {

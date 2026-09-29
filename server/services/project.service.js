@@ -1,5 +1,6 @@
 import { cache } from "../config/cache.js";
 import { createLogger } from "../config/logger.js";
+import { NotificationService } from "./notification.service.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -29,10 +30,10 @@ export const ProjectService = {
 
     // CLIENT_ADMIN sees only their client's projects
     if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByUser(user.id);
+      const client = await ClientRepo.findByAssignedAdmin(user.id);
       if (!client) throw new NotFoundError("No client assigned to this admin");
 
-      return await ProjectRepo.findByClient(client._id);
+      return await ProjectRepo.findByClientId(client.id);
     }
 
     // USER sees only projects they are assigned to
@@ -230,6 +231,15 @@ export const ProjectService = {
     );
 
     await cache.invalidate(`projects:${data.id}`);
+
+    await Promise.all(
+      newUsers.map((uid) =>
+        NotificationService.notify(
+          uid,
+          `You have been added to project "${project.name}".`,
+        ).catch(() => {}),
+      ),
+    );
 
     return updated;
   },

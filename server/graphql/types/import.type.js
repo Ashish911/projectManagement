@@ -1,6 +1,6 @@
 // graphql/types/import.type.js
 
-export { AuthType, UserType } from "./user.type.js";
+export { AuthType, UserType, ForgotPasswordType, MessageType } from "./user.type.js";
 export { ProjectType } from "./project.type.js";
 export { ClientType } from "./client.type.js";
 export { PreferenceType } from "./preference.type.js";

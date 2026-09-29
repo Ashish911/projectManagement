@@ -34,7 +34,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Users, Plus } from "lucide-react";
+import { Pencil, Trash2, Users, Plus, Search } from "lucide-react";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -64,15 +64,20 @@ export const Projects: React.FC = () => {
     const { clients } = useSelector((state: any) => state.clients);
     const { users } = useSelector((state: any) => state.usersList);
 
+    const [search, setSearch] = useState("");
+
     const STATUS_FILTER_LABEL: Record<string, string> = {
         NOT_STARTED: "Not Started",
         IN_PROGRESS: "In Progress",
         COMPLETED: "Completed",
     };
 
-    const visibleProjects: Project[] = statusFilter
+    const visibleProjects: Project[] = (statusFilter
         ? projects.filter((p: Project) => p.status === statusFilter)
-        : projects;
+        : projects
+    ).filter((p: Project) =>
+        !search || p.name.toLowerCase().includes(search.toLowerCase())
+    );
 
     useEffect(() => {
         dispatch(fetchProjects() as any);
@@ -192,7 +197,7 @@ export const Projects: React.FC = () => {
     };
 
     const availableUsers = (project: Project | null): User[] =>
-        users.filter((u: User) => !project?.user.some((m) => m.id === u.id));
+        users.filter((u: User) => u.role === "USER" && !project?.user.some((m) => m.id === u.id));
 
     return (
         <AppLayout>
@@ -218,6 +223,16 @@ export const Projects: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <div className="relative w-full max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                    placeholder="Search projects…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                />
+            </div>
 
             <div className="rounded-lg border bg-card">
                 {loading ? (

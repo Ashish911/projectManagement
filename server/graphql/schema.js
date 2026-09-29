@@ -18,6 +18,8 @@ import {
   NotificationType,
   TaskType,
   PreferenceType,
+  ForgotPasswordType,
+  MessageType,
 } from "./types/import.type.js";
 
 import {
@@ -126,6 +128,31 @@ const Mutation = new GraphQLObjectType({
         userId: { type: new GraphQLNonNull(GraphQLID) },
       },
       resolve: userResolvers.Mutation.deleteUser,
+    },
+    updateProfile: {
+      type: UserType,
+      args: {
+        name: { type: GraphQLString },
+        number: { type: GraphQLString },
+        dob: { type: GraphQLString },
+        gender: { type: GraphQLString },
+      },
+      resolve: userResolvers.Mutation.updateProfile,
+    },
+    forgotPassword: {
+      type: ForgotPasswordType,
+      args: {
+        email: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: userResolvers.Mutation.forgotPassword,
+    },
+    resetPassword: {
+      type: MessageType,
+      args: {
+        token: { type: new GraphQLNonNull(GraphQLString) },
+        password: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: userResolvers.Mutation.resetPassword,
     },
     register: {
       type: UserType,

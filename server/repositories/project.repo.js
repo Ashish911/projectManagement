@@ -14,6 +14,8 @@ export const ProjectRepo = {
         { new: true, runValidators: true },
       )
     )?.toObject() ?? null,
+  findByAssignedUser: async (userId) =>
+    (await Project.find({ assignedUsers: userId })).map((p) => p.toObject()),
   delete: async (id) =>
     (await Project.findByIdAndDelete(id))?.toObject() ?? null,
 };

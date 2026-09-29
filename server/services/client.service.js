@@ -5,6 +5,7 @@ import {
   NotFoundError,
 } from "../errors/errors.js";
 import { ClientRepo, UserRepo } from "../repositories/import.repo.js";
+import { NotificationService } from "./notification.service.js";
 import {
   addClientSchema,
   assignAdminSchema,
@@ -255,13 +256,11 @@ export const ClientService = {
       throw new ForbiddenError("User does not have CLIENT_ADMIN role");
     }
 
-    const alreadyAssigned = await ClientRepo.findByUser(data.assignedAdmin);
-    if (alreadyAssigned)
-      throw new ConflictError("User is already assigned to a client");
+    const alreadyAssigned = await ClientRepo.findByAssignedAdmin(data.assignedAdmin);
+    if (alreadyAssigned && alreadyAssigned.id !== data.id)
+      throw new ConflictError("User is already assigned to a different client");
 
-    const updated = await ClientRepo.update(data.id, {
-      set: { assignedAdmin: data.assignedAdmin },
-    });
+    const updated = await ClientRepo.update(data.id, { assignedAdmin: data.assignedAdmin });
 
     logger.info(
       {
@@ -275,6 +274,11 @@ export const ClientService = {
 
     await cache.invalidate(`clients:${data.id}`);
     await cache.invalidate("clients:all");
+
+    await NotificationService.notify(
+      data.assignedAdmin,
+      `You have been assigned as admin for client "${client.name}".`,
+    ).catch(() => {});
 
     return updated;
   },
