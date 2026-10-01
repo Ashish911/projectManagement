@@ -1,9 +1,20 @@
+// Redis-backed cache used by services. Failures are logged, never thrown,
+// so the app keeps working (falling back to the database) if Redis is down.
 import { redis } from "./redis.js";
 import logger from "./logger.js";
 
-const DEFAULT_TTL = 60 * 5;
+const DEFAULT_TTL = 60 * 5; // 5 minutes, in seconds
 
+/**
+ * Simple JSON cache on top of Redis.
+ * Keys follow the pattern `entity:id` or `entity:all`.
+ */
 export const cache = {
+  /**
+   * Reads a cached value.
+   * @param {string} key Cache key.
+   * @returns {Promise<any|null>} The parsed value, or null on a miss or Redis error.
+   */
   async get(key) {
     try {
       const data = await redis.get(key);
@@ -19,6 +30,12 @@ export const cache = {
     }
   },
 
+  /**
+   * Stores a value as JSON with an expiry.
+   * @param {string} key   Cache key.
+   * @param {any} value    Value to cache; must be JSON-serializable.
+   * @param {number} [ttl] Time to live in seconds (default 5 minutes).
+   */
   async set(key, value, ttl = DEFAULT_TTL) {
     try {
       await redis.set(key, JSON.stringify(value), "EX", ttl);
@@ -27,6 +44,10 @@ export const cache = {
     }
   },
 
+  /**
+   * Removes a single key. Call after any write that changes the cached data.
+   * @param {string} key Cache key.
+   */
   async invalidate(key) {
     try {
       await redis.del(key);
@@ -36,11 +57,14 @@ export const cache = {
     }
   },
 
-  // Invalidate all keys matching a pattern e.g. "clients:*"
+  /**
+   * Removes all keys matching a pattern.
+   * @param {string} pattern Redis glob pattern, e.g. "clients:*".
+   */
   async invalidatePattern(pattern) {
     try {
       const keys = await redis.keys(pattern);
-      if (keys.length) await redis.del(...keys);
+      if (keys.length) await redis.del(...keys); // `del` with no keys would error, so skip it
       logger.debug(
         { pattern, count: keys.length },
         "Cache pattern invalidated",
