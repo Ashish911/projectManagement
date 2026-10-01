@@ -5,4 +5,6 @@ export {
   ForbiddenError,
   ValidationError,
   ConflictError,
+  InternalServerError,
+  TooManyRequestsError,
 } from "./errors.js";
