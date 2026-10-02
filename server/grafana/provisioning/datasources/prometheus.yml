@@ -1,0 +1,10 @@
+# Registers Prometheus as Grafana's default data source on startup.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus # Referenced by the provisioned dashboards
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090 # Prometheus service on the compose network
+    isDefault: true

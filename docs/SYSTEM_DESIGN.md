@@ -303,8 +303,8 @@ All operations go through `POST /graphql`. No REST routes exist.
 | Limit | Value | Protects against |
 |---|:---:|---|
 | Query depth | 7 | Deeply nested query abuse (`project.tasks.subtasks.task.project...`) |
-| Query complexity | 1 000 | Expensive field fan-out (e.g. all projects × all tasks × all users) |
-| Rate limit (app) | 100 req / 15 min per IP | API scraping, brute force on public ops |
+| Query complexity | 1 000 (planned — not enforced yet) | Expensive field fan-out (e.g. all projects × all tasks × all users) |
+| Rate limit (app) | Per IP + operation, development only | API scraping, brute force on public ops (production relies on the WAF) |
 | Rate limit (WAF) | 1 000 req / 5 min per IP | DDoS, volumetric abuse |
 
 ### Public vs Protected Operations
@@ -376,6 +376,8 @@ For a 1 000 DAU workload with 50 reads/session distributed across an 8-hour work
 ---
 
 ## 6. Async Processing
+
+> **Current status:** the BullMQ queue and worker are built but not wired in. `NotificationService.notify()` currently saves to MongoDB and publishes over Redis PubSub in the request. The flow below is the target design.
 
 ### Notification Flow
 
@@ -569,7 +571,7 @@ Option C: 4 Fargate tasks × 0.5 vCPU, single process per task
 
 ```
 ALB Target Group Health Check:
-  Path:                 /graphql (POST with { query: "{ __typename }" })
+  Path:                 GET /health/ready (200 when MongoDB is reachable, 503 otherwise)
   Healthy threshold:    2 consecutive passes
   Unhealthy threshold:  3 consecutive failures
   Interval:             30 seconds
@@ -585,12 +587,15 @@ ALB Target Group Health Check:
 
 ### Metrics
 
-Two custom Prometheus metrics exposed at `:9090/metrics`:
+Three custom Prometheus metrics exposed at `:9090/metrics` (combined across workers in cluster mode):
 
 | Metric | Type | Labels | Alert threshold |
 |---|---|---|---|
-| `graphql_requests_total` | Counter | `operation`, `status` | Error rate > 1% over 5 min |
+| `graphql_requests_total` | Counter | `operation`, `status` (`success` / `error` / `unauthenticated`) | Error rate > 1% over 5 min |
 | `graphql_request_duration_ms` | Histogram | `operation` | p95 > 500 ms |
+| `cache_operations_total` | Counter | `op`, `result` (`hit` / `miss` / `ok` / `error`) | Hit ratio drop (dashboard only) |
+
+The dev stack's `prometheus/alerts.yml` currently uses looser thresholds (error rate > 5%, p95 > 1 s, API down for 1 min) and the Grafana "ProjoMan API" dashboard is provisioned automatically.
 
 Default Node.js runtime metrics also exported: CPU usage, heap size, event loop lag, GC pause duration.
 
@@ -670,7 +675,7 @@ fields @timestamp, userId, action, targetUserId, targetProjectId
 - File uploads need multipart extension (not yet required)
 - Introspection disabled in production + WAF rule to reduce schema exposure
 
-**Query safety:** depth limit 7, complexity limit 1 000.
+**Query safety:** depth limit 7; complexity limit 1 000 planned.
 
 ---
 
@@ -734,6 +739,8 @@ fields @timestamp, userId, action, targetUserId, targetProjectId
 ### ADR-005 — Async Notification Delivery via BullMQ
 
 **Decision:** `NotificationService.notify()` enqueues a BullMQ job. A standalone worker process consumes it.
+
+**Status:** not implemented yet — `notify()` writes directly; the queue and worker exist but nothing enqueues jobs.
 
 **Why:** Notification DB writes (10–30 ms each) should not block API responses. At scale, bulk operations (assign 50 users to a project → 50 notifications) would serialize into a 500–1 500 ms delay without async delivery.
 

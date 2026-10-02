@@ -17,7 +17,7 @@ projectManagement/
 
 # Backend
 
-A GraphQL-first backend built on Node.js with a clean layered architecture, role-based access control, async job processing, Redis caching, real-time subscriptions, and full observability.
+A GraphQL-first backend built on Node.js with a clean layered architecture, role-based access control, Redis caching, real-time subscriptions, an async job queue (being wired in), and full observability.
 
 ## Backend Status
 
@@ -25,18 +25,20 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 |---|---|
 | GraphQL API (Users, Clients, Projects, Tasks, SubTasks) | Complete |
 | Authentication (JWT, login throttling, account lockout) | Complete |
-| Forgot / Reset Password (token-based, 1-hour expiry) | Complete |
+| Forgot / Reset Password (emailed link via Bird, hashed token, 1-hour expiry) | Complete |
 | Role-Based Access Control (SUPER_ADMIN, CLIENT_ADMIN, USER) | Complete |
-| Redis Caching (entity-level + pattern invalidation) | Complete |
-| Async Notification System (BullMQ + Worker) | Complete |
+| Redis Caching (entity-level, 5-minute TTL, invalidation on write) | Complete |
+| Async Notification Queue (BullMQ + Worker) | Partial — queue and worker exist; notifications are not enqueued yet |
 | Real-time GraphQL Subscriptions (notificationCreated) | Complete |
 | User Profile Update (name, number, dob, gender) | Complete |
 | User Preferences (theme, language) | Complete |
 | Notification Triggers (tasks, subtasks, projects, promotions, client assignment) | Complete |
 | Unit Tests (Jest + mocks, all service domains) | Complete |
-| Structured Logging (Pino, per-request child loggers, audit trail) | Complete |
-| Prometheus Metrics + Grafana Dashboards | Complete |
-| Docker (dev + prod profiles, worker as separate container) | Complete |
+| Structured Logging (Pino, per-request child loggers, audit trail incl. login/password reset, secret redaction) | Complete |
+| Prometheus Metrics + Grafana Dashboards (provisioned dashboard, cluster-aggregated metrics, cache hit ratio) | Complete |
+| Prometheus Alert Rules (API down, error rate > 5%, p95 > 1s) | Complete |
+| Health Checks (`/health/live`, `/health/ready`) | Complete |
+| Docker (dev + prod profiles) | Complete — worker container defined but commented out |
 | CPU Clustering (production multi-process) | Complete |
 | Comment System | Model defined — service/resolver integration pending |
 | E2E Testing | Planned |
@@ -57,7 +59,7 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 | Metrics | prom-client (Prometheus) + Grafana |
 | Testing | Jest with `unstable_mockModule` for ESM |
 | Containerisation | Docker + Docker Compose |
-| Security | Helmet, CORS, rate limiting, query depth + complexity limits |
+| Security | CORS, dev rate limiting, query depth limit, log redaction |
 
 ## Getting Started (Backend)
 
@@ -79,6 +81,14 @@ Copy `.env.local` and populate:
 | `SECRET_KEY` | JWT signing secret (min 32 chars) |
 | `REDIS_HOST` | Redis hostname (default `localhost`) |
 | `REDIS_PORT` | Redis port (default `6379`) |
+| `REDIS_PASSWORD` | Redis password (optional) |
+| `CORS_ORIGIN` | Allowed CORS origin (default `*`) |
+| `METRICS_PORT` | Prometheus metrics port (default `9090`) |
+| `BIRD_API_KEY` | Bird API key for password-reset email |
+| `EMAIL_FROM` | Sender address (default `onboarding@messagebird.dev`) |
+| `APP_URL` | Frontend base URL used in reset links (default `http://localhost:4000`) |
+
+Copy `server/.env.example` to `.env.local` / `.env.prod`. Real env files are git-ignored and must never be committed.
 
 ### Running Locally (Docker)
 
@@ -93,9 +103,10 @@ docker compose --profile prod up
 | Service | URL |
 |---|---|
 | GraphQL API | http://localhost:8000/graphql |
+| Liveness / Readiness | http://localhost:8000/health/live, http://localhost:8000/health/ready |
 | Prometheus Metrics | http://localhost:9090/metrics |
-| Prometheus | http://localhost:9091 |
-| Grafana | http://localhost:3001 (admin/admin) |
+| Prometheus (alerts at `/alerts`) | http://localhost:9091 |
+| Grafana ("ProjoMan API" dashboard) | http://localhost:3001 (admin/admin) |
 
 ### Running Without Docker
 
@@ -122,12 +133,13 @@ npm run test:task
 npm run test:subTask
 npm run test:notification
 npm run test:preference
+npm run test:server
 
 # Single test by name
 node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbose -t "should notify"
 ```
 
-Tests use Jest with `unstable_mockModule` to mock at the repository boundary — no real DB or Redis connection required.
+Tests use Jest with `unstable_mockModule` to mock at the repository boundary — no real DB connection required. Suites that don't mock `config/cache.js` (currently `client` and `preference`) talk to a local Redis if one is running, which causes 3 known failures.
 
 ## Architecture Overview
 
@@ -135,10 +147,10 @@ Tests use Jest with `unstable_mockModule` to mock at the repository boundary —
 Client Request
       │
       ▼
-Apollo Server (server.js)
-  ├─ JWT verification (all non-public operations)
+Apollo Server on Express (server.js)
+  ├─ /health/live, /health/ready (plain HTTP, no auth)
+  ├─ JWT verification (all non-public operations; failures counted + logged)
   ├─ Query depth limit (max 7)
-  ├─ Query complexity limit (max 1000)
   └─ Per-request context: { user, reqId, logger, operation, startTime }
       │
       ▼
@@ -150,9 +162,9 @@ Services (business logic, role checks, validation)           │
   ├─ Validate input via Zod                                   │
   ├─ Enforce RBAC                                             │
   ├─ Read/write Redis cache                                   │
-  ├─ Call NotificationService → Redis PubSub (real-time)     │
-  ├─ Enqueue async jobs (BullMQ)  ──► Notification Worker    │
-  └─ Write audit logs                                         │
+  ├─ Call NotificationService → MongoDB + Redis PubSub       │
+  │   (BullMQ queue + worker exist but are not wired in)     │
+  └─ Write audit logs (incl. login / password reset)         │
       │                                                       │
       ▼                                                       │
 Repositories (Mongoose wrappers, return .toObject())         │
@@ -161,8 +173,9 @@ Repositories (Mongoose wrappers, return .toObject())         │
 MongoDB                                                       │
                                                               │
 Prometheus Plugin ◄───────────────────────────────────────────┘
-  └─ graphql_requests_total
+  └─ graphql_requests_total (success / error / unauthenticated)
   └─ graphql_request_duration_ms
+  └─ cache_operations_total (from config/cache.js)
 ```
 
 ## Role Model
@@ -222,8 +235,8 @@ Notifications are created and delivered in real-time via Redis PubSub (GraphQL s
 | Mutation | Description |
 |---|---|
 | `login` | Returns JWT token |
-| `register` | Creates user + default preference |
-| `forgotPassword` | Generates reset token (1h expiry), returns token directly |
+| `register` | Creates a `USER` + default preference (role cannot be chosen) |
+| `forgotPassword` | Emails a reset link (1h expiry); same response whether or not the account exists |
 | `resetPassword` | Validates token, updates password |
 | `updateProfile` | Updates name, number, dob, gender |
 | `promoteToAdmin` | SUPER_ADMIN: USER → CLIENT_ADMIN |
@@ -263,7 +276,7 @@ Notifications are created and delivered in real-time via Redis PubSub (GraphQL s
 
 ```
 server/
-├── app.js                    # Bootstrap: DB, metrics server, cluster
+├── app.js                    # Bootstrap: DB, metrics server, cluster, crash logging
 ├── cluster.js                # Production worker forking
 ├── server.js                 # Apollo Server, JWT context, plugins
 ├── config/
@@ -272,7 +285,8 @@ server/
 │   ├── redis.js              # Redis client with retry + health check
 │   ├── cache.js              # Cache wrapper (get/set/invalidate/pattern)
 │   ├── logger.js             # Pino logger + DB index creation
-│   ├── metrics.js            # Prometheus counter + histogram
+│   ├── metrics.js            # Prometheus request + cache metrics
+│   ├── health.js             # Readiness checks (MongoDB required, Redis reported)
 │   └── pubsub.js             # Redis PubSub for GraphQL subscriptions
 ├── graphql/
 │   ├── schema.js             # Root Query, Mutation, Subscription definitions
@@ -286,8 +300,9 @@ server/
 ├── validation/               # Zod schemas + validate() helper
 ├── errors/                   # AppError hierarchy (NotFound, Forbidden, etc.)
 ├── middleware/               # Rate limiter
-├── tests/                    # Jest unit tests (7 test files)
-└── docker/                   # Prometheus config, observability compose
+├── tests/                    # Jest unit tests (8 test files)
+├── prometheus/               # Scrape config + alert rules
+└── grafana/                  # Provisioned data source + dashboards
 ```
 
 ## Backend Roadmap

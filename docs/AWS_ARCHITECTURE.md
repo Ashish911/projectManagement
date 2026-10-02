@@ -171,6 +171,7 @@ Credentials are stored in **AWS Secrets Manager** and injected as environment va
 | `MONGO_URI` | API + Worker |
 | `SECRET_KEY` | API (JWT signing) |
 | Redis AUTH token | API + Worker |
+| `BIRD_API_KEY` | API (password-reset email) |
 
 **Task IAM Role (least-privilege):**
 ```
