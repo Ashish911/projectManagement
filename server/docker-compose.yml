@@ -1,55 +1,58 @@
-version: "1.0"
+version: "1.0" # Ignored by Compose v2; kept for older tooling
 
-# ── Shared network so all services can talk to each other ──
+# ── Shared network ────────────────────────────────────────────────────────────
+# Lets containers reach each other by service name, e.g. Redis at host "redis".
 networks:
   app-network:
     driver: bridge
 
-# ── Named volumes for persistence ──
+# ── Named volumes ─────────────────────────────────────────────────────────────
+# Keep Redis, Prometheus and Grafana data when containers are recreated.
 volumes:
-  redis-data:
-  prometheus-data:
-  grafana-data:
+  redis-data: # Redis AOF/RDB snapshot persistence
+  prometheus-data: # Prometheus TSDB (time-series data)
+  grafana-data: # Grafana dashboard and datasource config
 
 services:
-  # ════════════════════════════════
-  # APP - DEV
-  # ════════════════════════════════
+  # ════════════════════════════════════════════════════════════════════════════
+  # APP — DEVELOPMENT
+  # Profile: dev  →  docker compose --profile dev up
+  # ════════════════════════════════════════════════════════════════════════════
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.dev # Single-stage image; installs all deps including devDependencies
     profiles: ["dev"]
     container_name: "ProjoMan-GraphQl"
     env_file:
-      - .env.local
+      - .env.local # Dev environment variables (MONGO_URI, SECRET_KEY, etc.)
     environment:
-      - REDIS_HOST=redis
+      - REDIS_HOST=redis # Override so the app talks to the Redis service, not localhost
       - REDIS_PORT=6379
     ports:
-      - "8000:8000"
-      - "9090:9090"
+      - "8000:8000" # GraphQL API
+      - "9090:9090" # Prometheus metrics endpoint
     volumes:
-      - .:/app
-      - /app/node_modules
+      - .:/app # Mount source code for live reload via nodemon
+      - /app/node_modules # Anonymous volume prevents host node_modules from shadowing the container's
     networks:
       - app-network
     depends_on:
       redis:
-        condition: service_healthy
+        condition: service_healthy # Wait until Redis passes its healthcheck before starting
 
-  # ════════════════════════════════
-  # APP - PROD
-  # ════════════════════════════════
-
+  # ════════════════════════════════════════════════════════════════════════════
+  # APP — PRODUCTION
+  # Profile: prod  →  docker compose --profile prod up
+  # ════════════════════════════════════════════════════════════════════════════
   app-prod:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile # Multi-stage build with production dependencies only
     profiles: ["prod"]
     container_name: "ProjoMan-GraphQl-Prod"
     env_file:
-      - .env.prod
+      - .env.prod # Production environment variables
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -57,17 +60,19 @@ services:
       - "8000:8000"
       - "9090:9090"
     volumes:
-      - .:/app
-      - /app/node_modules
+      - .:/app # Supplies .env.prod for `npm start`; .dockerignore keeps it out of the image
+      - /app/node_modules # Keep the image's production node_modules
     networks:
       - app-network
     depends_on:
       redis:
         condition: service_healthy
 
-  # ════════════════════════════════
-  # WORKER APP
-  # ════════════════════════════════
+  # ════════════════════════════════════════════════════════════════════════════
+  # NOTIFICATION WORKER (disabled)
+  # Consumes the BullMQ notification queue in its own process, separate from the API.
+  # Uncomment to enable; nothing enqueues jobs yet, as services save notifications directly.
+  # ════════════════════════════════════════════════════════════════════════════
   worker:
     build:
       context: .
@@ -85,36 +90,41 @@ services:
     networks:
       - app-network
 
-  # ════════════════════════════════
-  # CACHE
-  # ════════════════════════════════
+  # ════════════════════════════════════════════════════════════════════════════
+  # CACHE — Redis
+  # Used by both profiles for app caching (config/cache.js) and BullMQ queues.
+  # ════════════════════════════════════════════════════════════════════════════
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine # Pinned to major version 7
     profiles: ["dev", "prod"]
     container_name: redis
     ports:
-      - "6379:6379"
+      - "6379:6379" # Expose to host so you can connect with redis-cli locally
     volumes:
-      - redis-data:/data
+      - redis-data:/data # Persist data so the cache survives container restarts
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "ping"] # Returns PONG when Redis is ready
       interval: 5s
       timeout: 3s
       retries: 5
     networks:
       - app-network
-  # ════════════════════════════════
-  # OBSERVABILITY
-  # ════════════════════════════════
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # OBSERVABILITY — Prometheus + Grafana (dev profile only)
+  # Prometheus scrapes the app's :9090/metrics; Grafana charts it on port 3001.
+  # Data source and the "ProjoMan API" dashboard are provisioned from ./grafana.
+  # ════════════════════════════════════════════════════════════════════════════
   prometheus:
     image: prom/prometheus
     profiles: ["dev"]
     container_name: prometheus
     volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml # Scrape config
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml # Alert rules
       - prometheus-data:/prometheus
     ports:
-      - "9091:9090"
+      - "9091:9090" # Prometheus UI on host 9091; host 9090 is taken by the app
     networks:
       - app-network
 
@@ -123,11 +133,13 @@ services:
     profiles: ["dev"]
     container_name: grafana
     ports:
-      - "3001:3000"
+      - "3001:3000" # Grafana UI at http://localhost:3001
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Default admin password — change before exposing externally
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning # Prometheus data source + dashboard loader
+      - ./grafana/dashboards:/var/lib/grafana/dashboards # Dashboard JSON files
     depends_on:
       - prometheus
     networks:

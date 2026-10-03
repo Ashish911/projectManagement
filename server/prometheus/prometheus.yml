@@ -1,0 +1,14 @@
+# Prometheus scrape config for the dev Docker stack.
+
+global:
+  scrape_interval: 5s # Short interval so dev dashboards update quickly
+  evaluation_interval: 15s # How often alert rules are checked
+
+rule_files:
+  - /etc/prometheus/alerts.yml # Mounted from prometheus/alerts.yml
+
+scrape_configs:
+  # API metrics: GraphQL requests, cache operations and default Node.js metrics
+  - job_name: "ProjoMan-GraphQl"
+    static_configs:
+      - targets: ["app:9090"] # "app" service from docker-compose; metrics server on :9090/metrics

@@ -1,12 +1,21 @@
+# Development image: all deps plus nodemon hot reload. Run with `docker compose --profile dev up`.
+
 FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy manifests first so the install layer is cached until package*.json changes.
 COPY package*.json ./
+
+# Full install, including devDependencies (nodemon, jest).
 RUN npm install
 
+# Baked-in copy of the source; compose mounts the host dir over it for live edits.
 COPY . .
 
-EXPOSE 8080
+# GraphQL API (8000) and Prometheus metrics (9090).
+EXPOSE 8000
 EXPOSE 9090
+
+# nodemon via the `dev` script; .env.local comes from the compose mount, not the image.
 CMD ["npm", "run", "dev"]
