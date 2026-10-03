@@ -16,7 +16,14 @@ import { validate } from "../validation/validate.js";
 import { createLogger } from "../config/logger.js";
 import { notificationQueue } from "../queues/notification.queue.js";
 
+/** Business logic and role checks for clients. */
 export const ClientService = {
+  /**
+   * Lists all clients. SUPER_ADMIN only.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} All clients.
+   * @throws {ForbiddenError} If the user is not a SUPER_ADMIN.
+   */
   async getClients(context) {
     const { user } = context;
 
@@ -35,6 +42,13 @@ export const ClientService = {
 
     return clients;
   },
+  /**
+   * Fetches one client. SUPER_ADMIN sees any client; CLIENT_ADMIN only the one assigned to them.
+   * @param {string} id      Client ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The client.
+   * @throws {ForbiddenError} If the user may not view this client.
+   */
   async getClient(id, context) {
     validate(idSchema, { id });
 
@@ -58,6 +72,7 @@ export const ClientService = {
 
     if (!client) throw new Error("Client not found");
 
+    // Cached before the role check, so the cached path above must repeat it.
     await cache.set(cacheKey, client);
 
     // SUPER_ADMIN can access everything
@@ -66,7 +81,7 @@ export const ClientService = {
     }
 
     if (user.role === "CLIENT_ADMIN") {
-      // Assuming client.admins is an array of assigned client admins
+      // Loose equality: assignedAdmin.id may be an ObjectId rather than a string
       const isAssigned = client.assignedAdmin?.id == user.id;
 
       if (!isAssigned) {
@@ -80,13 +95,21 @@ export const ClientService = {
       "Current role does not have the permission to get Client",
     );
   },
+  /**
+   * Creates a client, optionally with a CLIENT_ADMIN attached. SUPER_ADMIN only.
+   * @param {object} data    Client fields (name, email, optional assignedAdmin).
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The new client.
+   * @throws {ForbiddenError} If the user is not a SUPER_ADMIN or the admin lacks CLIENT_ADMIN role.
+   * @throws {ConflictError}  If the email is taken or the admin already has a client.
+   */
   async addClient(data, context) {
     validate(addClientSchema, data);
 
     const { user } = context;
     const logger = createLogger(context);
 
-    // SUPER_ADMIN can access everything
+    // Only SUPER_ADMIN can add clients
     if (user.role !== "SUPER_ADMIN") {
       throw new ForbiddenError(
         "Current role does not have the permission to add Clients",
@@ -98,6 +121,7 @@ export const ClientService = {
     if (existingClient)
       throw new ConflictError("Client with this email already exists");
 
+    // If an admin is supplied, it must be an unassigned CLIENT_ADMIN
     if (data.assignedAdmin != null) {
       const clientUser = await UserRepo.findById(data.user?.id);
 
@@ -133,14 +157,20 @@ export const ClientService = {
 
     return client;
   },
+  /**
+   * Flags a client for deletion; a SUPER_ADMIN then confirms it. CLIENT_ADMIN only.
+   * @param {string} id      Client ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The client with `deleteRequest` set.
+   * @throws {ForbiddenError} If the user is not a CLIENT_ADMIN.
+   */
   async deleteClientRequest(id, context) {
-    console.log("deleteClientRequest called with id:", id);
     validate(idSchema, { id });
 
     const { user } = context;
     const logger = createLogger(context);
 
-    // Only the Client admin itself can delete client_admin
+    // Only a CLIENT_ADMIN can request deletion of a client
     if (user.role == "CLIENT_ADMIN") {
       const updatedClient = await ClientRepo.update(id, {
         set: { deleteRequest: true },
@@ -165,13 +195,20 @@ export const ClientService = {
       );
     }
   },
+  /**
+   * Deletes a client that has a pending delete request. SUPER_ADMIN only.
+   * @param {string} id      Client ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted client.
+   * @throws {ConflictError} If the client has not requested deletion.
+   */
   async deleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
     const { user } = context;
     const logger = createLogger(context);
 
-    // SUPER_ADMIN can access everything
+    // Only SUPER_ADMIN can delete clients
     if (user.role !== "SUPER_ADMIN") {
       throw new ForbiddenError(
         "Current role does not have the permission to delete Clients.",
@@ -202,6 +239,12 @@ export const ClientService = {
     return deleted;
   },
 
+  /**
+   * Deletes a client without a prior delete request. SUPER_ADMIN only.
+   * @param {string} id      Client ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted client.
+   */
   async forceDeleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
@@ -234,6 +277,13 @@ export const ClientService = {
 
     return deleted;
   },
+  /**
+   * Assigns a CLIENT_ADMIN to a client and notifies them. SUPER_ADMIN only.
+   * @param {object} data    `{ id, assignedAdmin }` — client ID and user ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated client.
+   * @throws {ConflictError} If the user already administers a different client.
+   */
   async assignAdmin(data, context) {
     validate(assignAdminSchema, data);
 
@@ -256,6 +306,7 @@ export const ClientService = {
       throw new ForbiddenError("User does not have CLIENT_ADMIN role");
     }
 
+    // An admin may manage only one client; re-assigning to the same client is allowed
     const alreadyAssigned = await ClientRepo.findByAssignedAdmin(data.assignedAdmin);
     if (alreadyAssigned && alreadyAssigned.id !== data.id)
       throw new ConflictError("User is already assigned to a different client");
@@ -275,6 +326,7 @@ export const ClientService = {
     await cache.invalidate(`clients:${data.id}`);
     await cache.invalidate("clients:all");
 
+    // A failed notification should not fail the assignment
     await NotificationService.notify(
       data.assignedAdmin,
       `You have been assigned as admin for client "${client.name}".`,
@@ -282,6 +334,14 @@ export const ClientService = {
 
     return updated;
   },
+  /**
+   * Updates a client. Allowed for SUPER_ADMIN or the client's assigned admin.
+   * @param {object} data    Client ID plus fields to change.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated client.
+   * @throws {ForbiddenError} If the user is a USER.
+   * @throws {ConflictError}  If a CLIENT_ADMIN is not assigned to this client.
+   */
   async updateClient(data, context) {
     validate(updateClientSchema, data);
 
@@ -298,6 +358,7 @@ export const ClientService = {
 
     if (!client) throw new NotFoundError("Client not found");
 
+    // Loose equality: assignedAdmin is an ObjectId, user.id a string
     if (user.id == client.assignedAdmin || user.role == "SUPER_ADMIN") {
       const updated = await ClientRepo.update(data.id, data);
 

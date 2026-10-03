@@ -19,7 +19,14 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 
+/** Business logic and role checks for projects and their assigned users. */
 export const ProjectService = {
+  /**
+   * Lists the projects visible to the current user, scoped by role.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The visible projects.
+   * @throws {NotFoundError} If a CLIENT_ADMIN has no assigned client.
+   */
   async getProjects(context) {
     const { user } = context;
 
@@ -39,6 +46,13 @@ export const ProjectService = {
     // USER sees only projects they are assigned to
     return await ProjectRepo.findByAssignedUser(user.id);
   },
+  /**
+   * Fetches one project if the current user may see it.
+   * @param {string} id      Project ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The project.
+   * @throws {ForbiddenError} If the project is outside the user's client or assignments.
+   */
   async getProject(id, context) {
     validate(idSchema, { id });
 
@@ -50,11 +64,12 @@ export const ProjectService = {
 
     if (user.role === "SUPER_ADMIN") return project;
 
+    // CLIENT_ADMIN — project must belong to their client
     if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByUser(user.id);
+      const client = await ClientRepo.findByAssignedAdmin(user.id);
       if (!client) throw new NotFoundError("No client assigned to this admin");
 
-      if (project.clientId.toString() !== client._id.toString()) {
+      if (project.clientId.toString() !== client.id.toString()) {
         throw new ForbiddenError("You do not have access to this project");
       }
       return project;
@@ -70,6 +85,13 @@ export const ProjectService = {
 
     return project;
   },
+  /**
+   * Creates a project under a client. Not allowed for USER.
+   * @param {object} data    `{ name, description, [status], clientId }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The new project.
+   * @throws {ForbiddenError} If the user is a USER or not the client's admin.
+   */
   async addProject(data, context) {
     validate(addProjectSchema, data);
 
@@ -110,6 +132,13 @@ export const ProjectService = {
 
     return project;
   },
+  /**
+   * Updates a project's name, description, and status. Not allowed for USER.
+   * @param {object} data    Project ID plus fields to change.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated project.
+   * @throws {ForbiddenError} If the user is a USER or not the client's admin.
+   */
   async updateProject(data, context) {
     validate(updateProjectSchema, data);
 
@@ -126,6 +155,7 @@ export const ProjectService = {
 
     if (!project) throw new NotFoundError("Project not found.");
 
+    // CLIENT_ADMIN can only update their own client's projects
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
@@ -150,6 +180,13 @@ export const ProjectService = {
 
     return updated;
   },
+  /**
+   * Deletes a project. Not allowed for USER.
+   * @param {string} id      Project ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted project.
+   * @throws {ForbiddenError} If the user is a USER or not the client's admin.
+   */
   async deleteProject(id, context) {
     validate(idSchema, { id });
 
@@ -166,6 +203,7 @@ export const ProjectService = {
 
     if (!project) throw new NotFoundError("Project not found");
 
+    // CLIENT_ADMIN can only delete their own client's projects
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
       if (client.assignedAdmin.toString() !== user.id) {
@@ -187,6 +225,13 @@ export const ProjectService = {
 
     return deleted;
   },
+  /**
+   * Adds users to a project and notifies the newly added ones. Not allowed for USER.
+   * @param {object} data    `{ id, users }` — project ID and user IDs to add.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated project.
+   * @throws {NotFoundError} If any user ID does not exist.
+   */
   async addUserToProject(data, context) {
     validate(projectUserSchema, data);
 
@@ -209,10 +254,12 @@ export const ProjectService = {
       }
     }
 
+    // Every requested user must exist
     const foundUsers = await UserRepo.findByIds(data.users);
     if (foundUsers.length !== data.users.length)
       throw new NotFoundError("One or more users not found");
 
+    // Skip users already on the project
     const existingIds = project.assignedUsers.map((id) => id.toString());
     const newUsers = data.users.filter((id) => !existingIds.includes(id));
 
@@ -232,6 +279,7 @@ export const ProjectService = {
 
     await cache.invalidate(`projects:${data.id}`);
 
+    // Notification failures are ignored so they don't fail the update
     await Promise.all(
       newUsers.map((uid) =>
         NotificationService.notify(
@@ -243,6 +291,13 @@ export const ProjectService = {
 
     return updated;
   },
+  /**
+   * Removes users from a project. Not allowed for USER.
+   * @param {object} data    `{ id, users }` — project ID and user IDs to remove.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated project.
+   * @throws {ConflictError} If none of the users are on the project.
+   */
   async removeUserFromProject(data, context) {
     validate(projectUserSchema, data);
 
@@ -265,6 +320,7 @@ export const ProjectService = {
       }
     }
 
+    // At least one requested user must currently be assigned
     const existingIds = project.assignedUsers.map((id) => id.toString());
     const hasMatch = data.users.some((id) => existingIds.includes(id));
     if (!hasMatch)

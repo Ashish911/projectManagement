@@ -1,4 +1,4 @@
-// services/import.service.js
+// Barrel file: re-exports every service so callers can import them from one place.
 
 export { UserService } from "./user.service.js";
 export { ProjectService } from "./project.service.js";

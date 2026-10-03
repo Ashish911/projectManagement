@@ -15,48 +15,101 @@ import {
 } from "../errors/errors.js";
 import crypto from "crypto";
 import { validate } from "../validation/validate.js";
-import { registerSchema, loginSchema, idSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema } from "../validation/schema.js";
+import {
+  registerSchema,
+  loginSchema,
+  idSchema,
+  updateProfileSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../validation/schema.js";
 import { NotificationService } from "./notification.service.js";
 import { createLogger } from "../config/logger.js";
+import { EmailService } from "./email.service.js";
 
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_MS = 60 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5; // Failed logins allowed before the account is locked
+const LOCKOUT_MS = 60 * 60 * 1000; // Lockout lasts 1 hour from the last failed attempt
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // Reset links are valid for 1 hour
 
+// Same message for unknown emails and wrong passwords, so login can't be used to probe for accounts.
+const INVALID_CREDENTIALS = "Invalid email or password";
+const RESET_REQUESTED_MESSAGE =
+  "If an account exists for this email, a password reset link has been sent.";
+
+// Compared against when the email is unknown, so both paths take a similar time.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
+
+/** Reset tokens are stored as SHA-256 hashes, so a database leak doesn't expose usable links. */
+const hashResetToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+/** Authentication, password reset, and user management. */
 export const UserService = {
   /**
-   * Login a user and return a JWT token.
-   * @param {string} email The user's email address.
-   * @param {string} password The user's password.
-   * @returns {Promise<object>} A promise that resolves to an object containing the user's ID, email, JWT token, and token expiration time in hours.
-   * @throws {UnauthorizedError} If the user has attempted to login too many times within the lockout period.
-   * @throws {UnauthorizedError} If the user's password is invalid.
-   * @throws {NotFoundError} If the user is not found.
+   * Logs a user in and returns a one-hour JWT.
+   * @param {string} email     The user's email address.
+   * @param {string} password  The user's password.
+   * @param {object} [context] GraphQL context, used for logging.
+   * @returns {Promise<object>} `{ id, email, token, tokenExpiration }` (expiration in hours).
+   * @throws {UnauthorizedError} If the account is locked out, or the email or password is wrong (same message for both).
    */
-  async login(email, password) {
+  async login(email, password, context) {
     validate(loginSchema, { email, password });
+    const logger = createLogger(context);
 
     const user = await UserRepo.findByEmail(email);
 
-    if (!user) throw new NotFoundError("User not found");
+    if (!user) {
+      // Dummy compare keeps timing in line with the wrong-password path
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      logger.warn(
+        { audit: true, action: "LOGIN_FAILED", reason: "unknown_email" },
+        "AUDIT",
+      );
+      throw new UnauthorizedError(INVALID_CREDENTIALS);
+    }
 
+    // Reject while locked out; the lock lifts once LOCKOUT_MS has passed
     if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS && user.lastFailedLogin) {
       const elapsed = Date.now() - new Date(user.lastFailedLogin).getTime();
       if (elapsed < LOCKOUT_MS) {
+        logger.warn(
+          {
+            audit: true,
+            userId: user.id,
+            action: "LOGIN_FAILED",
+            reason: "locked_out",
+          },
+          "AUDIT",
+        );
         throw new UnauthorizedError(
           "Too many failed login attempts. Try again later.",
         );
       }
     }
 
+    // Wrong password: count the attempt toward the lockout
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      const attempts = user.loginAttempts + 1;
       await UserRepo.update(user.id, {
-        loginAttempts: user.loginAttempts + 1,
+        loginAttempts: attempts,
         lastFailedLogin: new Date().toISOString(),
       });
-      throw new UnauthorizedError("Invalid password");
+      logger.warn(
+        {
+          audit: true,
+          userId: user.id,
+          action: "LOGIN_FAILED",
+          reason: "invalid_password",
+          attempts,
+        },
+        "AUDIT",
+      );
+      throw new UnauthorizedError(INVALID_CREDENTIALS);
     }
 
+    // Successful login clears the failed-attempt counter
     await UserRepo.update(user.id, {
       loginAttempts: 0,
       lastFailedLogin: null,
@@ -68,6 +121,8 @@ export const UserService = {
       { expiresIn: "1h" },
     );
 
+    logger.info({ audit: true, userId: user.id, action: "LOGIN" }, "AUDIT");
+
     return {
       id: user.id,
       email: user.email,
@@ -77,20 +132,15 @@ export const UserService = {
   },
 
   /**
-   * Register a new user.
-   * @param {Object} data - The user data to register.
-   * @property {string} data.email - The email of the user.
-   * @property {string} data.name - The name of the user.
-   * @property {string} data.number - The phone number of the user.
-   * @property {string} data.dob - The date of birth of the user.
-   * @property {string} data.password - The password of the user.
-   * @property {string} data.gender - The gender of the user.
-   * @property {string} data.role - The role of the user.
-   * @throws {ConflictError} - If the email already exists.
-   * @returns {Promise<UserDocument>} - The registered user.
+   * Registers a new USER and creates their default preferences.
+   * @param {object} data      `{ email, name, number, dob, password, gender }`.
+   * @param {object} [context] GraphQL context, used for logging.
+   * @returns {Promise<object>} The registered user.
+   * @throws {ConflictError} If the email is already registered.
    */
-  async register(data) {
+  async register(data, context) {
     validate(registerSchema, data);
+    const logger = createLogger(context);
 
     const existing = await UserRepo.findByEmail(data.email);
     if (existing)
@@ -101,11 +151,13 @@ export const UserService = {
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await UserRepo.create({
       ...data,
+      role: "USER", // Public sign-up is always a USER; admins are made via promoteToAdmin/assignAdmin
       password: hashedPassword,
       loginAttempts: 0,
       lastFailedLogin: null,
     });
 
+    // Every user starts with default preferences
     try {
       await PreferenceRepo.create({
         theme: "LIGHT",
@@ -118,14 +170,16 @@ export const UserService = {
       throw err;
     }
 
+    logger.info({ audit: true, userId: user.id, action: "REGISTER" }, "AUDIT");
+
     return user;
   },
 
   /**
-   * Get the user profile based on the user id.
-   * @param {string} id - The id of the user.
-   * @throws {NotFoundError} - If the user is not found.
-   * @returns {Promise<UserDocument>} - The user profile.
+   * Returns a user's profile by ID.
+   * @param {string} id User ID.
+   * @returns {Promise<object>} The user.
+   * @throws {NotFoundError} If the user does not exist.
    */
   async getProfile(id) {
     validate(idSchema, { id });
@@ -135,9 +189,16 @@ export const UserService = {
     return user;
   },
 
+  /**
+   * Lists users: all for SUPER_ADMIN, or those on the CLIENT_ADMIN's client projects.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The visible users.
+   * @throws {ForbiddenError} If the user is a USER or a CLIENT_ADMIN with no client.
+   */
   async getUsers(context) {
     const { user } = context;
 
+    // SUPER_ADMIN: every user, cached
     if (user.role === "SUPER_ADMIN") {
       const cacheKey = "users:all";
       const cached = await cache.get(cacheKey);
@@ -153,6 +214,7 @@ export const UserService = {
       if (!client)
         throw new ForbiddenError("You are not assigned to any client");
 
+      // Unique IDs of users assigned to any of the client's projects
       const projects = await ProjectRepo.findByClientId(client.id);
       const userIds = [
         ...new Set(projects.flatMap((p) => p.assignedUsers.map(String))),
@@ -167,6 +229,13 @@ export const UserService = {
     );
   },
 
+  /**
+   * Fetches one user. SUPER_ADMIN sees anyone; CLIENT_ADMIN only users on their client's projects.
+   * @param {string} id      User ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The user.
+   * @throws {ForbiddenError} If the caller may not view this user.
+   */
   async getUser(id, context) {
     validate(idSchema, { id });
 
@@ -189,6 +258,7 @@ export const UserService = {
       if (!client)
         throw new ForbiddenError("You are not assigned to any client");
 
+      // Target must be assigned to one of the client's projects
       const projects = await ProjectRepo.findByClientId(client.id);
       const userIds = projects.flatMap((p) => p.assignedUsers.map(String));
 
@@ -205,6 +275,13 @@ export const UserService = {
     );
   },
 
+  /**
+   * Deletes a user. SUPER_ADMIN only, and not their own account.
+   * @param {string} userId  ID of the user to delete.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted user.
+   * @throws {ForbiddenError} If the caller is not a SUPER_ADMIN or targets themselves.
+   */
   async deleteUser(userId, context) {
     validate(idSchema, { id: userId });
 
@@ -240,13 +317,12 @@ export const UserService = {
   },
 
   /**
-   * Promote a user to admin.
-   * @param {string} userId - The id of the user to promote.
-   * @param {object} context - The context object containing the user info.
-   * @throws {ForbiddenError} - If the current role does not have the permission to promote users to admin.
-   * @throws {NotFoundError} - If the user to promote is not found.
-   * @throws {ConflictError} - If the user is already an admin.
-   * @returns {Promise<UserDocument>} - The updated user profile.
+   * Promotes a USER to CLIENT_ADMIN and notifies them. SUPER_ADMIN only.
+   * @param {string} userId  ID of the user to promote.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated user.
+   * @throws {ForbiddenError} If the caller is not a SUPER_ADMIN.
+   * @throws {ConflictError}  If the user is already an admin.
    */
   async promoteToAdmin(userId, context) {
     validate(idSchema, { id: userId });
@@ -282,42 +358,110 @@ export const UserService = {
       "AUDIT",
     );
 
-    await NotificationService.notify(userId, "You have been promoted to Client Admin.").catch(() => {});
+    // A failed notification should not fail the promotion
+    await NotificationService.notify(
+      userId,
+      "You have been promoted to Client Admin.",
+    ).catch(() => {});
 
     return updated;
   },
 
   /**
-   * Generate a password reset token for the given email.
-   * Returns the token directly (no email service — caller must relay it).
+   * Emails a one-hour password reset link if the account exists.
+   * Always returns the same message, so callers can't tell which emails are registered.
+   * @param {string} email The account's email address.
+   * @param {object} [context] GraphQL context, used for logging.
+   * @returns {Promise<{ token: null, message: string }>}
    */
-  async forgotPassword(email) {
+  async forgotPassword(email, context) {
     validate(forgotPasswordSchema, { email });
+    const logger = createLogger(context);
 
+    // Respond the same way whether or not the account exists.
     const user = await UserRepo.findByEmail(email);
-    if (!user) throw new NotFoundError("User not found");
+    if (!user) {
+      logger.info(
+        {
+          audit: true,
+          action: "PASSWORD_RESET_REQUESTED",
+          reason: "unknown_email",
+        },
+        "AUDIT",
+      );
+      return { token: null, message: RESET_REQUESTED_MESSAGE };
+    }
 
     const token = crypto.randomBytes(32).toString("hex");
-    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
-    await UserRepo.update(user.id, { resetToken: token, resetTokenExpiry: expiry });
+    await UserRepo.update(user.id, {
+      resetToken: hashResetToken(token),
+      resetTokenExpiry: expiry,
+    });
 
-    return { token, message: "Use this token to reset your password within 1 hour." };
+    // The raw token only ever leaves the server inside the emailed link.
+    const appUrl = process.env.APP_URL || "http://localhost:4000";
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
+
+    // Not awaited, so the response time doesn't reveal whether an email was sent.
+    EmailService.sendPasswordReset(user.email, resetUrl).catch((err) =>
+      logger.error({ err, userId: user.id }, "Password reset email failed"),
+    );
+
+    // Never log the token itself.
+    logger.info(
+      { audit: true, userId: user.id, action: "PASSWORD_RESET_REQUESTED" },
+      "AUDIT",
+    );
+
+    return { token: null, message: RESET_REQUESTED_MESSAGE };
   },
 
   /**
-   * Reset the user's password using a valid token.
+   * Sets a new password using an emailed reset token, then clears the token and lockout.
+   * @param {string} token     Raw token from the reset link.
+   * @param {string} password  New password.
+   * @param {object} [context] GraphQL context, used for logging.
+   * @returns {Promise<{ message: string }>}
+   * @throws {NotFoundError}     If the token does not match any user.
+   * @throws {UnauthorizedError} If the token has expired.
    */
-  async resetPassword(token, password) {
+  async resetPassword(token, password, context) {
     validate(resetPasswordSchema, { token, password });
+    const logger = createLogger(context);
 
-    const user = await UserRepo.findOne({ resetToken: token });
-    if (!user) throw new NotFoundError("Invalid or expired reset token");
+    // Look up by hash, since only the hash is stored
+    const user = await UserRepo.findOne({ resetToken: hashResetToken(token) });
+    if (!user) {
+      logger.warn(
+        {
+          audit: true,
+          action: "PASSWORD_RESET_FAILED",
+          reason: "invalid_token",
+        },
+        "AUDIT",
+      );
+      throw new NotFoundError("Invalid or expired reset token");
+    }
 
-    if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < new Date()) {
+    if (
+      !user.resetTokenExpiry ||
+      new Date(user.resetTokenExpiry) < new Date()
+    ) {
+      logger.warn(
+        {
+          audit: true,
+          userId: user.id,
+          action: "PASSWORD_RESET_FAILED",
+          reason: "expired_token",
+        },
+        "AUDIT",
+      );
       throw new UnauthorizedError("Reset token has expired");
     }
 
+    // Save the new password, make the token single-use, and lift any lockout
     const hashedPassword = await bcrypt.hash(password, 10);
     await UserRepo.update(user.id, {
       password: hashedPassword,
@@ -326,6 +470,11 @@ export const UserService = {
       loginAttempts: 0,
       lastFailedLogin: null,
     });
+
+    logger.info(
+      { audit: true, userId: user.id, action: "PASSWORD_RESET" },
+      "AUDIT",
+    );
 
     return { message: "Password reset successfully" };
   },

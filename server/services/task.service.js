@@ -14,7 +14,15 @@ import {
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
+/** Business logic and role checks for tasks. Admins have full access; USERs are limited to their own. */
 export const TaskService = {
+  /**
+   * Lists a project's tasks.
+   * @param {string} projectId Project ID.
+   * @param {object} context   GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The project's tasks.
+   * @throws {ForbiddenError} If a USER is not assigned to the project.
+   */
   async getTasks(projectId, context) {
     validate(idSchema, { id: projectId });
 
@@ -36,6 +44,13 @@ export const TaskService = {
     return await TaskRepo.findByProject(projectId);
   },
 
+  /**
+   * Fetches one task.
+   * @param {string} id      Task ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The task.
+   * @throws {ForbiddenError} If a USER neither created nor is assigned the task.
+   */
   async getTask(id, context) {
     validate(idSchema, { id });
 
@@ -44,6 +59,7 @@ export const TaskService = {
     const task = await TaskRepo.findById(id);
     if (!task) throw new NotFoundError("Task not found");
 
+    // USER must be the task's assignee or creator
     if (user.role === "USER") {
       const isAssigned =
         task.assignedTo?.toString() === user.id ||
@@ -56,6 +72,13 @@ export const TaskService = {
     return task;
   },
 
+  /**
+   * Creates a task in a project and notifies the assignee. Not allowed for USER.
+   * @param {object} data    `{ projectId, title, [priority], [deadline], [assignedTo] }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The new task.
+   * @throws {ForbiddenError} If the user is a USER.
+   */
   async createTask(data, context) {
     validate(createTaskSchema, data);
 
@@ -101,6 +124,13 @@ export const TaskService = {
     return task;
   },
 
+  /**
+   * Updates a task's fields and notifies a new assignee.
+   * @param {object} data    Task ID plus fields to change.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated task.
+   * @throws {ForbiddenError} If a USER is not the task's assignee.
+   */
   async updateTask(data, context) {
     validate(updateTaskSchema, data);
 
@@ -126,6 +156,7 @@ export const TaskService = {
       );
     }
 
+    // Only include fields that were provided
     const updated = await TaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
@@ -147,8 +178,16 @@ export const TaskService = {
     return updated;
   },
 
+  /**
+   * Changes a task's status and notifies the relevant users.
+   * @param {string} id      Task ID.
+   * @param {string} status  New status, e.g. "RESOLVED" or "REOPENED".
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated task.
+   * @throws {ForbiddenError} If a USER is not the task's assignee.
+   */
   async updateTaskStatus(id, status, context) {
-    validate(updateSubTaskStatusSchema, { id, status });
+    validate(updateSubTaskStatusSchema, { id, status }); // Tasks and subtasks share the same status rules
 
     const { user } = context;
     const logger = createLogger(context);
@@ -203,6 +242,13 @@ export const TaskService = {
     return updatedTask;
   },
 
+  /**
+   * Deletes a task and its subtasks, and notifies the assignee. Not allowed for USER.
+   * @param {string} id      Task ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted task.
+   * @throws {ForbiddenError} If the user is a USER.
+   */
   async deleteTask(id, context) {
     validate(idSchema, { id });
 

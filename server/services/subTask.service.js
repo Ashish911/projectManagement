@@ -10,7 +10,15 @@ import {
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
+/** Business logic and role checks for subtasks. Admins have full access; USERs are limited to their own. */
 export const SubTaskService = {
+  /**
+   * Lists the subtasks of a task.
+   * @param {string} taskId  Parent task ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The task's subtasks.
+   * @throws {ForbiddenError} If a USER neither created nor is assigned the parent task.
+   */
   async getSubTasks(taskId, context) {
     validate(idSchema, { id: taskId });
 
@@ -19,6 +27,7 @@ export const SubTaskService = {
     const task = await TaskRepo.findById(taskId);
     if (!task) throw new NotFoundError("Task not found");
 
+    // USER must be the parent task's assignee or creator
     if (user.role === "USER") {
       const isAssigned =
         task.assignedTo?.toString() === user.id ||
@@ -31,6 +40,13 @@ export const SubTaskService = {
     return await SubTaskRepo.findByTask(taskId);
   },
 
+  /**
+   * Fetches one subtask.
+   * @param {string} id      Subtask ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The subtask.
+   * @throws {ForbiddenError} If a USER neither created nor is assigned the subtask.
+   */
   async getSubTask(id, context) {
     validate(idSchema, { id });
 
@@ -40,6 +56,7 @@ export const SubTaskService = {
 
     if (!subTask) throw new NotFoundError("SubTask not found");
 
+    // USER must be the subtask's assignee or creator
     if (user.role === "USER") {
       const isAssigned =
         subTask.assignedTo?.toString() === user.id ||
@@ -52,6 +69,13 @@ export const SubTaskService = {
     return subTask;
   },
 
+  /**
+   * Creates a subtask under a task and notifies the assignee.
+   * @param {object} data    `{ taskId, title, [priority], [deadline], [assignedTo] }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The new subtask.
+   * @throws {ForbiddenError} If a USER is not assigned the parent task.
+   */
   async createSubTask(data, context) {
     validate(createSubTaskSchema, data);
 
@@ -98,6 +122,13 @@ export const SubTaskService = {
     return subTask;
   },
 
+  /**
+   * Updates a subtask's fields and notifies a new assignee.
+   * @param {object} data    Subtask ID plus fields to change.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated subtask.
+   * @throws {ForbiddenError} If a USER is not the subtask's assignee.
+   */
   async updateSubTask(data, context) {
     validate(updateSubTaskSchema, data);
 
@@ -107,6 +138,7 @@ export const SubTaskService = {
     const subTask = await SubTaskRepo.findById(data.id);
     if (!subTask) throw new NotFoundError("SubTask not found");
 
+    // USER can only update subtasks assigned to them
     if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
       throw new ForbiddenError(
         "You do not have permission to update this subtask",
@@ -121,6 +153,7 @@ export const SubTaskService = {
       );
     }
 
+    // Only include fields that were provided
     const updated = await SubTaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
@@ -142,6 +175,14 @@ export const SubTaskService = {
     return updated;
   },
 
+  /**
+   * Changes a subtask's status and notifies the relevant users.
+   * @param {string} id      Subtask ID.
+   * @param {string} status  New status, e.g. "RESOLVED" or "REOPENED".
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated subtask.
+   * @throws {ForbiddenError} If a USER is not the subtask's assignee.
+   */
   async updateSubTaskStatus(id, status, context) {
     validate(updateSubTaskStatusSchema, { id, status });
 
@@ -168,6 +209,7 @@ export const SubTaskService = {
         `Subtask "${subTask.title}" has been marked as resolved`,
       );
 
+      // Also notify the assignee, unless they are the creator
       if (subTask.assignedTo?.toString() !== subTask.createdBy?.toString()) {
         await NotificationService.notify(
           subTask.assignedTo,
@@ -197,6 +239,13 @@ export const SubTaskService = {
     return updatedSubTask;
   },
 
+  /**
+   * Deletes a subtask and notifies its assignee.
+   * @param {string} id      Subtask ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted subtask.
+   * @throws {ForbiddenError} If a USER did not create the subtask.
+   */
   async deleteSubTask(id, context) {
     validate(idSchema, { id });
 
@@ -206,12 +255,14 @@ export const SubTaskService = {
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
 
+    // USER can only delete subtasks they created
     if (user.role === "USER" && subTask.createdBy?.toString() !== user.id) {
       throw new ForbiddenError(
         "You do not have permission to delete this subtask",
       );
     }
 
+    // Notify before deleting, while the title is still available
     if (subTask.assignedTo) {
       await NotificationService.notify(
         subTask.assignedTo,

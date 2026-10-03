@@ -5,8 +5,15 @@ import { idSchema } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import pubsub, { NOTIFICATION_CREATED } from "../config/pubsub.js";
 
+/** In-app notifications: creation, live delivery, and per-user management. */
 export const NotificationService = {
-  // Internal method, called by other services not by resolvers
+  /**
+   * Saves a notification and pushes it to the user's `notificationCreated` subscription.
+   * Internal: called by other services, not by resolvers.
+   * @param {string} userId  Recipient user ID.
+   * @param {string} content Message text.
+   * @returns {Promise<object>} The saved notification.
+   */
   async notify(userId, content) {
     const notification = await NotificationRepo.create({
       content,
@@ -24,6 +31,12 @@ export const NotificationService = {
     return notification;
   },
 
+  /**
+   * Lists the current user's notifications.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The user's notifications.
+   * @throws {NotFoundError} If the user has none.
+   */
   async getNotifications(context) {
     const { user } = context;
 
@@ -35,6 +48,13 @@ export const NotificationService = {
     return notification;
   },
 
+  /**
+   * Fetches one notification owned by the current user.
+   * @param {string} id      Notification ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The notification.
+   * @throws {ForbiddenError} If it belongs to another user.
+   */
   async getNotification(id, context) {
     validate(idSchema, { id });
 
@@ -44,6 +64,7 @@ export const NotificationService = {
 
     if (!notification) throw new NotFoundError("Notification not found.");
 
+    // Only the owner may read it
     if (notification.user.toString() !== user.id) {
       throw new ForbiddenError("You do not have access to this notification");
     }
@@ -51,6 +72,12 @@ export const NotificationService = {
     return notification;
   },
 
+  /**
+   * Marks one of the current user's notifications as read.
+   * @param {string} id      Notification ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The updated notification.
+   */
   async markAsRead(id, context) {
     validate(idSchema, { id });
 
@@ -67,6 +94,12 @@ export const NotificationService = {
     return await NotificationRepo.update(id, { status: "READ" });
   },
 
+  /**
+   * Marks all of the current user's unread notifications as read.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The user's notifications after the update.
+   * @throws {NotFoundError} If there are no notifications, or none unread.
+   */
   async markAllAsRead(context) {
     const { user } = context;
 
@@ -83,9 +116,17 @@ export const NotificationService = {
       unread.map((n) => NotificationRepo.update(n._id, { status: "READ" })),
     );
 
+    // Re-fetch so the response reflects the new statuses
     return await NotificationRepo.findByUser(user.id);
   },
 
+  /**
+   * Deletes a notification. Allowed for its owner or a SUPER_ADMIN.
+   * @param {string} id      Notification ID.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The deleted notification.
+   * @throws {ForbiddenError} If the user is neither the owner nor a SUPER_ADMIN.
+   */
   async deleteNotification(id, context) {
     validate(idSchema, { id });
 
@@ -96,6 +137,7 @@ export const NotificationService = {
 
     if (!notification) throw new NotFoundError("Notification not found.");
 
+    // Owner or SUPER_ADMIN only
     if (
       notification.user.toString() !== user.id &&
       user.role !== "SUPER_ADMIN"
@@ -120,6 +162,12 @@ export const NotificationService = {
     return deleted;
   },
 
+  /**
+   * Deletes all of the current user's notifications.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The notifications that were deleted.
+   * @throws {NotFoundError} If the user has none.
+   */
   async deleteAllNotifications(context) {
     const { user } = context;
     const logger = createLogger(context);
