@@ -1,17 +1,14 @@
 import mongoose from "mongoose";
 
 /**
- * The Client model.
- *
- * This model represents a client. Each client has a name, email, and phone number.
- * It also has a reference to a user that registered the client. The client's
- * registration info is stored in the user's "clients" array.
+ * A client organisation whose projects are managed in the app, optionally run by one CLIENT_ADMIN.
  *
  * @typedef {import('mongoose').Document & {
  *   name: string,
  *   email: string,
  *   phone: string,
- *   user: import('mongoose').Types.ObjectId
+ *   deleteRequest: boolean,
+ *   assignedAdmin: import('mongoose').Types.ObjectId
  * }} ClientDocument
  */
 const ClientSchema = new mongoose.Schema(
@@ -23,22 +20,25 @@ const ClientSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      lowercase: true,
+      lowercase: true, // Stored lowercase so lookups by email are case-insensitive
       index: true,
     },
     phone: {
       type: String,
     },
+    // Set by the CLIENT_ADMIN; a SUPER_ADMIN must confirm before the client is deleted
     deleteRequest: {
       type: Boolean,
       default: false,
     },
+    // The CLIENT_ADMIN user who manages this client
     assignedAdmin: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
   },
   {
+    // Expose `id` as a string and hide Mongo internals in plain objects and JSON
     toObject: {
       virtuals: true,
       transform: (_, ret) => {
@@ -55,11 +55,12 @@ const ClientSchema = new mongoose.Schema(
         delete ret.__v;
       },
     },
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
 );
 
+/** Mongoose model for the `clients` collection. */
 const Client = mongoose.model("Client", ClientSchema);
 
 export default Client;

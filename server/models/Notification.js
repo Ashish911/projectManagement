@@ -1,24 +1,24 @@
 import mongoose from "mongoose";
 
 /**
- * The Notification model.
- *
- * This model represents a notification that a user can receive. Each notification
- * has a content and a user that it belongs to.
+ * Mongoose schema for an in-app notification sent to a single user.
+ * Records are created by NotificationService.notify().
  *
  * @typedef {import('mongoose').Document & {
- *   content: string,
- *   status: string,
  *   user: import('mongoose').Types.ObjectId,
+ *   content: string,
+ *   status: "READ" | "UNREAD",
  * }} NotificationDocument
  */
 const NotificationSchema = new mongoose.Schema(
   {
+    // Recipient of the notification
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+    // Message text shown to the user
     content: {
       type: String,
       required: true,
@@ -30,6 +30,7 @@ const NotificationSchema = new mongoose.Schema(
     },
   },
   {
+    // Expose `id` as a string and drop `_id`/`__v` when serialising
     toObject: {
       virtuals: true,
       transform: (_, ret) => {
@@ -46,11 +47,12 @@ const NotificationSchema = new mongoose.Schema(
         delete ret.__v;
       },
     },
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
 );
 
+/** Mongoose model for the `notifications` collection. */
 const Notification = mongoose.model("Notification", NotificationSchema);
 
 export default Notification;

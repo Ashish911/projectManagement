@@ -1,18 +1,21 @@
 import mongoose from "mongoose";
 
 /**
- * The User model.
- *
- * This model represents a user in the system. Each user has a name, email,
- * password, and role. The role is an enum that can be either "SUPER_ADMIN",
- * "CLIENT_ADMIN", or "USER". The password is hashed before it is stored in
- * the database.
+ * Mongoose schema for a user account.
+ * Passwords are stored as bcrypt hashes; hashing is done in UserService, not here.
  *
  * @typedef {import('mongoose').Document & {
  *   name: string,
  *   email: string,
+ *   number: string,
+ *   gender: "MALE" | "FEMALE" | "OTHERS",
+ *   dob?: Date,
  *   password: string,
- *   role: string,
+ *   role: "SUPER_ADMIN" | "CLIENT_ADMIN" | "USER",
+ *   loginAttempts: number,
+ *   lastFailedLogin: Date | null,
+ *   resetToken: string | null,
+ *   resetTokenExpiry: Date | null,
  * }} UserDocument
  */
 const UserSchema = new mongoose.Schema(
@@ -22,6 +25,7 @@ const UserSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    // Access level; role checks are enforced in the service layer
     role: {
       type: String,
       enum: ["SUPER_ADMIN", "CLIENT_ADMIN", "USER"],
@@ -31,9 +35,10 @@ const UserSchema = new mongoose.Schema(
       type: String,
       unique: true,
       index: true,
-      lowercase: true,
+      lowercase: true, // Normalised so lookups are case-insensitive
       required: true,
     },
+    // Phone number, kept as a string to preserve leading zeros and "+"
     number: {
       type: String,
       required: true,
@@ -47,9 +52,10 @@ const UserSchema = new mongoose.Schema(
       type: Date,
     },
     password: {
-      type: String,
+      type: String, // bcrypt hash, never the plain-text password
       required: true,
     },
+    // Failed-login tracking used to lock the account after repeated failures
     loginAttempts: {
       type: Number,
       default: 0,
@@ -58,6 +64,7 @@ const UserSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Password-reset token and its expiry; cleared once the reset succeeds
     resetToken: {
       type: String,
       default: null,
@@ -68,6 +75,7 @@ const UserSchema = new mongoose.Schema(
     },
   },
   {
+    // Expose `id` as a string and drop `_id`/`__v` when serialising
     toObject: {
       virtuals: true,
       transform: (_, ret) => {
@@ -84,11 +92,12 @@ const UserSchema = new mongoose.Schema(
         delete ret.__v;
       },
     },
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
 );
 
+/** Mongoose model for the `users` collection. */
 const User = mongoose.model("User", UserSchema);
 
 export default User;

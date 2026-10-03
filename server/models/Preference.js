@@ -1,15 +1,12 @@
 import mongoose from "mongoose";
 
 /**
- * The Preference model.
- *
- * This model represents a user preference. Each user has a preference that
- * includes their theme and language.
+ * Mongoose schema for a user's UI settings; each user has at most one preference.
  *
  * @typedef {import('mongoose').Document & {
  *   user: import('mongoose').Types.ObjectId,
- *   theme: string,
- *   language: string,
+ *   theme: "LIGHT" | "DARK",
+ *   language: "ENGLISH" | "JAPANESE" | "KOREAN",
  * }} PreferenceDocument
  */
 const PreferenceSchema = new mongoose.Schema(
@@ -18,7 +15,7 @@ const PreferenceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      unique: true, // One preference record per user
     },
     theme: {
       type: String,
@@ -32,6 +29,7 @@ const PreferenceSchema = new mongoose.Schema(
     },
   },
   {
+    // Expose `id` as a string and drop `_id`/`__v` when serialising
     toObject: {
       virtuals: true,
       transform: (_, ret) => {
@@ -48,11 +46,12 @@ const PreferenceSchema = new mongoose.Schema(
         delete ret.__v;
       },
     },
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
 );
 
+/** Mongoose model for the `preferences` collection. */
 const Preference = mongoose.model("Preference", PreferenceSchema);
 
 export default Preference;

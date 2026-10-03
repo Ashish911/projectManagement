@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+/** Mongoose schema for a task that belongs to a project. */
 const TaskSchema = new mongoose.Schema(
   {
     title: {
@@ -15,11 +16,13 @@ const TaskSchema = new mongoose.Schema(
     deadline: {
       type: Date,
     },
+    // Workflow state; REOPENED marks a task moved back after being resolved
     currentStatus: {
       type: String,
       enum: ["NEW", "IN_PROGRESS", "RESOLVED", "REOPENED"],
       default: "NEW",
     },
+    // Optional; a task can exist without an assignee
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -29,6 +32,7 @@ const TaskSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // Parent project; used for project-level access checks
     project: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
@@ -36,6 +40,7 @@ const TaskSchema = new mongoose.Schema(
     },
   },
   {
+    // Expose `id` as a string and drop `_id`/`__v` when serialising
     toObject: {
       virtuals: true,
       transform: (_, ret) => {
@@ -52,11 +57,12 @@ const TaskSchema = new mongoose.Schema(
         delete ret.__v;
       },
     },
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
 );
 
+/** Mongoose model for the `tasks` collection. */
 const Task = mongoose.model("Task", TaskSchema);
 
 export default Task;
