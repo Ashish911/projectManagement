@@ -8,6 +8,10 @@ const mockFindByUser = jest.fn();
 const mockCreate = jest.fn();
 const mockUpdate = jest.fn();
 const mockDelete = jest.fn();
+const mockMarkRead = jest.fn();
+const mockDeleteByUser = jest.fn();
+const mockQueueAdd = jest.fn();
+const mockPublish = jest.fn().mockResolvedValue(true);
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/notification.repo.js", () => ({
@@ -18,17 +22,29 @@ jest.unstable_mockModule("../repositories/notification.repo.js", () => ({
     create: mockCreate,
     update: mockUpdate,
     delete: mockDelete,
+    markRead: mockMarkRead,
+    deleteByUser: mockDeleteByUser,
   },
 }));
 
 jest.unstable_mockModule("../config/pubsub.js", () => ({
-  default: { publish: jest.fn().mockResolvedValue(true) },
+  default: { publish: mockPublish },
   NOTIFICATION_CREATED: "NOTIFICATION_CREATED",
 }));
+
+jest.unstable_mockModule("../queues/notification.queue.js", () => ({
+  NOTIFICATION_QUEUE: "notifications",
+  getNotificationQueue: () => ({ add: mockQueueAdd }),
+}));
+
+// The worker module connects to MongoDB only when started, so importing it is safe
+jest.unstable_mockModule("../config/db.js", () => ({ default: jest.fn() }));
 
 // ─── Import AFTER mocking ─────────────────────────────────────────
 const { NotificationService } =
   await import("../services/notification.service.js");
+const { processNotificationJob } =
+  await import("../worker/notification.worker.js");
 
 // ─── Mock Data ────────────────────────────────────────────────────
 const mockSuperAdmin = {
@@ -63,30 +79,98 @@ describe("NotificationService", () => {
   // NOTIFY (internal method)
   // ════════════════════════════════════════════════════════════════
   describe("notify", () => {
-    it("🟢 should create a notification for a user", async () => {
-      mockCreate.mockResolvedValue(mockNotification);
+    it("🟢 should queue the notification for the worker", async () => {
+      mockQueueAdd.mockResolvedValue({ id: "1" });
 
-      const result = await NotificationService.notify(
-        mockUser.id,
-        "You have been assigned a new task",
-      );
+      await NotificationService.notify(mockUser.id, "You have been assigned a new task");
 
-      expect(mockCreate).toHaveBeenCalledWith({
-        content: "You have been assigned a new task",
-        status: "UNREAD",
+      expect(mockQueueAdd).toHaveBeenCalledWith("notify", {
         user: mockUser.id,
+        content: "You have been assigned a new task",
       });
-      expect(result).toEqual(mockNotification);
+      expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it("🟢 should always create notification with UNREAD status", async () => {
+    it("🟢 should send ObjectId recipients as strings", async () => {
+      mockQueueAdd.mockResolvedValue({ id: "1" });
+      const objectIdLike = { toString: () => mockUser.id };
+
+      await NotificationService.notify(objectIdLike, "Hi");
+
+      expect(mockQueueAdd).toHaveBeenCalledWith("notify", { user: mockUser.id, content: "Hi" });
+    });
+
+    it("🔴 should save directly when the queue is unavailable", async () => {
+      mockQueueAdd.mockRejectedValue(new Error("Connection is closed."));
       mockCreate.mockResolvedValue(mockNotification);
 
       await NotificationService.notify(mockUser.id, "Test notification");
 
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ status: "UNREAD" }),
-      );
+      expect(mockCreate).toHaveBeenCalledWith({
+        content: "Test notification",
+        status: "UNREAD",
+        user: mockUser.id,
+      });
+      expect(mockPublish).toHaveBeenCalled();
+    });
+
+    it("🔴 should save directly when the queue hangs (Redis unreachable)", async () => {
+      jest.useFakeTimers();
+      try {
+        mockQueueAdd.mockReturnValue(new Promise(() => {})); // Never settles
+        mockCreate.mockResolvedValue(mockNotification);
+
+        const pending = NotificationService.notify(mockUser.id, "Slow queue");
+        await jest.advanceTimersByTimeAsync(3000);
+        await pending;
+
+        expect(mockCreate).toHaveBeenCalledWith(
+          expect.objectContaining({ content: "Slow queue", user: mockUser.id }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // DELIVER (worker)
+  // ════════════════════════════════════════════════════════════════
+  describe("deliver", () => {
+    it("🟢 should save an UNREAD notification and publish it to the user", async () => {
+      mockCreate.mockResolvedValue(mockNotification);
+
+      const result = await NotificationService.deliver(mockUser.id, "Hello");
+
+      expect(mockCreate).toHaveBeenCalledWith({ content: "Hello", status: "UNREAD", user: mockUser.id });
+      expect(mockPublish).toHaveBeenCalledWith(`NOTIFICATION_CREATED:${mockUser.id}`, {
+        notificationCreated: mockNotification,
+      });
+      expect(result).toEqual(mockNotification);
+    });
+
+    it("🟢 should still return the notification if publishing fails", async () => {
+      mockCreate.mockResolvedValue(mockNotification);
+      mockPublish.mockRejectedValueOnce(new Error("Redis down"));
+
+      await expect(NotificationService.deliver(mockUser.id, "Hello")).resolves.toEqual(mockNotification);
+    });
+
+    it("🟢 worker job should deliver the queued notification", async () => {
+      mockCreate.mockResolvedValue(mockNotification);
+
+      const result = await processNotificationJob({ id: "7", data: { user: mockUser.id, content: "Queued" } });
+
+      expect(mockCreate).toHaveBeenCalledWith({ content: "Queued", status: "UNREAD", user: mockUser.id });
+      expect(result).toEqual(mockNotification);
+    });
+
+    it("🔴 worker job should fail (so BullMQ retries) when saving fails", async () => {
+      mockCreate.mockRejectedValue(new Error("Mongo down"));
+
+      await expect(
+        processNotificationJob({ id: "8", data: { user: mockUser.id, content: "Queued" } }),
+      ).rejects.toThrow("Mongo down");
     });
   });
 
@@ -123,12 +207,12 @@ describe("NotificationService", () => {
       expect(result).toHaveLength(2);
     });
 
-    it("🔴 should throw if no notifications found", async () => {
+    it("🟢 should return an empty list if the user has none", async () => {
       mockFindByUser.mockResolvedValue([]);
 
       await expect(
         NotificationService.getNotifications({ user: mockUser }),
-      ).rejects.toThrow("No notifications found.");
+      ).resolves.toEqual([]);
     });
   });
 
@@ -234,63 +318,52 @@ describe("NotificationService", () => {
   // MARK ALL AS READ
   // ════════════════════════════════════════════════════════════════
   describe("markAllAsRead", () => {
-    it("🟢 should mark all unread notifications as read", async () => {
-      const unreadNotifications = [
-        mockNotification,
-        { ...mockNotification, _id: "748a1b2c3d4e5f6a7b8c9d0f" },
-      ];
-      mockFindByUser
-        .mockResolvedValueOnce(unreadNotifications) // first call
-        .mockResolvedValueOnce([
-          // second call after update
-          { ...mockNotification, status: "READ" },
-          {
-            ...mockNotification,
-            _id: "748a1b2c3d4e5f6a7b8c9d0f",
-            status: "READ",
-          },
-        ]);
-      mockUpdate.mockResolvedValue(mockReadNotification);
-
-      const result = await NotificationService.markAllAsRead({
-        user: mockUser,
-      });
-
-      expect(mockUpdate).toHaveBeenCalledTimes(2);
-      expect(result.every((n) => n.status === "READ")).toBe(true);
-    });
-
-    it("🔴 should throw if no notifications found", async () => {
-      mockFindByUser.mockResolvedValue([]);
-
-      await expect(
-        NotificationService.markAllAsRead({ user: mockUser }),
-      ).rejects.toThrow("No notifications found.");
-    });
-
-    it("🔴 should throw if no unread notifications", async () => {
+    it("🟢 should mark all unread notifications read in one write", async () => {
       mockFindByUser.mockResolvedValue([mockReadNotification]);
 
-      await expect(
-        NotificationService.markAllAsRead({ user: mockUser }),
-      ).rejects.toThrow("No unread notifications found");
+      const result = await NotificationService.markAllAsRead({ user: mockUser });
+
+      expect(mockMarkRead).toHaveBeenCalledTimes(1);
+      expect(mockMarkRead).toHaveBeenCalledWith(mockUser.id);
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(result).toEqual([mockReadNotification]);
     });
 
-    it("🟢 should only update unread notifications", async () => {
-      const mixed = [
-        mockNotification, // UNREAD
-        mockReadNotification, // READ - should be skipped
-        { ...mockNotification, _id: "748a1b2c3d4e5f6a7b8c9d1b" }, // UNREAD
-      ];
-      mockFindByUser
-        .mockResolvedValueOnce(mixed)
-        .mockResolvedValueOnce(mixed.map((n) => ({ ...n, status: "READ" })));
-      mockUpdate.mockResolvedValue(mockReadNotification);
+    it("🟢 should succeed when nothing is unread", async () => {
+      mockFindByUser.mockResolvedValue([]);
 
-      await NotificationService.markAllAsRead({ user: mockUser });
+      await expect(NotificationService.markAllAsRead({ user: mockUser })).resolves.toEqual([]);
+    });
+  });
 
-      // Should only update the 2 UNREAD ones not the READ one
-      expect(mockUpdate).toHaveBeenCalledTimes(2);
+  // ════════════════════════════════════════════════════════════════
+  // MARK NOTIFICATIONS READ (bulk by id)
+  // ════════════════════════════════════════════════════════════════
+  describe("markNotificationsRead", () => {
+    const ids = ["748a1b2c3d4e5f6a7b8c9d0e", "748a1b2c3d4e5f6a7b8c9d0f"];
+
+    it("🟢 should mark the given notifications read in one write, scoped to the user", async () => {
+      mockFindByUser.mockResolvedValue([mockReadNotification]);
+
+      const result = await NotificationService.markNotificationsRead(ids, { user: mockUser });
+
+      expect(mockMarkRead).toHaveBeenCalledTimes(1);
+      expect(mockMarkRead).toHaveBeenCalledWith(mockUser.id, ids);
+      expect(result).toEqual([mockReadNotification]);
+    });
+
+    it("🔴 should reject an empty list", async () => {
+      await expect(
+        NotificationService.markNotificationsRead([], { user: mockUser }),
+      ).rejects.toThrow("Select at least one notification");
+      expect(mockMarkRead).not.toHaveBeenCalled();
+    });
+
+    it("🔴 should reject an invalid id", async () => {
+      await expect(
+        NotificationService.markNotificationsRead(["bad"], { user: mockUser }),
+      ).rejects.toThrow();
+      expect(mockMarkRead).not.toHaveBeenCalled();
     });
   });
 
@@ -381,13 +454,12 @@ describe("NotificationService", () => {
         { ...mockNotification, _id: "748a1b2c3d4e5f6a7b8c9d0f" },
       ];
       mockFindByUser.mockResolvedValue(notifications);
-      mockDelete.mockResolvedValue(mockNotification);
 
       const result = await NotificationService.deleteAllNotifications({
         user: mockUser,
       });
 
-      expect(mockDelete).toHaveBeenCalledTimes(2);
+      expect(mockDeleteByUser).toHaveBeenCalledWith(mockUser.id);
       expect(result).toEqual(notifications);
     });
 
@@ -406,7 +478,7 @@ describe("NotificationService", () => {
         await NotificationService.deleteAllNotifications({ user: mockUser });
       } catch (e) {}
 
-      expect(mockDelete).not.toHaveBeenCalled();
+      expect(mockDeleteByUser).not.toHaveBeenCalled();
     });
   });
 });

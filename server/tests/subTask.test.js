@@ -9,6 +9,7 @@ const mockSubTaskDelete = jest.fn();
 
 const mockTaskFindById = jest.fn();
 const mockNotify = jest.fn();
+const mockCommentDeleteBySubTask = jest.fn();
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/import.repo.js", () => ({
@@ -21,6 +22,9 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   },
   TaskRepo: {
     findById: mockTaskFindById,
+  },
+  CommentRepo: {
+    deleteBySubTask: mockCommentDeleteBySubTask,
   },
   ProjectRepo: {},
   PreferenceRepo: {},
@@ -515,6 +519,18 @@ describe("SubTaskService", () => {
       });
 
       expect(mockSubTaskDelete).toHaveBeenCalledWith(mockSubTask._id);
+    });
+
+    it("🟢 should delete the subtask's comments when subtask is deleted", async () => {
+      mockSubTaskFindById.mockResolvedValue(mockSubTask);
+      mockSubTaskDelete.mockResolvedValue(mockSubTask);
+      mockNotify.mockResolvedValue({});
+
+      await SubTaskService.deleteSubTask(mockSubTask._id, {
+        user: mockSuperAdmin,
+      });
+
+      expect(mockCommentDeleteBySubTask).toHaveBeenCalledWith(mockSubTask._id);
     });
 
     it("🟢 USER should delete subtask they created", async () => {

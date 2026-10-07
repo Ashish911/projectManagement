@@ -1,5 +1,6 @@
 // tests/user.service.test.js
 import { jest } from "@jest/globals";
+import crypto from "crypto";
 
 // ─── Mock Data defined at top level ──────────────────────────────
 const plainPassword = "password123";
@@ -20,7 +21,9 @@ const mockFindById = jest.fn();
 const mockCreate = jest.fn();
 const mockUpdate = jest.fn();
 const mockDelete = jest.fn();
+const mockFindOne = jest.fn();
 const mockPreferenceCreate = jest.fn();
+const mockSendPasswordReset = jest.fn();
 
 const mockProjectFindByClientId = jest.fn();
 const mockClientFindByAssignedAdmin = jest.fn();
@@ -35,7 +38,12 @@ jest.unstable_mockModule("../repositories/user.repo.js", () => ({
     create: mockCreate,
     update: mockUpdate,
     delete: mockDelete,
+    findOne: mockFindOne,
   },
+}));
+
+jest.unstable_mockModule("../services/email.service.js", () => ({
+  EmailService: { sendPasswordReset: mockSendPasswordReset },
 }));
 
 jest.unstable_mockModule("../repositories/preference.repo.js", () => ({
@@ -47,13 +55,23 @@ jest.unstable_mockModule("../repositories/preference.repo.js", () => ({
 jest.unstable_mockModule("../repositories/project.repo.js", () => ({
   ProjectRepo: {
     findByClientId: mockProjectFindByClientId,
+    removeUserEverywhere: jest.fn().mockResolvedValue({}),
   },
 }));
 
 jest.unstable_mockModule("../repositories/client.repo.js", () => ({
   ClientRepo: {
     findByAssignedAdmin: mockClientFindByAssignedAdmin,
+    clearAdmin: jest.fn().mockResolvedValue({}),
   },
+}));
+
+jest.unstable_mockModule("../repositories/task.repo.js", () => ({
+  TaskRepo: { unassignUser: jest.fn().mockResolvedValue({}) },
+}));
+
+jest.unstable_mockModule("../repositories/subTask.repo.js", () => ({
+  SubTaskRepo: { unassignUser: jest.fn().mockResolvedValue({}) },
 }));
 
 jest.unstable_mockModule("../config/cache.js", () => ({
@@ -61,6 +79,12 @@ jest.unstable_mockModule("../config/cache.js", () => ({
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue(undefined),
     invalidate: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.unstable_mockModule("../services/notification.service.js", () => ({
+  NotificationService: {
+    notify: jest.fn().mockResolvedValue({}),
   },
 }));
 
@@ -164,6 +188,7 @@ describe("UserService", () => {
         expect.objectContaining({
           loginAttempts: 0,
           lastFailedLogin: null,
+          lastLoginAt: expect.any(Date),
         }),
       );
     });
@@ -228,7 +253,7 @@ describe("UserService", () => {
 
       await expect(
         UserService.login("notfound@example.com", plainPassword),
-      ).rejects.toThrow("User not found");
+      ).rejects.toThrow("Invalid email or password");
     });
 
     it("🔴 should throw if password is invalid", async () => {
@@ -237,7 +262,7 @@ describe("UserService", () => {
 
       await expect(
         UserService.login("test@example.com", "wrongpassword"),
-      ).rejects.toThrow("Invalid password");
+      ).rejects.toThrow("Invalid email or password");
     });
 
     it("🔴 should increment loginAttempts on failed login", async () => {
@@ -282,7 +307,7 @@ describe("UserService", () => {
 
       await expect(
         UserService.login("asd@gmail.com", plainPassword),
-      ).rejects.toThrow("User not found");
+      ).rejects.toThrow("Invalid email or password");
     });
 
     it("🔴 should throw if password is empty", async () => {
@@ -300,13 +325,189 @@ describe("UserService", () => {
 
       await expect(
         UserService.login("test@example.com", "wrongpassword"),
-      ).rejects.toThrow("Invalid password");
+      ).rejects.toThrow("Invalid email or password");
     });
   });
 
   // ════════════════════════════════════════════════════════════════
   // REGISTER
   // ════════════════════════════════════════════════════════════════
+  describe("auth audit logging", () => {
+    const makeContext = () => {
+      const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+      return { context: { logger }, logger };
+    };
+
+    it("🟢 should log a LOGIN audit entry on success", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+      const { context, logger } = makeContext();
+
+      await UserService.login("test@example.com", plainPassword, context);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { audit: true, userId: mockUser.id, action: "LOGIN" },
+        "AUDIT",
+      );
+    });
+
+    it("🟢 should still work without a context", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+
+      await expect(
+        UserService.login("test@example.com", plainPassword),
+      ).resolves.toHaveProperty("token");
+    });
+
+    it("🔴 should log LOGIN_FAILED with the attempt count on a wrong password", async () => {
+      mockFindByEmail.mockResolvedValue({ ...mockUser, loginAttempts: 2 });
+      const { context, logger } = makeContext();
+
+      await expect(
+        UserService.login("test@example.com", "wrongpassword", context),
+      ).rejects.toThrow("Invalid email or password");
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "LOGIN_FAILED",
+          reason: "invalid_password",
+          attempts: 3,
+        }),
+        "AUDIT",
+      );
+    });
+
+    it("🔴 should log LOGIN_FAILED when the account is locked out", async () => {
+      mockFindByEmail.mockResolvedValue({
+        ...mockUser,
+        loginAttempts: 5,
+        lastFailedLogin: new Date().toISOString(),
+      });
+      const { context, logger } = makeContext();
+
+      await expect(
+        UserService.login("test@example.com", plainPassword, context),
+      ).rejects.toThrow("Too many failed login attempts");
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "LOGIN_FAILED", reason: "locked_out" }),
+        "AUDIT",
+      );
+    });
+
+    it("🔴 should never log the password", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      const { context, logger } = makeContext();
+
+      await expect(
+        UserService.login("test@example.com", "wrongpassword", context),
+      ).rejects.toThrow();
+
+      const logged = JSON.stringify([
+        ...logger.info.mock.calls,
+        ...logger.warn.mock.calls,
+      ]);
+      expect(logged).not.toContain("wrongpassword");
+    });
+
+    it("🟢 should log PASSWORD_RESET_REQUESTED without the reset token", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+      mockSendPasswordReset.mockResolvedValue(true);
+      const { context, logger } = makeContext();
+
+      await UserService.forgotPassword("test@example.com", context);
+      const resetUrl = mockSendPasswordReset.mock.calls[0][1];
+      const rawToken = new URL(resetUrl).searchParams.get("token");
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { audit: true, userId: mockUser.id, action: "PASSWORD_RESET_REQUESTED" },
+        "AUDIT",
+      );
+      expect(JSON.stringify(logger.info.mock.calls)).not.toContain(rawToken);
+    });
+  });
+
+  describe("auth security", () => {
+    const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+
+    it("🟢 should always register as USER, even if a role is supplied", async () => {
+      mockFindByEmail.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ ...mockUser, role: "USER" });
+      mockPreferenceCreate.mockResolvedValue({});
+
+      await UserService.register({ ...registerData, role: "SUPER_ADMIN" });
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ role: "USER" }),
+      );
+    });
+
+    it("🟢 should email a reset link and store only the hashed token", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+      mockSendPasswordReset.mockResolvedValue(true);
+
+      const result = await UserService.forgotPassword("test@example.com");
+
+      expect(result.token).toBeNull();
+      expect(mockSendPasswordReset).toHaveBeenCalledWith(
+        mockUser.email,
+        expect.stringContaining("/reset-password?token="),
+      );
+
+      const rawToken = new URL(mockSendPasswordReset.mock.calls[0][1]).searchParams.get("token");
+      const stored = mockUpdate.mock.calls[0][1].resetToken;
+      expect(stored).toBe(sha256(rawToken));
+      expect(stored).not.toBe(rawToken);
+    });
+
+    it("🔴 should give the same response for an unknown email without sending anything", async () => {
+      mockFindByEmail.mockResolvedValueOnce(mockUser).mockResolvedValueOnce(null);
+      mockUpdate.mockResolvedValue(mockUser);
+      mockSendPasswordReset.mockResolvedValue(true);
+
+      const known = await UserService.forgotPassword("test@example.com");
+      const unknown = await UserService.forgotPassword("nobody@example.com");
+
+      expect(unknown).toEqual(known);
+      expect(mockSendPasswordReset).toHaveBeenCalledTimes(1);
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it("🔴 should still respond normally if the email fails to send", async () => {
+      mockFindByEmail.mockResolvedValue(mockUser);
+      mockUpdate.mockResolvedValue(mockUser);
+      mockSendPasswordReset.mockRejectedValue(new Error("Bird down"));
+
+      await expect(
+        UserService.forgotPassword("test@example.com"),
+      ).resolves.toHaveProperty("token", null);
+    });
+
+    it("🟢 should look up the reset token by its hash", async () => {
+      mockFindOne.mockResolvedValue({
+        ...mockUser,
+        resetTokenExpiry: new Date(Date.now() + 60_000),
+      });
+      mockUpdate.mockResolvedValue(mockUser);
+
+      await UserService.resetPassword("raw-token-value", "newpassword123");
+
+      expect(mockFindOne).toHaveBeenCalledWith({ resetToken: sha256("raw-token-value") });
+    });
+
+    it("🔴 should use the same error for an unknown email and a wrong password", async () => {
+      mockFindByEmail.mockResolvedValueOnce(null).mockResolvedValueOnce(mockUser);
+
+      const unknown = UserService.login("nobody@example.com", plainPassword);
+      await expect(unknown).rejects.toThrow("Invalid email or password");
+      const wrong = UserService.login("test@example.com", "wrongpassword");
+      await expect(wrong).rejects.toThrow("Invalid email or password");
+    });
+  });
+
   describe("register", () => {
     it("🟢 should register a new user successfully", async () => {
       mockFindByEmail.mockResolvedValue(null);

@@ -72,6 +72,7 @@ const mockUser = {
 };
 
 const mockClient = {
+  id: "748a1b2c3d4e5f6a7b8c9d0e",
   _id: "748a1b2c3d4e5f6a7b8c9d0e",
   name: "Test Client",
   assignedAdmin: "648a1b2c3d4e5f6a7b8c9d1a",
@@ -115,7 +116,7 @@ describe("ProjectService", () => {
     });
 
     it("🟢 CLIENT_ADMIN should get only their client projects", async () => {
-      mockClientFindByUser.mockResolvedValue(mockClient);
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
       mockProjectFindByClient.mockResolvedValue([mockProject]);
 
       const result = await ProjectService.getProjects({
@@ -123,7 +124,7 @@ describe("ProjectService", () => {
       });
 
       expect(result).toEqual([mockProject]);
-      expect(mockProjectFindByClient).toHaveBeenCalledWith(mockClient._id);
+      expect(mockProjectFindByClient).toHaveBeenCalledWith(mockClient.id);
     });
 
     it("🟢 USER should get only their assigned projects", async () => {
@@ -138,7 +139,7 @@ describe("ProjectService", () => {
     });
 
     it("🔴 CLIENT_ADMIN should throw if no client assigned", async () => {
-      mockClientFindByUser.mockResolvedValue(null);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
 
       await expect(
         ProjectService.getProjects({ user: mockClientAdmin }),
@@ -172,9 +173,9 @@ describe("ProjectService", () => {
 
     it("🟢 CLIENT_ADMIN should get project from their client", async () => {
       mockProjectFindById.mockResolvedValue(mockProject);
-      mockClientFindByUser.mockResolvedValue({
+      mockClientFindByAssignedAdmin.mockResolvedValue({
         ...mockClient,
-        _id: mockProject.clientId,
+        id: mockProject.clientId,
       });
 
       const result = await ProjectService.getProject(mockProject._id, {
@@ -186,9 +187,9 @@ describe("ProjectService", () => {
 
     it("🔴 CLIENT_ADMIN should not get project from another client", async () => {
       mockProjectFindById.mockResolvedValue(mockProject);
-      mockClientFindByUser.mockResolvedValue({
+      mockClientFindByAssignedAdmin.mockResolvedValue({
         ...mockClient,
-        _id: "differentclient1234567",
+        id: "differentclient1234567",
       });
 
       await expect(

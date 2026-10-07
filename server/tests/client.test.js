@@ -6,11 +6,13 @@ const mockClientFind = jest.fn();
 const mockClientFindById = jest.fn();
 const mockClientFindByEmail = jest.fn();
 const mockClientFindByUser = jest.fn();
+const mockClientFindByAssignedAdmin = jest.fn();
 const mockClientCreate = jest.fn();
 const mockClientUpdate = jest.fn();
 const mockClientDelete = jest.fn();
 
 const mockUserFindById = jest.fn();
+const mockNotify = jest.fn().mockResolvedValue({});
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/client.repo.js", () => ({
@@ -19,6 +21,7 @@ jest.unstable_mockModule("../repositories/client.repo.js", () => ({
     findById: mockClientFindById,
     findByEmail: mockClientFindByEmail,
     findByUser: mockClientFindByUser,
+    findByAssignedAdmin: mockClientFindByAssignedAdmin,
     create: mockClientCreate,
     update: mockClientUpdate,
     delete: mockClientDelete,
@@ -28,6 +31,20 @@ jest.unstable_mockModule("../repositories/client.repo.js", () => ({
 jest.unstable_mockModule("../repositories/user.repo.js", () => ({
   UserRepo: {
     findById: mockUserFindById,
+  },
+}));
+
+jest.unstable_mockModule("../services/notification.service.js", () => ({
+  NotificationService: {
+    notify: mockNotify,
+  },
+}));
+
+jest.unstable_mockModule("../config/cache.js", () => ({
+  cache: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    invalidate: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -264,10 +281,19 @@ describe("ClientService", () => {
     it("🔴 should throw if user is already assigned to another client", async () => {
       mockClientFindByEmail.mockResolvedValue(null);
       mockUserFindById.mockResolvedValue(mockClientAdmin);
-      mockClientFindByUser.mockResolvedValue(mockClient); // already assigned
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient); // already assigned
       await expect(
         ClientService.addClient(addClientData, { user: mockSuperAdmin }),
       ).rejects.toThrow("User is already assigned to a client");
+    });
+
+    it("🟢 should create a client without email or phone", async () => {
+      mockClientCreate.mockResolvedValue({ _id: "748a1b2c3d4e5f6a7b8c9d2b", name: "No Contact" });
+
+      await ClientService.addClient({ name: "No Contact", email: "", phone: "" }, { user: mockSuperAdmin });
+
+      expect(mockClientFindByEmail).not.toHaveBeenCalled();
+      expect(mockClientCreate).toHaveBeenCalledWith(expect.objectContaining({ name: "No Contact", email: undefined, phone: undefined }));
     });
 
     it("🔴 should not call create if email already exists", async () => {
@@ -337,6 +363,7 @@ describe("ClientService", () => {
   // ════════════════════════════════════════════════════════════════
   describe("deleteClientRequest", () => {
     it("🟢 CLIENT_ADMIN should be able to request client deletion", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
       mockClientUpdate.mockResolvedValue({
         ...mockClient,
         deleteRequest: true,
@@ -344,7 +371,14 @@ describe("ClientService", () => {
       const result = await ClientService.deleteClientRequest(mockClient._id, {
         user: mockClientAdmin,
       });
-      expect(mockClientUpdate).toHaveBeenCalled();
+      expect(mockClientUpdate).toHaveBeenCalledWith(mockClient._id, { deleteRequest: true });
+    });
+    it("🔴 CLIENT_ADMIN should not request deletion of another client", async () => {
+      mockClientFindById.mockResolvedValue({ ...mockClient, assignedAdmin: "648a1b2c3d4e5f6a7b8c9d99" });
+      await expect(
+        ClientService.deleteClientRequest(mockClient._id, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not assigned to this client");
+      expect(mockClientUpdate).not.toHaveBeenCalled();
     });
     it("🔴 USER should not be able to request client deletion", async () => {
       await expect(
@@ -352,6 +386,42 @@ describe("ClientService", () => {
       ).rejects.toThrow(
         "Current role does not have the permission to request client deletion.",
       );
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // DECLINE CLIENT DELETION
+  // ════════════════════════════════════════════════════════════════
+  describe("declineClientDeletion", () => {
+    it("🟢 SUPER_ADMIN should decline a pending request and notify the client admin", async () => {
+      mockClientFindById.mockResolvedValue(mockDeleteClient);
+      mockClientUpdate.mockResolvedValue({ ...mockDeleteClient, deleteRequest: false });
+
+      const result = await ClientService.declineClientDeletion(
+        { id: mockDeleteClient._id, message: "Project still in progress." },
+        { user: mockSuperAdmin },
+      );
+
+      expect(mockClientUpdate).toHaveBeenCalledWith(mockDeleteClient._id, { deleteRequest: false });
+      expect(result.deleteRequest).toBe(false);
+      expect(mockNotify).toHaveBeenCalledWith(
+        mockDeleteClient.assignedAdmin,
+        expect.stringContaining("Project still in progress."),
+      );
+    });
+
+    it("🔴 should reject when there is no pending request", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      await expect(
+        ClientService.declineClientDeletion({ id: mockClient._id }, { user: mockSuperAdmin }),
+      ).rejects.toThrow("Delete request not found for this client.");
+      expect(mockClientUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 CLIENT_ADMIN should not decline requests", async () => {
+      await expect(
+        ClientService.declineClientDeletion({ id: mockDeleteClient._id }, { user: mockClientAdmin }),
+      ).rejects.toThrow("Current role does not have the permission to decline deletion requests.");
     });
   });
 
@@ -484,7 +554,7 @@ describe("ClientService", () => {
     it("🟢 SUPER_ADMIN should assign a CLIENT_ADMIN to a client", async () => {
       mockClientFindById.mockResolvedValue(mockClient);
       mockUserFindById.mockResolvedValue(mockClientAdmin);
-      mockClientFindByUser.mockResolvedValue(null);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
       mockClientUpdate.mockResolvedValue(mockClientWithAdmin);
 
       const result = await ClientService.assignAdmin(assignAdminData, {
@@ -493,7 +563,7 @@ describe("ClientService", () => {
 
       expect(result.assignedAdmin).toBe("648a1b2c3d4e5f6a7b8c9d1a");
       expect(mockClientUpdate).toHaveBeenCalledWith(assignAdminData.id, {
-        set: { assignedAdmin: assignAdminData.assignedAdmin },
+        assignedAdmin: assignAdminData.assignedAdmin,
       });
     });
 
@@ -553,11 +623,14 @@ describe("ClientService", () => {
     it("🔴 should throw if admin is already assigned to another client", async () => {
       mockClientFindById.mockResolvedValue(mockClient);
       mockUserFindById.mockResolvedValue(mockClientAdmin);
-      mockClientFindByUser.mockResolvedValue(mockClient);
+      mockClientFindByAssignedAdmin.mockResolvedValue({
+        ...mockClient,
+        id: "different000000000000001",
+      });
 
       await expect(
         ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin }),
-      ).rejects.toThrow("User is already assigned to a client");
+      ).rejects.toThrow("User is already assigned to a different client");
     });
 
     it("🔴 should throw if id is invalid", async () => {

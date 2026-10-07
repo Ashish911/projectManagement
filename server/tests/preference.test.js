@@ -15,6 +15,14 @@ jest.unstable_mockModule("../repositories/preference.repo.js", () => ({
   },
 }));
 
+jest.unstable_mockModule("../config/cache.js", () => ({
+  cache: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    invalidate: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // ─── Import AFTER mocking ─────────────────────────────────────────
 const { PreferenceService } = await import("../services/preference.service.js");
 

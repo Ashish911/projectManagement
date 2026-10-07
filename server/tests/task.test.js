@@ -10,9 +10,14 @@ const mockTaskUpdate = jest.fn();
 const mockTaskDelete = jest.fn();
 
 const mockProjectFindById = jest.fn();
+const mockProjectFindByClientId = jest.fn();
+const mockProjectFindByAssignedUser = jest.fn();
+const mockTaskFindByProjects = jest.fn();
+const mockClientFindByAssignedAdmin = jest.fn();
 const mockSubTaskFindByTask = jest.fn();
 const mockSubTaskDelete = jest.fn();
 const mockNotify = jest.fn();
+const mockCommentDeleteByTask = jest.fn();
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/import.repo.js", () => ({
@@ -20,18 +25,26 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
     find: mockTaskFind,
     findById: mockTaskFindById,
     findByProject: mockTaskFindByProject,
+    findByProjects: mockTaskFindByProjects,
     create: mockTaskCreate,
     update: mockTaskUpdate,
     delete: mockTaskDelete,
   },
   ProjectRepo: {
     findById: mockProjectFindById,
+    findByClientId: mockProjectFindByClientId,
+    findByAssignedUser: mockProjectFindByAssignedUser,
   },
   SubTaskRepo: {
     findByTask: mockSubTaskFindByTask,
     delete: mockSubTaskDelete,
   },
-  ClientRepo: {},
+  CommentRepo: {
+    deleteByTask: mockCommentDeleteByTask,
+  },
+  ClientRepo: {
+    findByAssignedAdmin: mockClientFindByAssignedAdmin,
+  },
   PreferenceRepo: {},
   UserRepo: {},
 }));
@@ -269,6 +282,26 @@ describe("TaskService", () => {
       expect(result).toBeDefined();
     });
 
+    it("🟢 should create a task that starts in progress", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockTaskCreate.mockResolvedValue({ ...createTaskData, _id: "848a1b2c3d4e5f6a7b8c9d0f" });
+      mockNotify.mockResolvedValue({});
+
+      await TaskService.createTask({ ...createTaskData, currentStatus: "IN_PROGRESS" }, { user: mockSuperAdmin });
+
+      expect(mockTaskCreate).toHaveBeenCalledWith(expect.objectContaining({ currentStatus: "IN_PROGRESS" }));
+    });
+
+    it("🟢 should default a new task to NEW", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockTaskCreate.mockResolvedValue({ ...createTaskData, _id: "848a1b2c3d4e5f6a7b8c9d0f" });
+      mockNotify.mockResolvedValue({});
+
+      await TaskService.createTask(createTaskData, { user: mockSuperAdmin });
+
+      expect(mockTaskCreate).toHaveBeenCalledWith(expect.objectContaining({ currentStatus: "NEW" }));
+    });
+
     it("🔴 USER should not create a task", async () => {
       await expect(
         TaskService.createTask(createTaskData, { user: mockUser }),
@@ -437,6 +470,20 @@ describe("TaskService", () => {
 
       expect(mockTaskUpdate).toHaveBeenCalledWith(mockTask._id, {
         currentStatus: "IN_PROGRESS",
+        resolvedAt: null,
+      });
+    });
+
+    it("🟢 should stamp resolvedAt when a task is resolved", async () => {
+      mockTaskFindById.mockResolvedValue(mockTask);
+      mockTaskUpdate.mockResolvedValue({ ...mockTask, currentStatus: "RESOLVED" });
+      mockNotify.mockResolvedValue({});
+
+      await TaskService.updateTaskStatus(mockTask._id, "RESOLVED", { user: mockSuperAdmin });
+
+      expect(mockTaskUpdate).toHaveBeenCalledWith(mockTask._id, {
+        currentStatus: "RESOLVED",
+        resolvedAt: expect.any(Date),
       });
     });
 
@@ -517,6 +564,51 @@ describe("TaskService", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
+  // GET ALL TASKS
+  // ════════════════════════════════════════════════════════════════
+  describe("getAllTasks", () => {
+    it("🟢 SUPER_ADMIN should get every task", async () => {
+      mockTaskFind.mockResolvedValue([mockTask]);
+      const result = await TaskService.getAllTasks({ user: mockSuperAdmin });
+      expect(result).toEqual([mockTask]);
+      expect(mockTaskFindByProjects).not.toHaveBeenCalled();
+    });
+
+    it("🟢 CLIENT_ADMIN should get tasks from their client's projects", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue({ id: "c1" });
+      mockProjectFindByClientId.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+      mockTaskFindByProjects.mockResolvedValue([mockTask]);
+
+      await TaskService.getAllTasks({ user: mockClientAdmin });
+
+      expect(mockProjectFindByClientId).toHaveBeenCalledWith("c1");
+      expect(mockTaskFindByProjects).toHaveBeenCalledWith(["p1", "p2"]);
+    });
+
+    it("🟢 USER should get tasks from projects they are assigned to", async () => {
+      mockProjectFindByAssignedUser.mockResolvedValue([{ id: "p1" }]);
+      mockTaskFindByProjects.mockResolvedValue([mockTask]);
+
+      await TaskService.getAllTasks({ user: mockUser });
+
+      expect(mockProjectFindByAssignedUser).toHaveBeenCalledWith(mockUser.id);
+      expect(mockTaskFindByProjects).toHaveBeenCalledWith(["p1"]);
+    });
+
+    it("🟢 CLIENT_ADMIN without a client should get an empty list", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      expect(await TaskService.getAllTasks({ user: mockClientAdmin })).toEqual([]);
+      expect(mockTaskFindByProjects).not.toHaveBeenCalled();
+    });
+
+    it("🟢 USER with no projects should get an empty list", async () => {
+      mockProjectFindByAssignedUser.mockResolvedValue([]);
+      expect(await TaskService.getAllTasks({ user: mockUser })).toEqual([]);
+      expect(mockTaskFindByProjects).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
   // DELETE TASK
   // ════════════════════════════════════════════════════════════════
   describe("deleteTask", () => {
@@ -547,6 +639,17 @@ describe("TaskService", () => {
       await TaskService.deleteTask(mockTask._id, { user: mockSuperAdmin });
 
       expect(mockSubTaskDelete).toHaveBeenCalledTimes(2);
+    });
+
+    it("🟢 should delete the task's comments when task is deleted", async () => {
+      mockTaskFindById.mockResolvedValue(mockTask);
+      mockSubTaskFindByTask.mockResolvedValue([]);
+      mockTaskDelete.mockResolvedValue(mockTask);
+      mockNotify.mockResolvedValue({});
+
+      await TaskService.deleteTask(mockTask._id, { user: mockSuperAdmin });
+
+      expect(mockCommentDeleteByTask).toHaveBeenCalledWith(mockTask._id);
     });
 
     it("🟢 should notify assigned user when task is deleted", async () => {
