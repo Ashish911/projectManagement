@@ -32,6 +32,11 @@ const TaskSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // When the task was last marked RESOLVED; cleared if it is reopened. Feeds the dashboard charts
+    resolvedAt: {
+      type: Date,
+      default: null,
+    },
     // Parent project; used for project-level access checks
     project: {
       type: mongoose.Schema.Types.ObjectId,
@@ -61,6 +66,11 @@ const TaskSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+
+// Tasks of a project (findByProject, and findByProjects for allTasks)
+TaskSchema.index({ project: 1 });
+// Clearing a deleted user's assignments (unassignUser)
+TaskSchema.index({ assignedTo: 1 });
 
 /** Mongoose model for the `tasks` collection. */
 const Task = mongoose.model("Task", TaskSchema);

@@ -52,6 +52,9 @@ const NotificationSchema = new mongoose.Schema(
   },
 );
 
+// A user's notifications newest first (findByUser); the user prefix also serves markRead and deleteByUser
+NotificationSchema.index({ user: 1, createdAt: -1 });
+
 /** Mongoose model for the `notifications` collection. */
 const Notification = mongoose.model("Notification", NotificationSchema);
 

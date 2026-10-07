@@ -74,6 +74,11 @@ const SubTaskSchema = new mongoose.Schema(
   },
 );
 
+// Subtasks of a task (findByTask) and the done/total counts in Task.subTaskStats
+SubTaskSchema.index({ task: 1, currentStatus: 1 });
+// Clearing a deleted user's assignments (unassignUser)
+SubTaskSchema.index({ assignedTo: 1 });
+
 /** Mongoose model for the `subtasks` collection. */
 const SubTask = mongoose.model("SubTask", SubTaskSchema);
 

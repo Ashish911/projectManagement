@@ -21,7 +21,6 @@ const ClientSchema = new mongoose.Schema(
     email: {
       type: String,
       lowercase: true, // Stored lowercase so lookups by email are case-insensitive
-      index: true,
     },
     phone: {
       type: String,
@@ -59,6 +58,15 @@ const ClientSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+
+// Email is optional but unique when given. The partial filter leaves clients without an
+// email out of the index; otherwise they would all count as "null" and collide.
+ClientSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { email: { $gt: "" } } }, // $gt (not $type) so findByEmail can use it
+);
+// The client a CLIENT_ADMIN runs (findByAssignedAdmin, clearAdmin)
+ClientSchema.index({ assignedAdmin: 1 });
 
 /** Mongoose model for the `clients` collection. */
 const Client = mongoose.model("Client", ClientSchema);

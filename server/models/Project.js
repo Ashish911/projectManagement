@@ -33,6 +33,11 @@ const ProjectSchema = new mongoose.Schema(
       ref: "Client",
       required: true,
     },
+    // Optional target date for the whole project
+    dueDate: {
+      type: Date,
+      default: null,
+    },
     // Users with access to the project; exposed in GraphQL as `user`
     assignedUsers: [
       {
@@ -63,6 +68,11 @@ const ProjectSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+
+// A client's projects (findByClient)
+ProjectSchema.index({ clientId: 1 });
+// Projects a user belongs to (findByAssignedUser, removeUserEverywhere); multikey over the array
+ProjectSchema.index({ assignedUsers: 1 });
 
 /** Mongoose model for the `projects` collection. */
 const Project = mongoose.model("Project", ProjectSchema);

@@ -28,12 +28,14 @@ const CommentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Task",
       required: true,
+      index: true, // Comment threads are listed by task
     },
     // Set only when the comment targets a specific sub-task
     subTaskId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SubTask",
       required: false,
+      index: true, // Comment threads are listed by sub-task
     },
   },
   {

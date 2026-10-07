@@ -73,6 +73,16 @@ const UserSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Set on every successful login; null means the user has never signed in
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    // Set when a super admin invites the user by email (the invite reuses resetToken)
+    invitedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     // Expose `id` as a string and drop `_id`/`__v` when serialising
@@ -95,6 +105,14 @@ const UserSchema = new mongoose.Schema(
     timestamps: true, // Adds createdAt and updatedAt
     versionKey: false,
   },
+);
+
+// Listing users by role
+UserSchema.index({ role: 1 });
+// Reset-link lookup (resetPassword); only users with a pending reset are indexed
+UserSchema.index(
+  { resetToken: 1 },
+  { partialFilterExpression: { resetToken: { $gt: "" } } }, // $gt (not $type) so equality lookups can use it
 );
 
 /** Mongoose model for the `users` collection. */
