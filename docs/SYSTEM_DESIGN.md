@@ -2,6 +2,12 @@
 
 > A deep-dive into the data model, capacity planning, architectural decisions, and scalability analysis for the ProjoMan GraphQL backend. Written in the style of a production system design review.
 
+| | |
+|---|---|
+| **Audience** | Senior engineers, design reviewers |
+| **Last reviewed** | 2026-10-06 |
+| **Related** | [BACKEND.md](BACKEND.md) · [AWS_ARCHITECTURE.md](AWS_ARCHITECTURE.md) · [docs index](README.md) |
+
 ---
 
 ## Table of Contents
@@ -234,8 +240,9 @@ erDiagram
     }
     COMMENT {
         ObjectId id PK
-        ObjectId task FK
-        ObjectId author FK
+        ObjectId taskId FK
+        ObjectId subTaskId FK "optional"
+        ObjectId userId FK "author"
         string content
     }
 
@@ -247,7 +254,9 @@ erDiagram
     TASK }o--o| USER : "assignedTo"
     USER ||--|| PREFERENCE : "has"
     USER ||--o{ NOTIFICATION : "receives"
-    TASK ||--o{ COMMENT : "has (planned)"
+    TASK ||--o{ COMMENT : "has"
+    SUBTASK ||--o{ COMMENT : "has"
+    USER ||--o{ COMMENT : "writes"
 ```
 
 ### Schema Reference
@@ -260,6 +269,10 @@ erDiagram
 | `role` | Enum | `SUPER_ADMIN` \| `CLIENT_ADMIN` \| `USER` | — |
 | `loginAttempts` | Number | default 0 | — |
 | `lastFailedLogin` | Date | null until first failure | — |
+| `lastLoginAt` | Date | set on successful login | — |
+| `invitedAt` | Date | set by an invite, cleared when accepted | — |
+
+The API derives a `status` per user: `LOCKED`, `INVITED` or `ACTIVE`.
 
 **Login lockout logic:** After 5 failed attempts, any further attempt checks `Date.now() - lastFailedLogin < 3 600 000 ms`. The window resets on successful login by zeroing both fields.
 
@@ -268,6 +281,12 @@ erDiagram
 |---|---|---|
 | `assignedUsers` | `[ObjectId]` | Array of user refs. Filtered in service layer for `USER` role access. |
 | `status` | Enum | `NOT_STARTED` \| `IN_PROGRESS` \| `COMPLETED` |
+| `dueDate` | Date | optional target date |
+
+#### Task
+| Field | Type | Notes |
+|---|---|---|
+| `resolvedAt` | Date | set when resolved, cleared when reopened; with `createdAt`, powers the created-vs-resolved and burn-down charts |
 
 > [!IMPORTANT]
 > The field is `assignedUsers` (plural) on the Mongoose model and in all services. The GraphQL type exposes this array under the field name `user` (for backwards compatibility). Never use `assignedUser` (singular) — it will be `undefined` at runtime.
@@ -278,8 +297,15 @@ erDiagram
 | `status` | Enum | `UNREAD` (default) \| `READ` |
 | `content` | String | Free text — currently plain string, candidate for structured payload in future |
 
-#### Comment *(model defined — service/resolver not yet integrated)*
-Exists in `models/Comment.js`. Planned to attach to Tasks or SubTasks.
+#### Comment
+| Field | Type | Notes |
+|---|---|---|
+| `taskId` | ObjectId | Always set (for a sub-task comment, the parent task) |
+| `subTaskId` | ObjectId | Set only for sub-task comments; `taskComments` excludes these |
+| `userId` | ObjectId | Author |
+| `content` | String | Trimmed, 1–2000 chars |
+
+Access is limited to project members (assigned `USER`, the client's `CLIENT_ADMIN`, any `SUPER_ADMIN`). Comments are cascade-deleted with their task or sub-task.
 
 ---
 
@@ -377,24 +403,37 @@ For a 1 000 DAU workload with 50 reads/session distributed across an 8-hour work
 
 ## 6. Async Processing
 
-> **Current status:** the BullMQ queue and worker are built but not wired in. `NotificationService.notify()` currently saves to MongoDB and publishes over Redis PubSub in the request. The flow below is the target design.
+> **Current status:** implemented. `NotificationService.notify()` enqueues; the worker (`worker/notification.worker.js`) delivers. It runs as its own container (`worker` / `worker-prod`).
 
 ### Notification Flow
 
 ```mermaid
 sequenceDiagram
     participant API as API Process
-    participant Redis as Redis (BullMQ)
+    participant Redis as Redis (BullMQ + PubSub)
     participant Worker as Worker Process
     participant DB as MongoDB
+    participant Browser
 
-    API->>Redis: queue.add("notify", { userId, content })
+    API->>Redis: queue.add("notify", { user, content })
     Note over API: Returns response to client immediately
-    Redis-->>Worker: Job dispatched (within ~100ms)
+    Redis-->>Worker: Job dispatched (concurrency 5)
     Worker->>DB: Notification.create({ user, content, status: UNREAD })
-    Worker->>Redis: Job marked complete
-    Note over Worker: Retries up to 3× on failure
+    Worker->>Redis: PUBLISH NOTIFICATION_CREATED:{userId}
+    Redis-->>API: PubSub message (any API process)
+    API-->>Browser: graphql-ws "next" → notificationCreated
+    Note over Worker: 3 attempts, exponential back-off (1s, 2s, 4s)
 ```
+
+### Fallback when Redis is unavailable
+
+The queue connection uses `enableOfflineQueue: false`, and `notify()` races `queue.add` against a **3 s timeout**. If either fails, it calls `deliver()` in the request: save to MongoDB, then a best-effort publish. The notification is never lost; the request is up to 3 s slower during the outage.
+
+**Duplicate risk:** if `add` times out but Redis accepts the job later, both paths deliver. Accepted for now. The fix would be a deterministic `jobId` plus an idempotent `deliver`.
+
+### Reading at scale
+
+`markAllAsRead` and `markNotificationsRead(ids)` are single `updateMany` writes scoped to `{ user }`, and `deleteAllNotifications` is a single `deleteMany`. The cost doesn't depend on how many notifications a user has, unlike the earlier per-item loop.
 
 **Why async?**
 A synchronous DB write for every notification adds 10–30 ms to every task-assignment response. At 50 writes/day this is unnoticeable, but at 500 concurrent writes (e.g. a bulk project assignment) it creates a serialised bottleneck. Async decoupling means the API response time is independent of notification throughput.
@@ -425,27 +464,42 @@ The worker service scales on **queue depth** via a custom CloudWatch metric:
 
 ## 7. Database Design & Indexing
 
-### Current Indexes
+### Index Policy
 
-| Collection | Field | Type | Query it serves |
+- **The schema is the single source of truth.** Every index is declared in `server/models/*.js` (field `index` / `unique`, or `Schema.index()`), with a comment naming the query it serves. Application startup code never creates indexes.
+- **Dev and test:** Mongoose builds missing indexes on connect (`autoIndex`).
+- **Production:** `autoIndex` is off (`config/db.js`), so API workers never run index builds at boot. Indexes are applied at deploy time by `npm run db:indexes:prod` (`scripts/sync-indexes.js`):
+  - it builds missing indexes and drops ones the schema no longer declares;
+  - it first rebuilds legacy-named copies, because MongoDB refuses a second index on the same key under another name;
+  - `-- --dry-run` prints the plan without changing anything.
+- `tests/indexes.test.js` asserts that each repository query path has an index. A new query on an unindexed field should come with a new index and a test.
+
+### Indexes
+
+| Collection | Index | Options | Query it serves |
 |---|---|---|---|
-| `users` | `email` | Unique | `findByEmail` on login, register |
-| `clients` | `email` | Sparse | Duplicate email check on create |
+| `users` | `{ email: 1 }` | unique | Login, register, duplicate checks (`findByEmail`) |
+| `users` | `{ role: 1 }` | — | Listing users by role |
+| `users` | `{ resetToken: 1 }` | partial: `resetToken > ""` | `resetPassword` lookup by hashed token; users with no pending reset (`null`) aren't indexed |
+| `clients` | `{ email: 1 }` | unique, partial: `email > ""` | Duplicate-email check on create. Clients without an email aren't indexed, so they can't collide on `null` |
+| `clients` | `{ assignedAdmin: 1 }` | — | `findByAssignedAdmin` (client admin's client), `clearAdmin` |
+| `projects` | `{ clientId: 1 }` | — | `findByClient` |
+| `projects` | `{ assignedUsers: 1 }` | multikey | `findByAssignedUser`, `removeUserEverywhere` |
+| `tasks` | `{ project: 1 }` | — | `findByProject`, `findByProjects` (`$in`, for `allTasks`) |
+| `tasks` | `{ assignedTo: 1 }` | — | `unassignUser` |
+| `subtasks` | `{ task: 1, currentStatus: 1 }` | compound | `findByTask` (prefix) and both `Task.subTaskStats` counts |
+| `subtasks` | `{ assignedTo: 1 }` | — | `unassignUser` |
+| `notifications` | `{ user: 1, createdAt: -1 }` | compound | `findByUser` newest first; the prefix serves `markRead` and `deleteByUser` |
+| `comments` | `{ taskId: 1 }`, `{ subTaskId: 1 }` | — | Comment threads; cascade deletes |
+| `preferences` | `{ user: 1 }` | unique | One preference per user |
 
-### Missing Indexes (recommended additions)
+All are B-tree indexes (WiredTiger). Verified with `explain()`: each query above plans an `IXSCAN`.
 
-> [!WARNING]
-> The following queries run on unindexed fields today. At 10 000+ documents they will trigger full collection scans.
+> [!NOTE]
+> **Partial-filter gotcha.** MongoDB only uses a partial index when the query *implies* its filter. `{ email: "a@b.co" }` implies `email > ""`, but not `$type: "string"`. Filters therefore use `$gt: ""`; with `$type`, uniqueness was enforced but lookups fell back to a collection scan.
 
-| Collection | Field | Query | Impact without index |
-|---|---|---|---|
-| `clients` | `assignedAdmin` | `findByAssignedAdmin` (CLIENT_ADMIN login) | Full scan over all clients |
-| `projects` | `clientId` | `findByClient`, `findByClientId` | Full scan over all projects |
-| `projects` | `assignedUsers` | `findByAssignedUser` | Full scan over all projects |
-| `tasks` | `project` | `findByProject` | Full scan over all tasks |
-| `tasks` | `assignedTo` | Filter assigned tasks | Full scan over all tasks |
-| `subtasks` | `task` | `findByTask` | Full scan over all subtasks |
-| `notifications` | `user` | `findByUser` | Full scan over all notifications |
+> [!NOTE]
+> **Why `Task.subTaskStats` needed the compound index.** The field runs two `SubTask.countDocuments` per task (total and resolved) for every task in a list. Without `{ task, currentStatus }` each count was a full scan, i.e. 2 × N scans per task list.
 
 **Query time comparison (estimates, 20 000 task documents):**
 
@@ -457,18 +511,6 @@ With index on tasks.project:
   B-tree index lookup:          ~1–3 ms
 
 Improvement: 10–15× faster per query
-```
-
-**Recommended index additions in `config/logger.js` `createIndexes()`:**
-
-```js
-await Project.collection.createIndex({ clientId: 1 });
-await Project.collection.createIndex({ assignedUsers: 1 });
-await Task.collection.createIndex({ project: 1 });
-await Task.collection.createIndex({ assignedTo: 1 });
-await SubTask.collection.createIndex({ task: 1 });
-await Notification.collection.createIndex({ user: 1, status: 1 });
-await Client.collection.createIndex({ assignedAdmin: 1 });
 ```
 
 ### Read vs Write Ratio
@@ -561,9 +603,11 @@ Option C: 4 Fargate tasks × 0.5 vCPU, single process per task
 |---|---|---|---|
 | Single ECS task crash | Task exits | 50% capacity loss (2-task config) | ECS auto-restarts task; ALB stops routing to unhealthy target within ~30s |
 | Full AZ outage | AZ-1a down | 50% capacity loss | ALB routes all traffic to AZ-1b tasks; DocumentDB replica promotes to primary in < 30s |
-| Redis crash | Cache unavailable | All reads fall through to MongoDB; BullMQ queue paused | `cache.get/set` errors are caught and logged; API stays up; worker pauses and retries on reconnect |
+| Redis crash | Cache, queue and PubSub unavailable | Reads fall through to MongoDB; new notifications are saved directly (after a ≤3 s enqueue timeout) but not pushed live | `cache.get/set` errors are caught and logged; API stays up; `notify()` falls back to `deliver()`; browsers pick the notifications up when they reconnect (refresh on reconnect) or within the 5-minute safety poll |
 | DocumentDB primary failure | Writes fail | Write requests return 500 | Automatic failover to read replica in < 30s; Mongoose reconnects automatically |
-| Worker crash | Notification delivery stops | Notifications delayed, not lost | BullMQ jobs persist in Redis; worker restarts; jobs are retried from where they left off |
+| Worker crash | Notification delivery stops | Notifications delayed, not lost | BullMQ jobs persist in Redis; the container restarts (`restart: unless-stopped` in prod) and drains the backlog; on SIGTERM the worker finishes in-flight jobs first |
+| WebSocket drop | Live push stops for that browser | Missed pushes | The client reconnects with back-off and refetches the list on reconnect; a 5-minute poll is the backstop |
+| Expired / invalid JWT on WebSocket | Socket closed with 4403 | No live notifications until sign-in | Client does not retry on 4403 (avoids a reconnect storm) |
 | JWT secret rotation | All existing tokens invalid | All active sessions logged out | Accepted risk — coordinate rotation during low-traffic window |
 | Network partition (ECS ↔ Redis) | Cache + queue unreachable | Cache miss on all reads; notification queue stalls | Same as Redis crash scenario |
 
@@ -740,7 +784,7 @@ fields @timestamp, userId, action, targetUserId, targetProjectId
 
 **Decision:** `NotificationService.notify()` enqueues a BullMQ job. A standalone worker process consumes it.
 
-**Status:** not implemented yet — `notify()` writes directly; the queue and worker exist but nothing enqueues jobs.
+**Status:** implemented. With a direct-delivery fallback when Redis is unreachable (see §6).
 
 **Why:** Notification DB writes (10–30 ms each) should not block API responses. At scale, bulk operations (assign 50 users to a project → 50 notifications) would serialize into a 500–1 500 ms delay without async delivery.
 
@@ -765,3 +809,38 @@ fields @timestamp, userId, action, targetUserId, targetProjectId
 **`reqId` (UUID v4)** — correlates every log line from a single request across resolver → service → repository. In CloudWatch Logs Insights: `filter reqId = "uuid"` shows the full request trace.
 
 **Audit log pattern** — `{ audit: true, userId, action }` entries are filterable separately for compliance without a separate audit database.
+
+---
+
+### ADR-008 — Queue With Direct Fallback, Not Queue-Only
+
+**Decision:** `notify()` enqueues to BullMQ, but if the enqueue fails or takes longer than 3 s, it saves and publishes in the request instead.
+
+**Why:** Notifications are part of the user-visible outcome of an action (a task assignment, a declined request). With a queue-only design, a Redis outage would silently drop them. Losing one is worse than a slow request or a rare duplicate.
+
+**Trade-offs:** during an outage, notifying requests are up to 3 s slower. A timeout followed by late acceptance can deliver twice. Both are acceptable at current scale.
+
+---
+
+### ADR-009 — Authenticate WebSockets Once, at Connect
+
+**Decision:** `graphql-ws` `onConnect` verifies the JWT from `connectionParams.authorization`. A bad token closes the socket with **4403**, and the frontend client does not retry on 4403.
+
+**Why:** With only the per-subscription check (in the context function), the server accepted the socket and then failed each subscription. Rejecting at connect gives one clear failure, with a close code the client can act on: 4403 means "signed out, don't retry", anything else is a network blip to retry with back-off.
+
+---
+
+### ADR-010 — Indexes Declared in Schemas, Synced at Deploy
+
+**Decision:** All indexes live in the Mongoose schemas. `autoIndex` is on in dev/test and off in production, where `npm run db:indexes:prod` (`syncIndexes`) applies them at deploy time.
+
+**Why:** Indexes used to be defined twice: in the schemas and in a `createIndexes()` helper (in `config/logger.js`) that ran in every cluster worker at boot. The two disagreed on names and options.
+- Mongoose's own builds then failed silently.
+- `clients` ended up with two email indexes.
+- The unique one wasn't partial, so a second client without an email failed with E11000.
+- `tasks`, `subtasks` and `notifications` had no indexes at all.
+
+With one declaration per index, drift can't happen. Running builds at deploy keeps index work out of API startup on large collections.
+
+**Trade-off:** someone has to run the sync on each production deploy. It is listed in the CHANGELOG upgrade notes and must be part of the deploy pipeline.
+

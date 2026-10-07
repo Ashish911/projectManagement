@@ -2,6 +2,12 @@
 
 > A complete guide to the server-side API: how it is built, every endpoint, the rules it enforces, and what the tests verify.
 
+| | |
+|---|---|
+| **Audience** | Backend engineers and API consumers |
+| **Last reviewed** | 2026-10-06 |
+| **Related** | [../server/Routes.md](../server/Routes.md) (quick reference) · [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) · [../server/STATUS.md](../server/STATUS.md) · [docs index](README.md) |
+
 ---
 
 ## Table of Contents
@@ -58,7 +64,7 @@ HTTP Request (POST /graphql)
 │  • Check caller's role (RBAC)                │
 │  • Read from / write to Redis cache          │
 │  • Call Repository for database access       │
-│  • Trigger notifications                     │
+│  • Queue notifications (BullMQ → worker)     │
 │  • Write audit logs                          │
 └─────────────────┬───────────────────────────┘
                   │
@@ -80,6 +86,8 @@ HTTP Request (POST /graphql)
 - **Services** are fully unit-testable without a running database (we mock the Repository layer in tests).
 - **Repositories** are the only place that knows Mongoose exists — if we ever switched databases, only this layer changes.
 
+Alongside the request path, a separate **notification worker** process consumes the BullMQ queue and pushes notifications to browsers over WebSocket (see [§14](#14-notification-system)). The same port serves `graphql-ws` subscriptions and the `/health/live` and `/health/ready` probes.
+
 ---
 
 ## 2. Project Structure
@@ -92,11 +100,11 @@ server/
 │
 ├── config/
 │   ├── env.js                # Zod env validation — exits on startup if vars are missing
-│   ├── db.js                 # MongoDB connection via Mongoose
+│   ├── db.js                 # MongoDB connection via Mongoose (autoIndex off in production)
 │   ├── redis.js              # Redis client with retry strategy
 │   ├── cache.js              # Cache helper: get / set / invalidate / invalidatePattern
 │   ├── health.js             # Readiness checks for /health/ready
-│   ├── logger.js             # Pino logger (with secret redaction) + MongoDB index creation on startup
+│   ├── logger.js             # Pino logger (with secret redaction)
 │   ├── metrics.js            # Prometheus request and cache metric definitions
 │   └── pubsub.js             # Redis PubSub for GraphQL subscriptions
 │
@@ -105,14 +113,14 @@ server/
 │   ├── resolvers/            # One resolver file per domain (user, project, client, task, etc.)
 │   └── types/                # GraphQL type definitions (UserType, TaskType, etc.)
 │
-├── services/                 # All business logic (one file per domain) + email.service.js (Bird)
+├── services/                 # All business logic (one file per domain, incl. comment) + email.service.js (Bird: reset + invite)
 ├── repositories/             # All Mongoose access (one file per domain)
-├── models/                   # Mongoose schema definitions (9 models)
+├── models/                   # Mongoose schema definitions (8 models + barrel)
 │
 ├── queues/
-│   └── notification.queue.js # BullMQ queue definition
+│   └── notification.queue.js # BullMQ queue, created lazily by getNotificationQueue()
 ├── worker/
-│   └── notification.worker.js# Standalone BullMQ worker process (not used yet: nothing enqueues jobs)
+│   └── notification.worker.js# Worker process: runs NotificationService.deliver() for each queued job
 │
 ├── validation/
 │   ├── schema.js             # All Zod schemas
@@ -123,9 +131,11 @@ server/
 │   └── errors.js             # NotFoundError, ForbiddenError, UnauthorizedError, etc.
 │
 ├── middleware/
-│   └── rateLimiter.js        # Express rate limiting
+│   └── rateLimiter.js        # In-memory per-IP, per-operation limiter (100/min; development only)
 │
-├── tests/                    # Jest unit tests (one file per domain + server.test.js)
+├── scripts/
+│   └── sync-indexes.js       # Deploy-time index sync (npm run db:indexes[:prod], --dry-run)
+├── tests/                    # Jest unit tests: 12 suites (one per domain + userAdmin, server, indexes, graphqlTypes), 386 tests
 ├── prometheus/               # Scrape config + alert rules (dev stack)
 └── grafana/                  # Provisioned data source + "ProjoMan API" dashboard
 ```
@@ -157,7 +167,15 @@ npm run test:task
 npm run test:subTask
 npm run test:notification
 npm run test:preference
+npm run test:comment
+npm run test:userAdmin
 npm run test:server
+
+# Apply schema indexes to the database (production: db:indexes:prod); add `-- --dry-run` to preview
+npm run db:indexes
+
+# Notification worker (separate process; needs Redis)
+npx env-cmd -f .env.local node worker/notification.worker.js
 
 # Run a single test by its name
 node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbose -t "should create a task"
@@ -182,9 +200,9 @@ Variables are validated at startup by Zod (`config/env.js`). If any required var
 | `REDIS_PASSWORD` | No | — | Redis password (if auth is enabled) |
 | `CORS_ORIGIN` | No | `*` | Allowed CORS origin |
 | `METRICS_PORT` | No | `9090` | Port of the Prometheus metrics server |
-| `BIRD_API_KEY` | No | — | Bird API key for password-reset emails; without it no email is sent |
+| `BIRD_API_KEY` | No | — | Bird API key for password-reset and invite emails; without it no email is sent |
 | `EMAIL_FROM` | No | `onboarding@messagebird.dev` | Sender address (Bird's test sender by default) |
-| `APP_URL` | No | `http://localhost:4000` | Frontend base URL used to build reset links |
+| `APP_URL` | No | `http://localhost:4000` | Frontend base URL used to build reset and invite links |
 
 Only `NODE_ENV`, `PORT`, `MONGO_URI` and `SECRET_KEY` are checked by Zod; the rest are read directly from `process.env`. Copy `server/.env.example` to `.env.local` / `.env.prod`. These files are git-ignored and must never be committed.
 
@@ -220,7 +238,15 @@ After **5 consecutive failed login attempts**, the account is locked for **1 hou
 **Password reset flow:**
 
 1. Call `forgotPassword(email)` — if the account exists, the server generates a random 32-byte token that expires in 1 hour, stores only its SHA-256 hash, and emails a link (`APP_URL/reset-password?token=...`) through Bird. The response is the same whether or not the account exists, and never contains the token.
-2. Call `resetPassword(token, password)` with the token from the link — the server hashes it, finds the matching user, updates the password (bcrypt), and clears the reset token and all previous login failure counts.
+2. Call `resetPassword(token, password)` with the token from the link — the server hashes it, finds the matching user, updates the password (bcrypt), and clears the reset token, `invitedAt` and all previous login failure counts.
+
+**Invites:** `createUser` in `INVITE` mode creates the account without a usable password and emails a link to the same reset page, valid for **48 hours** (`resendInvite` issues a new one). Accepting it is a normal `resetPassword`.
+
+**Changing your own password:** `changePassword(currentPassword, newPassword)` — the current password must match.
+
+**Sign-in tracking:** a successful login sets `lastLoginAt`. The user `status` field is derived: `LOCKED` while a lockout is active, `INVITED` while an invite is outstanding, otherwise `ACTIVE`.
+
+**WebSocket auth:** subscriptions send the token as `connectionParams.authorization` (`Bearer <token>`). It is checked once when the socket connects; a missing or invalid token closes the socket with code **4403**.
 
 ---
 
@@ -231,10 +257,12 @@ There are three roles. Every service method checks the caller's role and throws 
 ### SUPER_ADMIN
 - Full access to everything across all clients.
 - Can create, read, update, and delete any data in the system.
+- Can invite users by email or create them with a temporary password (`createUser`), edit them (`updateUser`), resend invites, and unlock locked accounts (`unlockUsers`).
+- Can change roles in bulk (`changeUserRoles`); at least one `SUPER_ADMIN` must remain, and a new `CLIENT_ADMIN` needs exactly one person and a client without an admin.
 - Can promote a `USER` to `CLIENT_ADMIN`.
-- Can delete any user (except themselves).
+- Can delete any user except themselves (`deleteUser`, or `deleteUsers` in bulk); the user is removed from their tasks, sub-tasks, projects and any client they administer.
 - Can assign a `CLIENT_ADMIN` to a client.
-- Can delete clients (with or without a deletion request flag).
+- Can approve a client deletion request (`deleteClientBySuperAdmin`), decline it with a message (`declineClientDeletion`), or force-delete a client.
 - Sees all users, all clients, all projects, all tasks.
 
 ### CLIENT_ADMIN
@@ -244,8 +272,11 @@ There are three roles. Every service method checks the caller's role and throws 
 - Can create, update, and delete tasks within their projects.
 - Can see users who are assigned to their projects.
 - Can update their own client's details.
-- Can request their client for deletion (sets a flag for SUPER_ADMIN to confirm).
-- Cannot touch another client's data.
+- Can request their client for deletion (`confirmDeleteClient` sets a flag for SUPER_ADMIN to approve or decline).
+- Can delete any comment in their client's projects.
+- Cannot change another client's data.
+
+> **Known gap (S-2 in `server/STATUS.md`):** the read paths `tasks`, `task`, `subTasks` and `subTask` don't yet check that a `CLIENT_ADMIN` owns the project's client. Comments and `allTasks` do.
 
 ### USER
 - The most restricted role.
@@ -255,6 +286,7 @@ There are three roles. Every service method checks the caller's role and throws 
 - Can create sub-tasks on tasks they are assigned to.
 - Can update and resolve sub-tasks assigned to them.
 - Can delete sub-tasks they created.
+- Can comment on tasks and sub-tasks in their projects, and edit or delete their own comments.
 - Cannot create top-level tasks, create projects, manage clients, or see other users.
 
 ---
@@ -301,7 +333,7 @@ Every mutation input is validated using a **Zod schema** before any business log
 - Email addresses must be valid format.
 - Passwords must be at least 8 characters.
 - Names must be between 1 and 100 characters.
-- Enum fields (role, status, priority, theme, language) must be one of the allowed values.
+- Enum fields (role, status, priority, theme, language) must be one of the allowed values. GraphQL enum names equal their values, so clients send `"IN_PROGRESS"`, `"URGENT"` and so on. The one exception is `Gender` on `register`, which takes `M` / `F` / `O`.
 - Required fields are present.
 - Optional fields are the correct type when provided.
 
@@ -329,6 +361,8 @@ Cache is always invalidated (deleted) when the underlying data changes.
 
 ## 10. Data Models
 
+Indexes are declared in each schema and listed with the query they serve in [`SYSTEM_DESIGN.md` §7](SYSTEM_DESIGN.md#7-database-design--indexing). In production they are applied by `npm run db:indexes:prod`, not at startup.
+
 ### User
 
 Represents a person who has an account in the system.
@@ -347,7 +381,11 @@ Represents a person who has an account in the system.
 | `lastFailedLogin` | Date | Timestamp of most recent failed login |
 | `resetToken` | String | Temporary password reset token (nullable) |
 | `resetTokenExpiry` | Date | When the reset token expires (nullable) |
+| `lastLoginAt` | Date | Set on each successful login (nullable) |
+| `invitedAt` | Date | Set when invited by `createUser`; cleared once the invite is accepted (nullable) |
 | `createdAt` / `updatedAt` | Date | Auto-managed by Mongoose |
+
+The GraphQL `User` type also exposes a derived `status`: `LOCKED` (lockout active), `INVITED` (invite outstanding) or `ACTIVE`. `dob` is optional.
 
 ---
 
@@ -359,8 +397,8 @@ Represents a company using the platform.
 |---|---|---|
 | `id` | ObjectId | Auto-generated |
 | `name` | String | Company name |
-| `email` | String | Contact email, unique |
-| `phone` | String | Contact phone |
+| `email` | String | Contact email, optional, stored lowercase; must be unique when given (checked by the service) |
+| `phone` | String | Contact phone, optional |
 | `assignedAdmin` | ObjectId (ref: User) | The CLIENT_ADMIN managing this client (nullable) |
 | `deleteRequest` | Boolean | Set to `true` when CLIENT_ADMIN requests deletion — default: `false` |
 | `createdAt` / `updatedAt` | Date | Auto-managed |
@@ -379,6 +417,7 @@ Represents a project belonging to a client.
 | `status` | Enum | `NOT_STARTED` / `IN_PROGRESS` / `COMPLETED` — default: `NOT_STARTED` |
 | `clientId` | ObjectId (ref: Client) | Which company this project belongs to |
 | `assignedUsers` | [ObjectId] (ref: User) | List of users added to this project |
+| `dueDate` | Date | Optional target date (nullable) |
 | `createdAt` / `updatedAt` | Date | Auto-managed |
 
 > **Important:** The database field is `assignedUsers` (plural). The GraphQL API exposes this as `user` (singular field name, but returns an array). Always use `assignedUsers` when working with the model directly.
@@ -399,7 +438,10 @@ Represents a specific job within a project.
 | `assignedTo` | ObjectId (ref: User) | The user this task is assigned to (nullable) |
 | `createdBy` | ObjectId (ref: User) | Who created this task |
 | `project` | ObjectId (ref: Project) | Which project this task belongs to |
+| `resolvedAt` | Date | Set when the status becomes `RESOLVED`, cleared otherwise (nullable) |
 | `createdAt` / `updatedAt` | Date | Auto-managed |
+
+The GraphQL `Task` type adds `subTaskStats { done, total }` and returns `deadline`, `createdAt` and `resolvedAt` as ISO strings. `deadline` and `assignedTo` can be cleared by sending `null`.
 
 ---
 
@@ -449,9 +491,9 @@ Stores a user's personal settings. One per user, created automatically at regist
 
 ---
 
-### Comment *(model exists — service not yet implemented)*
+### Comment
 
-A comment on a task or sub-task.
+A comment on a task or sub-task. A sub-task comment stores both its `subTaskId` and the parent `taskId`; `taskComments` returns only comments without a `subTaskId`. Deleting a task or sub-task deletes its comments.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -460,6 +502,7 @@ A comment on a task or sub-task.
 | `userId` | ObjectId (ref: User) | Who wrote the comment |
 | `taskId` | ObjectId (ref: Task) | Which task this comment is on |
 | `subTaskId` | ObjectId (ref: SubTask) | Which sub-task (optional) |
+| `content` rules | — | Trimmed, 1–2000 characters |
 | `createdAt` / `updatedAt` | Date | Auto-managed |
 
 ---
@@ -736,9 +779,50 @@ Returns a single sub-task by ID.
 
 ---
 
+### `allTasks`
+
+Returns every task the caller can see, across all their projects. The dashboards and the Tasks board use it.
+
+**Who can call it:**
+- `SUPER_ADMIN` — every task.
+- `CLIENT_ADMIN` — tasks in their client's projects.
+- `USER` — tasks in projects they are assigned to.
+
+**Arguments:** None.
+
+**Returns:** `[TaskType]`, including `createdAt`, `resolvedAt` and `subTaskStats { done total }`.
+
+---
+
+### `taskComments(taskId)`
+
+Returns a task's own comments, oldest first. Comments made on its sub-tasks are not included.
+
+**Who can call it:** Project members — a `USER` assigned to the project, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`.
+
+| Argument | Type | Required |
+|---|---|---|
+| `taskId` | ID | Yes |
+
+**Returns:** `[CommentType]` (`id`, `content`, `user`, `createdAt`, `updatedAt`)
+
+---
+
+### `subTaskComments(subTaskId)`
+
+Returns a sub-task's comments, oldest first. Same access rule as `taskComments`.
+
+| Argument | Type | Required |
+|---|---|---|
+| `subTaskId` | ID | Yes |
+
+**Returns:** `[CommentType]`
+
+---
+
 ### `notifications`
 
-Returns all notifications for the currently logged-in user.
+Returns all notifications for the currently logged-in user, newest first. Returns an empty list (not an error) when there are none. `createdAt` is an ISO string.
 
 **Who can call it:** Any authenticated user (own notifications only).
 
@@ -844,7 +928,7 @@ Creates a new user account.
 | `password` | String | Yes | — | Min 8 characters |
 | `number` | String | Yes | — | Phone number |
 | `dob` | String | Yes | — | Date of birth |
-| `gender` | Enum | Yes | — | `MALE` / `FEMALE` / `OTHERS` |
+| `gender` | Enum | Yes | — | `M` / `F` / `O` (stored as `MALE` / `FEMALE` / `OTHERS`) |
 
 There is no `role` argument: public sign-up always creates a `USER`. Admins are created with `promoteToAdmin` / `assignAdmin`.
 
@@ -978,11 +1062,109 @@ Permanently deletes a user.
 
 **Behaviour:**
 - SUPER_ADMIN cannot delete themselves.
+- Unassigns the user from their tasks and sub-tasks, removes them from every project team, and frees any client they administered.
 - Logs an audit event.
 
 **Errors:**
 - `FORBIDDEN` — caller is not SUPER_ADMIN, or is trying to delete themselves.
 - `NOT_FOUND` — user does not exist.
+
+---
+
+### `changePassword(currentPassword, newPassword)`
+
+Changes the caller's own password.
+
+**Who can call it:** Any authenticated user.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `currentPassword` | String | Yes | Must match the current password |
+| `newPassword` | String | Yes | At least 8 characters |
+
+**Returns:** `MessageType` — `"Password changed"`
+
+**Errors:** `VALIDATION_ERROR` — "Current password is incorrect", or the new password is too short.
+
+---
+
+### `createUser(name, email, number, gender, dob?, role?, clientId?, mode, password?)`
+
+Creates a user on someone's behalf.
+
+**Who can call it:** `SUPER_ADMIN` only.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name`, `email`, `number`, `gender` | String | Yes | As for `register` |
+| `dob` | String | No | Date of birth |
+| `role` | Role | No | Default `USER` |
+| `clientId` | ID | When `role` is `CLIENT_ADMIN` | A client that has no admin yet |
+| `mode` | `"INVITE"` \| `"PASSWORD"` | Yes | `INVITE` emails a link to set a password (valid 48 hours); `PASSWORD` sets a temporary password |
+| `password` | String | When `mode` is `PASSWORD` | At least 8 characters |
+
+**Returns:** `UserType` (`status` is `INVITED` for invites)
+
+**Errors:**
+- `FORBIDDEN` — the caller is not a SUPER_ADMIN.
+- `CONFLICT` — the email is taken, or the client already has an admin.
+- `NOT_FOUND` — the client doesn't exist.
+- `VALIDATION_ERROR` — "Pick the client they'll manage", or the password is too short.
+
+---
+
+### `updateUser(id, name?, email?, number?, gender?, dob?)`
+
+Edits another user's details. **SUPER_ADMIN only.**
+
+**Returns:** `UserType`. **Errors:** `NOT_FOUND`; `CONFLICT` if the new email belongs to someone else.
+
+---
+
+### `changeUserRoles(ids, role, clientId?)`
+
+Sets one role for several users at once. **SUPER_ADMIN only.**
+
+**Behaviour:**
+- A new `CLIENT_ADMIN` needs exactly one id and a `clientId` for a client without an admin.
+- At least one `SUPER_ADMIN` must remain.
+- Former client admins are detached from their client.
+- Each user whose role changed is notified.
+
+**Returns:** `[UserType]`.
+
+**Errors:**
+- `NOT_FOUND` — an id doesn't exist.
+- `CONFLICT` — the last super admin would be removed, or the client already has an admin.
+- `VALIDATION_ERROR` — "A client admin needs exactly one person and a client".
+
+---
+
+### `unlockUsers(ids)`
+
+Clears failed sign-in attempts so locked users can sign in again. **SUPER_ADMIN only.** **Returns:** `[UserType]`.
+
+---
+
+### `resendInvite(id)`
+
+Emails a fresh 48-hour invite link. **SUPER_ADMIN only.** **Returns:** `MessageType` — `"Invite sent to {email}"`.
+
+**Errors:** `CONFLICT` — "This user has already signed in".
+
+---
+
+### `deleteUsers(ids)`
+
+Deletes several users at once, with the same cleanup as `deleteUser`. **SUPER_ADMIN only.**
+
+**Returns:** `[UserType]`.
+
+**Errors:**
+- `FORBIDDEN` — your own id is in the list.
+- `NOT_FOUND` — an id doesn't exist.
+
+Nothing is deleted if either check fails.
 
 ---
 
@@ -997,14 +1179,13 @@ Creates a new client (company).
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | String | Yes | Company name |
-| `email` | String | Yes | Contact email |
-| `phone` | String | Yes | Contact phone |
+| `email` | String | No | Contact email |
+| `phone` | String | No | Contact phone |
 | `assignedAdmin` | ID | No | ID of a CLIENT_ADMIN user to assign immediately |
 
 **Returns:** `ClientType`
 
 **Behaviour:**
-- Validates email is unique.
 - If `assignedAdmin` is provided: the user must have role `CLIENT_ADMIN` and must not already be assigned to another client.
 
 ---
@@ -1106,7 +1287,24 @@ Deletes a client immediately, regardless of the `deleteRequest` flag.
 
 ---
 
-### `addProject(name, clientId, description?, status?)`
+### `declineClientDeletion(id, message?)`
+
+Rejects a client admin's deletion request.
+
+**Who can call it:** `SUPER_ADMIN` only.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | ID | Yes | The client |
+| `message` | String | No | Up to 500 characters, included in the client admin's notification |
+
+**Returns:** `ClientType` with `deleteRequest: false`
+
+**Errors:** `NOT_FOUND`, or a `CONFLICT` if no deletion was requested.
+
+---
+
+### `addProject(name, clientId, description?, status?, dueDate?)`
 
 Creates a new project.
 
@@ -1120,6 +1318,7 @@ Creates a new project.
 | `clientId` | ID | Yes | Client the project belongs to |
 | `description` | String | No | Max 500 characters |
 | `status` | Enum | No | `NOT_STARTED` (default) / `IN_PROGRESS` / `COMPLETED` |
+| `dueDate` | String | No | Target date; `null` clears it |
 
 **Returns:** `ProjectType`
 
@@ -1127,7 +1326,7 @@ Creates a new project.
 
 ---
 
-### `updateProject(id, name?, description?, status?)`
+### `updateProject(id, name?, description?, status?, dueDate?)`
 
 Updates a project's details.
 
@@ -1196,7 +1395,7 @@ Removes one or more users from a project.
 
 ---
 
-### `createTask(title, projectId, assignedTo?, deadline?, priority?)`
+### `createTask(title, projectId, assignedTo?, deadline?, priority?, currentStatus?)`
 
 Creates a new task within a project.
 
@@ -1211,6 +1410,7 @@ Creates a new task within a project.
 | `assignedTo` | ID | No | — |
 | `deadline` | String | No | — |
 | `priority` | Enum | No | `NORMAL` |
+| `currentStatus` | `NEW` / `IN_PROGRESS` | No | `NEW` |
 
 **Returns:** `TaskType`
 
@@ -1321,23 +1521,63 @@ Deletes a sub-task.
 
 ---
 
+### `addTaskComment(taskId, content)` / `addSubTaskComment(subTaskId, content)`
+
+Adds a comment to a task or sub-task.
+
+**Who can call it:** Project members (see `taskComments`).
+
+**Behaviour:**
+- `content` is trimmed and must be 1–2000 characters.
+- The target's assignee and creator are notified, but not the author.
+
+**Returns:** `CommentType`
+
+---
+
+### `updateComment(id, content)`
+
+Edits a comment. **Author only**, and only while still a project member. **Returns:** `CommentType`.
+
+---
+
+### `deleteComment(id)`
+
+Deletes a comment.
+
+**Who can call it:** The author, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`.
+
+**Returns:** `CommentType`
+
+---
+
 ### `markAsRead(id)`
 
 Marks a single notification as read.
 
 **Who can call it:** Any authenticated user (own notifications only).
 
-**Returns:** `NotificationType`
+**Returns:** `SubTaskType` (the deleted sub-task)
 
 ---
 
 ### `markAllAsRead`
 
-Marks all of the caller's unread notifications as read at once.
+Marks all of the caller's unread notifications as read in **one** database write.
 
-**Returns:** `[NotificationType]`
+**Returns:** `[NotificationType]` — the caller's notifications after the update. Succeeds (with no change) when nothing is unread.
 
-**Errors:** `NOT_FOUND` — no unread notifications exist.
+---
+
+### `markNotificationsRead(ids)`
+
+Marks the given notifications read in **one** database write. IDs that belong to other users are ignored.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `ids` | [ID!] | Yes | 1–500 notification IDs |
+
+**Returns:** `[NotificationType]` — the caller's notifications after the update.
 
 ---
 
@@ -1389,10 +1629,10 @@ Delivers real-time notifications to the connected user via WebSocket.
 **Who can subscribe:** Any authenticated user.
 
 **How it works:**
-1. The client opens a WebSocket connection and sends a `subscribe` operation with a valid JWT.
-2. The server uses Redis PubSub to listen on the channel `NOTIFICATION_CREATED:{userId}`.
-3. When any service calls `NotificationService.notify(userId, message)`, the message is published to Redis.
-4. The server forwards the message through the WebSocket to the matching subscriber.
+1. The client opens a WebSocket to `/graphql` (protocol `graphql-ws`) and sends `connectionParams: { authorization: "Bearer <token>" }`.
+2. The server checks the token once, in `onConnect`. A missing or invalid token closes the socket with code **4403**. The client should not retry until the user signs in again.
+3. The server listens on the Redis PubSub channel `NOTIFICATION_CREATED:{userId}`.
+4. When the notification worker (or the direct-delivery fallback) saves a notification, it publishes it to that channel, and the server forwards it to the subscriber.
 
 **Returns:** `NotificationType` — the newly created notification.
 
@@ -1412,14 +1652,31 @@ Service (e.g., TaskService.createTask)
        ▼
 NotificationService.notify(userId, content)
        │
-       ├─► Saves Notification to MongoDB (status: UNREAD)
-       │
-       └─► Publishes to Redis PubSub (NOTIFICATION_CREATED:{userId})
-                 │
-                 └─► GraphQL Subscription → WebSocket → User's browser (instant)
+       ├─► BullMQ queue "notifications" ── job { user, content }
+       │        │  (3 attempts, exponential back-off 1s → 2s → 4s)
+       │        ▼
+       │   Notification worker (worker/notification.worker.js, own process)
+       │        │
+       │        ▼
+       └─► NotificationService.deliver(userId, content)      ◄── also called directly
+                │                                               if the queue can't be
+                ├─► Saves Notification to MongoDB (UNREAD)      reached within 3 s
+                └─► Publishes to Redis PubSub (NOTIFICATION_CREATED:{userId})
+                         │
+                         └─► GraphQL Subscription → WebSocket → browser (instant)
 ```
 
-If the user's browser is not connected via WebSocket (or the connection dropped), the notification is still saved in MongoDB and will appear the next time the frontend polls (every 30 seconds).
+**Key points:**
+- The queue is created lazily by `getNotificationQueue()` (`queues/notification.queue.js`), so importing it in tests opens no Redis connection. `app.js` creates it at startup and closes it on shutdown.
+- The queue connection uses `enableOfflineQueue: false` so it fails fast when Redis is down. `notify()` then logs a warning and calls `deliver()` itself, so the notification is never lost. The cost is that the calling mutation waits up to 3 s during an outage.
+- If the worker is down, jobs wait in Redis and are delivered when it starts. The worker runs with concurrency 5 and finishes its current jobs on SIGTERM.
+- A rare duplicate is possible: if `add()` times out but Redis accepts the job anyway, the notification is delivered by both paths.
+- **Reading:**
+  - `markAsRead(id)` marks one notification.
+  - `markAllAsRead` and `markNotificationsRead(ids)` are each a single `updateMany` limited to the caller's notifications.
+  - `deleteAllNotifications` is a single `deleteMany`.
+- If the browser is offline, the notification is still in MongoDB. The frontend reloads the list after reconnecting and also checks every 5 minutes.
+- Callers usually `.catch(() => {})` the `notify()` promise, so a notification problem never fails the operation that caused it.
 
 **Full trigger table:**
 
@@ -1438,6 +1695,9 @@ If the user's browser is not connected via WebSocket (or the connection dropped)
 | `updateSubTaskStatus → RESOLVED` | Creator + Assignee | Resolved notification |
 | `updateSubTaskStatus → REOPENED` | Creator | Reopened notification |
 | `deleteSubTask` | Assignee | "Subtask \"{title}\" has been deleted." |
+| `addTaskComment` / `addSubTaskComment` | Assignee + creator (not the author) | New comment notification |
+| `changeUserRoles` | Each user whose role changed | "Your role was changed to {role}." |
+| `declineClientDeletion` | The client's admin | "Your request to delete \"{name}\" was declined." plus the optional message |
 
 ---
 
@@ -1445,7 +1705,7 @@ If the user's browser is not connected via WebSocket (or the connection dropped)
 
 ### Philosophy
 
-Tests live in `server/tests/`. They test the **Service layer** in isolation. The Repository layer is mocked, so no real MongoDB or Redis connection is required to run the tests.
+Tests live in `server/tests/`: 12 suites, 386 tests. They test the **Service layer** in isolation, plus `buildHttpContext` in `server.js` and the notification worker's job handler. The Repository layer is mocked, so no real MongoDB or Redis connection is required to run the tests.
 
 This approach means:
 - Tests run fast (milliseconds, not seconds).
@@ -1471,6 +1731,10 @@ beforeEach(() => jest.clearAllMocks());
 ```
 
 **Important:** The `import` of the service must come *after* all mock definitions. Because of ES module hoisting, this is done inside a `beforeAll` or `describe` block using dynamic `await import()`.
+
+### Test first
+
+New behaviour is written test first. Write the test, run it and watch it fail for the expected reason, then write the code until it passes. For code that already exists without a test, add the test and prove it can fail: break the code on purpose, see red, then restore it.
 
 ### Naming Conventions
 
@@ -1548,15 +1812,43 @@ Mirrors Task tests but for sub-tasks. Additional rule: USER can only delete sub-
 
 #### Notification Tests (`tests/notification.test.js`)
 
+Mocks `../queues/notification.queue.js`, `../config/pubsub.js` and the repository.
+
 | Test Group | What Is Verified |
 |---|---|
-| **notify** | Creates notification with UNREAD status |
-| **getNotifications** | Returns caller's notifications; throws NOT_FOUND if empty |
+| **notify** | Adds a job to the queue (ObjectIds sent as strings); saves directly when the queue rejects or hangs for 3 s |
+| **deliver / worker** | Saves an UNREAD notification and publishes it to the user's channel; still returns it if publishing fails; the worker job calls `deliver` and fails (so BullMQ retries) when saving fails |
+| **getNotifications** | Returns the caller's notifications; an empty list when there are none |
 | **getNotification** | ForbiddenError if notification belongs to different user |
 | **markAsRead** | Status updated to READ |
-| **markAllAsRead** | All UNREAD updated; NOT_FOUND if none unread |
+| **markAllAsRead** | One `markRead` write for the caller; succeeds when nothing is unread |
+| **markNotificationsRead** | One write scoped to the caller's id; rejects an empty list and invalid ids |
 | **deleteNotification** | Own: allowed; SUPER_ADMIN: any; others: forbidden |
-| **deleteAllNotifications** | Deletes all for caller |
+| **deleteAllNotifications** | One `deleteByUser` for the caller |
+
+#### Comment Tests (`tests/comment.test.js`)
+
+| Test Group | What Is Verified |
+|---|---|
+| **taskComments / subTaskComments** | Project members only (assigned USER, the client's CLIENT_ADMIN, SUPER_ADMIN); task list excludes sub-task comments |
+| **addTaskComment / addSubTaskComment** | Membership check; content trimmed and 1–2000 chars; assignee and creator notified, author skipped |
+| **updateComment** | Author only, and only while still a member |
+| **deleteComment** | Author, the client's CLIENT_ADMIN or SUPER_ADMIN |
+
+#### User Administration Tests (`tests/userAdmin.test.js`)
+
+| Test Group | What Is Verified |
+|---|---|
+| **createUser** | Invite (email sent, `invitedAt` set) and password modes; super admin only; duplicate email; client admin needs a free client |
+| **updateUser** | Super admin only; email uniqueness |
+| **changeUserRoles** | Bulk update; last super admin protected; client-admin rules; detaches former client admins; notifies |
+| **unlockUsers / resendInvite** | Clears lockouts; refuses users who already signed in |
+| **deleteUsers** | Cannot include yourself; all-or-nothing; detaches users from tasks, projects and clients |
+| **changePassword** | Current password must match; new password validated |
+
+#### Server Tests (`tests/server.test.js`)
+
+`buildHttpContext`: public operations get `user: null`, JWT decoding, operation-name sanitising (non-identifiers become `"unknown"`), and unauthenticated requests are counted.
 
 #### Preference Tests (`tests/preference.test.js`)
 
@@ -1576,6 +1868,8 @@ npm test
 # Single domain
 npm run test:auth
 npm run test:notification
+npm run test:comment
+npm run test:userAdmin
 
 # Single test by name
 node --experimental-vm-modules node_modules/.bin/jest tests/auth.test.js --verbose -t "🟢 should return token on login"
@@ -1601,7 +1895,10 @@ Every request gets a **child logger** with unique context:
 ```
 
 Audited operations:
-- `deleteUser`, `promoteToAdmin`
+- Auth: `LOGIN`, `LOGIN_FAILED`, `REGISTER`, `PASSWORD_RESET_REQUESTED`, `PASSWORD_RESET`, `PASSWORD_RESET_FAILED`, `PASSWORD_CHANGED`, `PASSWORD_CHANGE_FAILED`
+- `deleteUser`, `deleteUsers`, `promoteToAdmin`, `createUser` (`USER_INVITED` / `USER_CREATED`), `updateUser`, `changeUserRoles`, `unlockUsers`, `resendInvite`
+- `declineClientDeletion`
+- `addTaskComment` / `addSubTaskComment`, `updateComment`, `deleteComment`
 - `addClient`, `updateClient`, `confirmDeleteClient`, `deleteClientBySuperAdmin`, `forceDeleteClient`, `assignAdmin`
 - `addProject`, `updateProject`, `deleteProject`, `addUserToProject`, `removeUserFromProject`
 - `createTask`, `updateTask`, `updateTaskStatus`, `deleteTask`
@@ -1643,6 +1940,7 @@ docker compose --profile dev up
 
 Starts:
 - **app** — API with nodemon hot-reload, ports 8000 (GraphQL) + 9090 (Metrics)
+- **worker** — notification worker (`worker/notification.worker.js`) with nodemon
 - **redis** — Redis 7
 - **prometheus** — scrapes metrics from `:9090`, evaluates alert rules; UI at `http://localhost:9091`
 - **grafana** — `http://localhost:3001` (admin / admin), with the Prometheus data source and "ProjoMan API" dashboard set up automatically
@@ -1655,8 +1953,7 @@ docker compose --profile prod up
 
 Starts:
 - **app-prod** — multi-stage Docker build, minimal image, clustering enabled
-- **redis** — Redis 7
-
-A **worker** service for `worker/notification.worker.js` is defined but commented out, because nothing adds notification jobs to the queue yet.
+- **worker-prod** — the notification worker (`node worker/notification.worker.js`, restarts unless stopped)
+- **redis** — Redis 7 (BullMQ needs `maxmemory-policy noeviction`)
 
 The production Dockerfile uses a multi-stage build: dependencies are installed in a builder stage, only the final runtime files are copied to the production image, resulting in a smaller image.

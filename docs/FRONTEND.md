@@ -1,6 +1,12 @@
 # ProjoMan — Frontend Documentation
 
-> A complete guide to the React application: how it is structured, every page, how state is managed, and how it talks to the backend.
+> A complete guide to the React application: how it is structured, every screen, how state is managed, and how it talks to the backend.
+
+| | |
+|---|---|
+| **Audience** | Frontend engineers |
+| **Last reviewed** | 2026-10-06 |
+| **Related** | [../frontend/Routes.md](../frontend/Routes.md) · [../frontend/CLAUDE.md](../frontend/CLAUDE.md) (conventions) · [../frontend/STATUS.md](../frontend/STATUS.md) · [docs index](README.md) |
 
 ---
 
@@ -22,20 +28,29 @@
 14. [Authentication Flow](#14-authentication-flow)
 15. [Notification System](#15-notification-system)
 16. [Theming and Styling](#16-theming-and-styling)
+17. [Reusable Hooks](#17-reusable-hooks)
+18. [Testing](#18-testing)
 
 ---
 
 ## 1. Overview
 
-The ProjoMan frontend is a **single-page application (SPA)** built with React and TypeScript. It communicates exclusively with the GraphQL backend API via HTTP POST requests using the Axios library.
+The ProjoMan frontend is a **single-page application (SPA)** built with React and TypeScript. It talks only to the GraphQL backend:
+- **HTTP POST** carries queries and mutations, through one `gql()` helper.
+- **WebSocket** (`graphql-ws`) carries live notifications.
 
 When you load the app in a browser:
 
 1. React renders the entire application in your browser — there is no page reload when navigating.
 2. JWT authentication is checked on startup from `localStorage`.
 3. Role-based routing ensures you only ever see pages your role is allowed to access.
-4. All data is fetched from the GraphQL API and cached in the Redux store.
-5. Notifications arrive in real time (via the backend's Redis PubSub system) or via a polling fallback every 30 seconds.
+4. Data is fetched from the GraphQL API once and kept in the Redux store. Forms update the store with the server's response, so lists stay current without reloading.
+5. Notifications arrive **instantly** over a WebSocket subscription. A 5-minute safety refresh and a reload after reconnecting catch anything missed.
+
+The interface follows the design in `ProjoMan Dashboard (standalone) (1).html` (repo root):
+- Tailwind with OKLCH design tokens, light and dark themes.
+- Geist fonts, small hand-written SVG charts.
+- Forms that open over any page.
 
 ---
 
@@ -44,84 +59,67 @@ When you load the app in a browser:
 ```
 frontend/src/
 │
-├── App.tsx                   # Root component — providers + all routes defined here
-├── main.tsx                  # Entry point — mounts App into the DOM
+├── App.tsx                   # Providers + all routes
+├── main.tsx                  # Entry point — fonts, global CSS, mounts App
+├── index.css                 # Design tokens (OKLCH, light + dark), tone classes, animations
 │
-├── api/                      # HTTP communication layer
-│   ├── authApi.ts            # login, register, forgotPassword, resetPassword
-│   ├── userApi.ts            # getProfile, getUsers, updateProfile, deleteUser, promoteToAdmin
-│   ├── clientApi.ts          # getClients, addClient, updateClient, assignAdmin, delete operations
-│   ├── projectApi.ts         # getProjects, addProject, updateProject, deleteProject, team management
-│   ├── taskApi.ts            # getTasks, createTask, updateTask, updateTaskStatus, deleteTask
-│   ├── subTaskApi.ts         # getSubTasks, createSubTask, updateSubTask, updateSubTaskStatus, deleteSubTask
-│   ├── notificationApi.ts    # getNotifications, markAsRead, markAllAsRead, delete operations
-│   └── preferenceApi.ts      # getPreference, updatePreference
+├── api/                      # Talking to the backend
+│   ├── graphql.ts            # gql<T>(query, variables) — the one Axios instance (Bearer token)
+│   ├── ws.ts                 # graphql-ws client: subscribe(), onReconnect(), closeSocket()
+│   ├── authApi.ts  userApi.ts  clientApi.ts  projectApi.ts
+│   ├── taskApi.ts  subTaskApi.ts  commentApi.ts  notificationApi.ts  preferenceApi.ts
 │
-├── queries/                  # Raw GraphQL query strings
-│   ├── userQueries.ts
-│   ├── clientQueries.ts
-│   ├── projectQueries.ts
-│   ├── taskQueries.ts
-│   ├── subTaskQueries.ts
-│   └── notificationQueries.ts
-│
-├── mutations/                # Raw GraphQL mutation strings
-│   ├── authMutations.ts
-│   ├── userMutations.ts
-│   ├── clientMutations.ts
-│   ├── projectMutations.ts
-│   ├── taskMutations.ts
-│   ├── subTaskMutations.ts
-│   └── notificationMutations.ts
-│
-├── types/                    # TypeScript interfaces for every entity
-│   ├── authTypes.ts
-│   ├── userTypes.ts
-│   ├── clientTypes.ts
-│   ├── projectTypes.ts
-│   ├── taskTypes.ts
-│   ├── subTaskTypes.ts
-│   └── genericTypes.ts
+├── queries/  mutations/      # Raw GraphQL strings (incl. the notification subscription)
+├── types/                    # TypeScript interfaces for API payloads
+├── hooks/                    # Reusable hooks (see §17); index.ts re-exports all of them
 │
 ├── redux/
-│   ├── store/
-│   │   └── store.ts          # Root Redux store — token validation on startup, LOGOUT reset
-│   ├── reducers/             # One reducer per domain slice
-│   ├── actions/              # Async thunks and simple dispatch functions
-│   └── constants/            # Action type string constants
+│   ├── store/store.ts        # Root store — token validation on startup, LOGOUT reset
+│   ├── reducers/  actions/  constants/
 │
-└── Screens/
-    ├── Auth/                 # Login, Register, ForgotPassword, ResetPassword
-    ├── Dashboard/            # Dashboard, Account, Users, Clients, Projects, Tasks, Kanban, Analytics
-    ├── Components/           # Shared layout components (Sidebar, Header, Profile, etc.)
-    ├── ui-Components/        # Auth form components
-    └── RouteHandler/         # ProtectedRoute and PublicRoute wrappers
+├── components/
+│   ├── ui/                   # shadcn/ui primitives (Button restyled to the design)
+│   ├── pm/                   # Design-system building blocks + charts/ (see §8)
+│   ├── forms/                # Form system: form-kit, form host, every form and sheet, toaster
+│   ├── hooks/                # useTheme, useIsMobile, legacy useInputFields/useInputMap
+│   └── lib/utils.ts          # cn()
+│
+├── Screens/
+│   ├── Auth/                 # Login, Register, ForgotPassword, ResetPassword
+│   ├── Dashboard/            # Dashboard (+ dashboard/: AdminDashboard, MemberDashboard, widgets),
+│   │                         #   Users, Clients, Projects, ProjectDetail, Tasks, Analytics, Account
+│   ├── Components/           # AppLayout, app-sidebar, site-header, nav-*, profile-*, AnalyticsDashboard
+│   ├── ui-Components/        # Auth form components
+│   └── RouteHandler/         # ProtectedRoute and PublicRoute
+│
+└── test/setup.ts             # Vitest setup (jest-dom, observer stubs, cleanup)
 ```
+
+Tests sit next to the code they test, as `*.test.ts(x)`.
 
 ---
 
 ## 3. Getting Started
 
 ```bash
-# From the repository root
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server (available at http://localhost:4000)
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview the production build locally
-npm run preview
+npm run dev        # http://localhost:4000
+npm test           # Vitest (watch); npm run test:run for a single run
+npm run build      # tsc + production build
+npm run preview    # serve the production build
 ```
 
-**Prerequisites:**
-- Node.js 20+
-- The backend API must be running on `http://localhost:8000`
+**Prerequisites:** Node.js 20+, and the backend API on `http://localhost:8000`. The API's notification worker must be running for live notifications.
+
+**Environment:**
+
+| Variable | Description |
+|---|---|
+| `VITE_API_URL` | GraphQL endpoint, e.g. `http://localhost:8000/graphql` |
+| `VITE_WS_URL` | Optional WebSocket endpoint; defaults to `VITE_API_URL` with `http` → `ws` |
+
+**Docker:** `docker compose --profile dev up -d frontend` (from `frontend/`). The container keeps `node_modules` in an anonymous volume, so after changing `package.json` run `docker compose --profile dev up -d --build --renew-anon-volumes frontend`.
 
 ---
 
@@ -149,26 +147,41 @@ React state is per-component. If the sidebar needs to know the user's role and t
 
 ### React Query
 
-Used for server mutations (form submissions like login, register). React Query makes it easy to track loading states and errors for individual operations without cluttering Redux.
+Used only on the auth screens (`useMutation` for login, register, forgot and reset password). Signed-in screens use Redux thunks and the `useAsyncAction` hook.
 
 ### Axios
 
-The HTTP client used to send all GraphQL requests to the backend. An **interceptor** (a function that runs on every request) automatically attaches the JWT token from `localStorage` to the `Authorization` header so the backend knows who is calling.
+The HTTP client behind `gql()` (`src/api/graphql.ts`). There is exactly one Axios instance. Its **interceptor** (a function that runs on every request) attaches the JWT from `localStorage` to the `Authorization` header.
 
 ### Tailwind CSS
 
 A utility-first CSS framework. Instead of writing custom CSS classes, you apply small utility classes directly in the HTML/JSX:
 
-```html
-<!-- Instead of a custom CSS class, use utility classes directly -->
-<div class="flex items-center gap-4 bg-white rounded-lg shadow-sm p-4">
+```tsx
+<div className="flex items-center gap-4 rounded-xl border bg-card p-4 shadow-sm">
 ```
 
-This makes styling fast and consistent. Dark mode is supported via Tailwind's `class` strategy — adding or removing a `dark` class on the root element switches the entire theme.
+Colours come from design tokens (`bg-card`, `text-muted-foreground`, `border-strong`…), never raw palette classes, so every screen supports both themes. See §16. Dark mode is supported via Tailwind's `class` strategy — adding or removing a `dark` class on the root element switches the entire theme.
 
 ### shadcn/ui + Radix UI
 
 Pre-built, accessible, unstyled UI components (buttons, dialogs, dropdowns, sheets, popovers). These handle the hard parts of UI — keyboard navigation, screen reader support, focus management — so the team can focus on the application logic.
+
+### motion
+
+`motion/react` animates the sliding tab and nav "pills" (shared `layoutId`) and the page transition. Everything else uses CSS keyframes defined in `tailwind.config.js`.
+
+### @dnd-kit/core
+
+Powers drag and drop on the Tasks board. Cards are draggable; status columns are drop targets.
+
+### graphql-ws
+
+The WebSocket client for GraphQL subscriptions (same protocol as the server). See §10 and §15.
+
+### Vitest + Testing Library
+
+Unit and component tests run in jsdom. See §18.
 
 ---
 
@@ -176,7 +189,7 @@ Pre-built, accessible, unstyled UI components (buttons, dialogs, dropdowns, shee
 
 When the browser loads the app, this sequence happens:
 
-1. **`main.tsx`** mounts the `<App />` component into the DOM.
+1. **`main.tsx`** loads the Geist fonts and `index.css`, then mounts `<App />` in `React.StrictMode`. Before React starts, an inline script in `index.html` applies the cached dark theme (`localStorage['pm-theme']`), so there is no flash.
 2. **`App.tsx`** sets up three wrappers (providers) around the entire app:
    - `QueryClientProvider` (React Query) — enables server state management.
    - `Redux Provider` — makes the Redux store accessible to all components.
@@ -188,12 +201,13 @@ When the browser loads the app, this sequence happens:
    - If valid, pre-loads the token into the `login` slice so the user appears logged in.
 4. **React Router renders** the component for the current URL.
 5. **ProtectedRoute and PublicRoute** check the token and role — redirecting if necessary.
+6. Signed-in pages render inside **`AppLayout`**, which wraps them in `FormsProvider` (forms, ⌘K, toasts) and `SidebarProvider`. The sidebar loads the profile and preference. `useAppData()` then loads projects and all tasks, plus users (admins) and clients (super admin), once per session.
 
 ---
 
 ## 6. Routing and Access Control
 
-All routes are defined in `App.tsx`.
+All routes are defined in `App.tsx`; the guards are in `Screens/RouteHandler/RouteNavigator.tsx`. Signed-in routes are children of one `ProtectedRoute` → `AppLayout` route, so screens render only their content. `frontend/Routes.md` has the per-route detail.
 
 ### Route Table
 
@@ -208,8 +222,9 @@ All routes are defined in `App.tsx`.
 | `/users` | Users | ProtectedRoute | `SUPER_ADMIN` only |
 | `/clients` | Clients | ProtectedRoute | `SUPER_ADMIN`, `CLIENT_ADMIN` |
 | `/projects` | Projects | ProtectedRoute | All authenticated |
-| `/tasks` | Tasks | ProtectedRoute | All authenticated |
-| `/kanban` | Kanban | ProtectedRoute | `USER` only |
+| `/projects/:id` | Project detail | ProtectedRoute | All authenticated |
+| `/tasks` | Tasks (board + list) | ProtectedRoute | All authenticated |
+| `/kanban` | Redirects to `/tasks` | — | — |
 | `/analytics` | Analytics | ProtectedRoute | `SUPER_ADMIN`, `CLIENT_ADMIN` |
 
 ### How ProtectedRoute Works
@@ -240,314 +255,101 @@ This prevents logged-in users from seeing the login page and prevents unauthenti
 
 ## 7. Pages — What Each Screen Does
 
----
+Forms and sheets are not separate pages. A screen opens them over itself with `openForm(kind, data)` (see §8, Forms).
 
-### Login (`/`)
+### Login, Register, Forgot / Reset Password
 
-**What it does:** The entry point for all users.
-
-**Layout:** Split-screen. Left side: dark branded panel with a testimonial quote. Right side: the login form.
-
-**Form fields:**
-- Email address
-- Password
-
-**What happens on submit:**
-1. Dispatches `LOGIN_REQUEST` to Redux (triggers loading state).
-2. Calls `loginUser(email, password)` API function.
-3. On success: stores the token in Redux and `localStorage`, redirects to `/dashboard`.
-4. On failure: displays the error message returned by the server.
-
-**Links:** Forgot Password, Register, Terms of Service, Privacy Policy.
-
----
-
-### Register (`/register`)
-
-**What it does:** Creates a new user account.
-
-**Form fields:**
-- Email address
-- Full name
-- Phone number
-- Gender (Male / Female / Others — dropdown)
-- Date of birth (calendar date-picker)
-- Password
-- Confirm password
-
-**Validation:** Password and confirm password must match (highlighted with a red border if they differ). Password must be at least 8 characters.
-
-**What happens on submit:**
-1. Dispatches `REGISTER_REQUEST`.
-2. Calls `registerUser(data)` API function.
-3. On success: navigates to `/` (login) automatically.
-4. On failure: displays the error message.
-
-**Date format sent to API:** `yyyy/MM/dd` (formatted via `date-fns`).
-
----
-
-### Forgot Password (`/forgot-password`)
-
-**What it does:** Starts the password reset process.
-
-**Form fields:**
-- Email address
-
-**What happens on submit:**
-1. Calls `forgotPassword(email)` API function.
-2. On success: shows a "check your email" box with the server's message. The message is the same whether or not the account exists.
-3. The server emails a link to `/reset-password?token=...` that expires in 1 hour. The token is never returned to the browser.
-
----
-
-### Reset Password (`/reset-password`)
-
-**What it does:** Sets a new password using a reset token.
-
-**Form fields:**
-- Reset token (pre-filled from the emailed link's `?token=` parameter, otherwise manual entry)
-- New password
-- Confirm new password
-
-**What happens on submit:**
-1. Validates passwords match (red border if not).
-2. Calls `resetPassword(token, newPassword)` API function.
-3. On success: shows a success message and redirects to `/` after 2 seconds.
-4. On failure: displays the error (e.g., "Token expired").
-
----
+The auth screens (not yet restyled to the new design):
+- **Login:** email and password.
+- **Register:** name, email, phone, date of birth, gender, password.
+- **Forgot password:** emails a reset link and always shows the same "check your email" message.
+- **Reset password:** reads `?token=` from the link and sets a new password. Invite links open the same page.
 
 ### Dashboard (`/dashboard`)
 
-**Who sees it:** All authenticated users.
+`Dashboard.tsx` waits for the profile, then shows the dashboard for the role.
 
-**What it shows:** Analytics overview via the `AnalyticsDashboard` component — stat cards, donut charts, and progress bars.
+**AdminDashboard** (super admin and client admin):
+- **Quick actions:**
+  - Super admin: Invite user and New project.
+  - Client admin: New task and New project.
+- **"Needs a decision" strip** (super admin only, hidden when empty):
+  - Client deletion requests, with Approve and Decline.
+  - Clients without an admin, with Assign admin.
+- **Stat cards:** users / clients / active projects / overdue tasks / resolved / team members, depending on role; each opens the filtered page.
+- **Range switch:** 7d / 30d / 90d. It drives the "Tasks created vs resolved" chart and the resolved count, and is remembered per browser (`useLocalStorage`).
+- **Panels:**
+  - Project status donut (super admin) or project progress list (client admin).
+  - Upcoming deadlines, workload (open tasks by assignee) and activity.
 
-The dashboard acts as a summary view. Clicking on stats can drill down to the relevant filtered page (e.g., clicking a project status stat navigates to the Projects page filtered by that status).
+**MemberDashboard** (`USER`):
+- "Needs attention" tabs (Overdue / Today / This week) of your own tasks, with one-click resolve.
+- Your projects with progress.
+- Mini stats, "My week" (tasks due per day), and activity.
 
-**Layout:** Wrapped in the standard `AppLayout` (sidebar + header).
+All numbers come from real data: `allTasks` returns `createdAt` / `resolvedAt` for the charts.
 
----
+### Users (`/users`, SUPER_ADMIN)
 
-### Account (`/account`)
+- Role tabs and search.
+- Table showing role, client, projects, open tasks, last seen and status (Active / Locked / Invited).
+- Row checkboxes open a bulk bar: change role, unlock, remove. You can't select yourself, and switching tabs clears the selection.
+- **Invite person:** send an email invite, or set a temporary password. Choose a role; client admins also pick a client.
+- **Edit:** a person's details, plus resend the invite.
+- **Export:** CSV or JSON with chosen columns and a live preview.
 
-**Who sees it:** All authenticated users.
+### Clients (`/clients`, SUPER_ADMIN and CLIENT_ADMIN)
 
-**What it shows:** The logged-in user's own profile and preferences.
+- **Super admin:**
+  - Tabs: All / Needs attention / Delete requested.
+  - Table and detail panel with projects, progress and admin.
+  - Actions: create, edit, assign admin, approve deletion, decline deletion (with a message to the client admin), force delete (typed confirmation).
+- **Client admin:** sees their own client, can edit it and can "Request deletion".
 
-**Profile section:**
-- View: name, email, phone, date of birth, gender, role.
-- Edit: click "Edit" to open an inline form for name, phone, DOB, and gender.
-- Calls `updateProfile(data)` on save.
+### Projects (`/projects`) and Project detail (`/projects/:id`)
 
-**Preferences section:**
-- View and change theme (Light / Dark).
-- View and change language (English / Japanese / Korean).
-- Calls `updatePreference(data)` on change.
-
----
-
-### Users (`/users`)
-
-**Who sees it:** `SUPER_ADMIN` only.
-
-**What it shows:** A table of all users in the system, excluding the currently logged-in user and other SUPER_ADMINs.
-
-**Table columns:** Name, Email, Phone, Gender, Role, Date of Birth.
-
-**Features:**
-
-| Feature | How to Use |
-|---|---|
-| Search | Type in the search box to filter by name or email |
-| Role filter | Dropdown to show: All / Super Admins / Client Admins / Users |
-| View details | Click any row to open a slide-in details panel |
-| Promote to Admin | Click the "Promote" button — confirmation dialog appears, calls `promoteToAdmin(userId)` |
-| Delete user | Click the "Delete" button — confirmation dialog appears, calls `deleteUser(userId)` |
-
-**After promote:** Redux updates the user's role in-store. No re-fetch needed.
-
-**After delete:** Redux removes the user from the in-store list. No re-fetch needed.
-
----
-
-### Clients (`/clients`)
-
-**Who sees it:** `SUPER_ADMIN`, `CLIENT_ADMIN`.
-
-**What it shows:** A table of clients (companies).
-
-**Table columns:** Company Name, Email, Phone, Assigned Admin, Delete Request status.
-
-**Filters:**
-- Pending Deletion (shows only clients where `deleteRequest: true`)
-- Unassigned (shows only clients with no assigned admin)
-
-**SUPER_ADMIN features:**
-
-| Feature | Action |
-|---|---|
-| Create client | Click "Add Client" — form with name, email, phone, optional admin assignment |
-| Edit client | Click "Edit" on any row — updates name, email, phone |
-| Assign admin | Click "Assign Admin" — dropdown shows all CLIENT_ADMIN users who are not yet assigned to another client |
-| Request deletion | Flags the client (`deleteRequest: true`) — a CLIENT_ADMIN step, but SUPER_ADMIN can see the flag |
-| Force delete | Immediately deletes the client without requiring the flag |
-| Confirm delete | Deletes a client that was flagged by CLIENT_ADMIN |
-
-**CLIENT_ADMIN features:**
-
-| Feature | Action |
-|---|---|
-| View own client | Can see their assigned client's details |
-| Edit own client | Can update name, email, phone |
-| Request deletion | Calls `confirmDeleteClient(id)` — sets the `deleteRequest` flag for SUPER_ADMIN to action |
-
----
-
-### Projects (`/projects`)
-
-**Who sees it:** All authenticated users.
-
-**What it shows:** A table of projects visible to the current user (scoped by role).
-
-**Table columns:** Project Name, Status, Client, Team Size.
-
-**Status filter:** NOT_STARTED / IN_PROGRESS / COMPLETED (dropdown).
-
-**SUPER_ADMIN / CLIENT_ADMIN features:**
-
-| Feature | Action |
-|---|---|
-| Create project | Form: name, description, client (dropdown), status |
-| Edit project | Update name, description, status |
-| Delete project | Confirmation dialog |
-| Manage team | Open a "Team" panel — add USERs by name search, remove existing members |
-
-**USER features:** Read-only — can see their assigned projects but cannot create, edit, or delete.
-
-**Adding users to a project:**
-- Only users with the `USER` role appear in the team assignment dropdown.
-- Admins (`SUPER_ADMIN`, `CLIENT_ADMIN`) cannot be assigned to projects as team members.
-- Selecting a user and clicking "Add" calls `addUserToProject({ id: projectId, users: [userId] })`.
-
----
+- **Projects:** a grid of project cards (progress, team avatars, due date), with status tabs and search. Create and edit open the project form, which shows a live card preview.
+- **Project detail:**
+  - Header with status and due date.
+  - Progress and a burn-down chart, built from task `createdAt` / `resolvedAt`.
+  - Open / overdue / resolved counts, "Up next", tasks by status, and team management.
 
 ### Tasks (`/tasks`)
 
-**Who sees it:** All authenticated users.
+- **Board:** four status columns. Drag a card to change its status: admins can move any task, a `USER` only their own.
+- **List:** grouped by due date, with rows that expand to show sub-tasks.
+- **Filters:** admins can switch between All and Mine; a `USER` sees only their own tasks.
+- **Task sheet** (opened by clicking a task):
+  - Inline edit of title, priority, assignee and deadline; status buttons.
+  - Sub-tasks, with quick add (`!high @name ^fri` sets priority, assignee and due date).
+  - Comments.
+  - Changes save as you go.
+- Creating tasks is for admins only.
 
-**What it shows:** A two-section hierarchical view.
+### Analytics (`/analytics`, SUPER_ADMIN and CLIENT_ADMIN)
 
-**Section 1 — Tasks:**
-1. Select a project from the dropdown at the top.
-2. The table below shows all tasks for that project.
-3. Click a task row to expand and show its sub-tasks (in Section 2).
+`AnalyticsDashboard`:
+- Stat cards; project-status and user-role donuts; client health; largest teams.
+- Clicking through opens the filtered page.
+- Not yet restyled.
 
-**Task table columns:** Title, Priority, Status, Assignee, Due Date, Created By.
+### Account (`/account`)
 
-**Section 2 — Sub-Tasks:**
-1. Select a task to load its sub-tasks.
-2. The sub-task table shows below.
-
-**Sub-task table columns:** Title, Priority, Status, Assignee, Due Date.
-
-**SUPER_ADMIN / CLIENT_ADMIN features (Tasks):**
-
-| Feature | Action |
-|---|---|
-| Create task | Title, assignee (USER role only), deadline, priority |
-| Edit task | Update title, assignee, deadline, priority |
-| Update status | Dropdown: NEW / IN_PROGRESS / RESOLVED / REOPENED |
-| Delete task | Confirmation dialog — also deletes all sub-tasks |
-| Search | Filter task list by title |
-
-**USER features (Tasks):** Can update status and details of tasks assigned to them only.
-
-**SUPER_ADMIN / CLIENT_ADMIN / USER features (Sub-Tasks):**
-
-| Feature | Who | Notes |
-|---|---|---|
-| Create sub-task | SUPER_ADMIN, CLIENT_ADMIN, USER (if on parent task) | Title, assignee, deadline, priority |
-| Edit sub-task | SUPER_ADMIN, CLIENT_ADMIN, assigned USER | |
-| Update status | SUPER_ADMIN, CLIENT_ADMIN, assigned USER | |
-| Delete sub-task | SUPER_ADMIN, CLIENT_ADMIN, creating USER | Users can only delete their own |
-
-> **Assignee restriction:** Only users with the `USER` role can be assigned to tasks and sub-tasks. Admin users do not appear in the assignee dropdown.
-
----
-
-### Kanban (`/kanban`)
-
-**Who sees it:** `USER` only.
-
-**What it shows:** A Kanban board — four columns representing the four task statuses.
-
-| Column | Status |
-|---|---|
-| To Do | NEW |
-| In Progress | IN_PROGRESS |
-| Done | RESOLVED |
-| Reopened | REOPENED |
-
-**How it works:**
-1. Select a project from the dropdown at the top.
-2. Tasks assigned to the logged-in user for that project appear as cards.
-3. Each card shows: title, priority badge, assignee name, due date.
-4. Click a card to open a detail sheet on the right.
-5. The sheet shows full task details and buttons to change status.
-6. Clicking a status button calls `updateTaskStatus(id, status)` immediately.
-
-**Design intent:** The Kanban board is the USER's primary workspace — a simple, visual way to see what they need to work on and move tasks forward without navigating through tables.
-
----
-
-### Analytics (`/analytics`)
-
-**Who sees it:** `SUPER_ADMIN`, `CLIENT_ADMIN`.
-
-**What it shows:** Charts and statistics giving a management overview of the work happening in the system — project statuses, task completion rates, priority breakdowns.
-
-Rendered via the `AnalyticsDashboard` component using donut charts, stat cards, and progress bars.
+- Profile (view and edit) and Preferences (theme, language). Not yet restyled.
+- The account menu (avatar in the sidebar) also lets you edit your profile, change your password and sign out.
 
 ---
 
 ## 8. Components — Shared Building Blocks
 
-These components are reused across multiple pages.
+### Layout (`Screens/Components/`)
 
----
-
-### AppLayout
-
-**File:** `Screens/Components/AppLayout.tsx`
-
-**Purpose:** The standard page wrapper. Every protected page uses this.
-
-**What it renders:**
-- `AppSidebar` on the left (collapsible).
-- `SiteHeader` at the top.
-- The page's children content in the main area.
-
-**Usage:**
-```tsx
-<AppLayout>
-  <YourPageContent />
-</AppLayout>
-```
-
----
-
-### AppSidebar
-
-**File:** `Screens/Components/app-sidebar.tsx`
-
-**Purpose:** The left navigation panel.
-
-**What it renders:**
-- ProjoMan logo at the top, linking to `/dashboard`.
-- Navigation links — different links are shown based on the logged-in user's role.
-- The current user's name and avatar at the bottom, with a menu for profile and logout.
+| Component | What it does |
+|---|---|
+| `AppLayout` | Signed-in shell: `FormsProvider` → `SidebarProvider` → sidebar + `SiteHeader` + `PageTransition` around the route's content |
+| `app-sidebar` | Logo, role-based nav with a sliding pill (`NAV_BY_ROLE`), collapses to a 64 px icon rail; loads profile + preference |
+| `site-header` | Sidebar toggle, title / breadcrumb (`Projects › name` on detail pages), search field that opens ⌘K, theme toggle, bell with unread dot; shows a toast for each live notification |
+| `nav-user` | Avatar + name at the bottom of the sidebar; opens the account menu |
 
 **Navigation per role:**
 
@@ -555,64 +357,40 @@ These components are reused across multiple pages.
 |---|---|
 | `SUPER_ADMIN` | Dashboard, Users, Clients, Projects, Tasks |
 | `CLIENT_ADMIN` | Dashboard, Clients, Projects, Tasks, Analytics |
-| `USER` | Dashboard, Projects, Tasks, Kanban |
+| `USER` | Dashboard, Projects, Tasks |
 
-**On mount:** Fetches the user's profile and preference (to apply the correct theme).
+### Design system (`components/pm/`)
 
----
+| Component | Use |
+|---|---|
+| `PageHead` | Eyebrow, title, subtitle and actions at the top of a screen |
+| `Panel` | Card with title, subtitle and actions; staggered entrance |
+| `StatCard` | Figure with label, delta and sparkline |
+| `StatusBadge` / `Tag` | Status, priority and role pills (the only way to render them) |
+| `Avatar` / `AvatarGroup` | Initials avatars with a stable colour per person |
+| `Progress`, `CountUp`, `Check`, `EmptyState`, `SearchBox`, `Segmented`, `AnimatedTabs` | Small controls |
+| `TaskRow` | One task line (status toggle, title, sub-task chip, assignee, due) + `isOverdue`, `dueBucket` |
+| `ProjectCard` | Project card + `projectProgress(tasks, projectId)` |
+| `table.tsx` | Shared table class names and `TableCard` |
+| `charts/` | `AreaChart`, `Donut`, `Sparkline` and `smoothPath()` (control points clamped so curves never overshoot) |
 
-### SiteHeader
+### Forms (`components/forms/`)
 
-**File:** `Screens/Components/site-header.tsx`
+| File | Contents |
+|---|---|
+| `forms-context.ts` | `FormKind` list, `useForms()` → `openForm(kind, data)`, `FormProps` |
+| `form-host.tsx` | `FormsProvider`: renders the one open form (with exit animation), the toaster, and ⌘K / Ctrl+K → search |
+| `form-kit.tsx` | `useForm(init, rules)` (validation on blur — empty fields aren't flagged until submit), `FormModal` (portal, Esc, ⌘↵ submits, shake on invalid), `Field`, `Section`, `Grid2`, `Note`, `FormError`, `FormFoot`, `SubmitButton`, `Switch`, `Pills`, `Chip` |
+| `combo.tsx`, `date-picker.tsx` | Searchable single/multi select and a date picker |
+| `toaster.tsx` | `toast()`, `toastError()`, `scheduleDelete()` — deletes wait 5 s with **Undo** (sent immediately if the page is closed) |
+| `use-app-data.ts` | `useAppData()` — the shared data every form and screen reads |
+| `task-actions.ts` | `useTaskActions()` — resolve / reopen with optimistic store update |
+| Forms | `task-form`, `project-form` (+ `TeamForm`), `user-form` (+ `RoleCards`), `user-bulk-forms` (role, unlock, export), `client-form` (+ `DeclineRequestForm`), `danger-form` (typed-confirmation deletes), `account-forms` (account menu, change password, log update) |
+| Sheets | `task-sheet` (`SideSheet`, `TaskSheet`), `notifications-sheet`, `command-palette` |
 
-**Purpose:** The top bar displayed on every page.
+### Auth forms
 
-**What it renders:**
-- The current page's title (determined from the URL path).
-- A notification bell icon with a badge showing unread count.
-- A notification popover (opens on bell click) that shows all notifications.
-
-**Notification popover features:**
-- List of all notifications with an unread indicator (blue dot).
-- "Mark as read" button per notification.
-- "Mark all as read" button.
-- "Delete" button per notification.
-- "Clear all" button.
-- Time-ago display ("2 minutes ago", "yesterday", etc.).
-
-**Polling:** Notifications are re-fetched every **30 seconds** via `setInterval` to catch any notifications that arrived when the WebSocket subscription was not active.
-
----
-
-### ProfileContent
-
-**File:** `Screens/Components/profile-content.tsx`
-
-**Purpose:** Renders the profile edit form on the Account page.
-
-**What it contains:**
-- View mode: displays current name, email, phone, DOB, gender, role.
-- Edit mode: inline form to update name, phone, DOB, and gender.
-- Preference section: theme toggle (Light / Dark) and language selector.
-
----
-
-### User Auth Form
-
-**File:** `Screens/ui-Components/user-auth-form.tsx`
-
-**Purpose:** The actual login and registration forms (used by the Login and Register pages).
-
-**`UserAuthLoginForm`:**
-- Email and password inputs.
-- Forgot password link.
-- Disabled social login buttons (Github, Google, Apple — placeholders for future implementation).
-- On submit: dispatches to Redux → API call → stores token → navigates to `/dashboard`.
-
-**`UserAuthRegisterForm`:**
-- All registration fields (see Register page above).
-- Date picker using a calendar popover (Radix UI).
-- Password confirmation with real-time match validation.
+`Screens/ui-Components/user-auth-form.tsx`: `UserAuthLoginForm` and `UserAuthRegisterForm` (React Query `useMutation`, legacy input hooks).
 
 ---
 
@@ -720,6 +498,7 @@ Redux Store
 - `removeUserFromStore(id)` — removes a user after deletion.
 - `promoteUserInStore(id)` — updates a user's role to `CLIENT_ADMIN` after promotion.
 - `setUsersRoleFilter(role)` — sets the active role filter for the Users page.
+- `upsertUsersInStore(users)` — merges created or updated users (used by invite, edit and bulk actions).
 
 ---
 
@@ -774,13 +553,14 @@ Redux Store
 ```typescript
 {
   loading: boolean,
+  loaded: boolean,          // true once the first fetch finished ("no tasks" vs "not loaded")
   tasks: Task[],
   selectedProjectId: string | null,
   error: string | null
 }
 ```
 
-**Thunk: `fetchTasks(projectId)`** — caches per project ID. If tasks are already loaded for the same project, skips the API call.
+**Thunk: `fetchAllTasks(force?)`** — loads every task the user can see (`allTasks`) once; `force` reloads. `updateTaskInStore` merges fields, so a partial update keeps the rest.
 
 **Store updaters:**
 - `addTaskToStore(task)`
@@ -835,239 +615,257 @@ After a mutation (create, update, delete), the result is applied directly to the
 
 ## 10. API Layer — Talking to the Backend
 
-All API files follow the same pattern:
+### HTTP: `gql()`
 
-1. Import the relevant GraphQL query/mutation string.
-2. Send an Axios POST to `/graphql` with `{ query, variables }`.
-3. Return the data from the response.
-
-**Axios interceptor** (configured once, applies to all requests):
+Every API module calls one helper, `gql<T>(query, variables)`, in `src/api/graphql.ts`:
 
 ```typescript
-// Automatically adds the JWT token to every request
-axiosInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+export async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    // POST { query, variables } with Authorization: Bearer <token>
+    // → returns response.data.data
+    // → throws Error(first GraphQL error message), also for 401 / 429 replies
+}
 ```
+
+API functions are one-liners on top of it:
+
+```typescript
+export const getTasks = async (projectId: string): Promise<Task[]> =>
+    (await gql<{ tasks: Task[] }>(GET_TASKS, { projectId })).tasks;
+```
+
+Don't create new Axios instances. Callers show `error.message` (forms put it in `FormError` or a toast).
+
+### WebSocket: `ws.ts`
+
+| Export | What it does |
+|---|---|
+| `wsClient()` | The shared `graphql-ws` client. Lazy (the socket opens with the first subscription); sends `connectionParams.authorization` read at connect time; retries forever with back-off **except** after close code 4403 (bad token) |
+| `subscribe(query, onData, variables?)` | Starts a subscription; returns an unsubscribe function |
+| `onReconnect(listener)` | Called after the socket reconnects, so stores can refetch what they missed |
+| `closeSocket()` | Disposes the client (called by `logout()`) |
 
 ### API Functions Reference
 
-#### authApi.ts
+| File | Functions |
+|---|---|
+| `authApi.ts` | `loginUser`, `registerUser`, `forgotPassword`, `resetPassword` |
+| `userApi.ts` | `getProfile`, `getUsers`, `updateProfile`, `deleteUser`, `promoteToAdmin`, `createUser`, `updateUser`, `changeUserRoles`, `unlockUsers`, `resendInvite`, `deleteUsers`, `changePassword` |
+| `clientApi.ts` | `getClients`, `getClient`, `addClient`, `updateClient`, `confirmDeleteClient`, `deleteClientBySuperAdmin`, `forceDeleteClient`, `assignAdmin`, `declineClientDeletion` |
+| `projectApi.ts` | `getProjects`, `addProject`, `updateProject`, `deleteProject`, `addUserToProject`, `removeUserFromProject` |
+| `taskApi.ts` | `getTasks`, `getAllTasks`, `createTask`, `updateTask` (`null` clears deadline / assignee), `updateTaskStatus`, `deleteTask` |
+| `subTaskApi.ts` | `getSubTasks`, `createSubTask`, `updateSubTask`, `updateSubTaskStatus`, `deleteSubTask` |
+| `commentApi.ts` | `getTaskComments`, `addTaskComment`, `deleteComment` |
+| `notificationApi.ts` | `getNotifications`, `markAsRead`, `markAllAsRead`, `markNotificationsRead`, `deleteNotification`, `deleteAllNotifications`, `subscribeToNotifications` |
+| `preferenceApi.ts` | `getPreference`, `updatePreference` |
 
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `loginUser` | `LoginMutation` | `{ email, password }` | `{ token }` |
-| `registerUser` | `RegisterMutation` | `{ name, email, number, dob, password, gender }` | `{ name }` |
-| `forgotPassword` | `ForgotPasswordMutation` | `{ email }` | `{ message }` |
-| `resetPassword` | `ResetPasswordMutation` | `{ token, password }` | `{ message }` |
-
-#### userApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getProfile` | `GetProfile` query | — | `User` |
-| `getUsers` | `GetUsers` query | — | `User[]` |
-| `updateProfile` | `UpdateProfile` mutation | `{ name?, number?, dob?, gender? }` | `User` |
-| `deleteUser` | `DeleteUser` mutation | `{ userId }` | void |
-| `promoteToAdmin` | `PromoteToAdmin` mutation | `{ userId }` | `User` |
-
-#### clientApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getClients` | `GetClients` query | — | `Client[]` |
-| `addClient` | `AddClient` mutation | `{ name, email, phone, assignedAdmin? }` | `Client` |
-| `updateClient` | `UpdateClient` mutation | `{ id, name, email, phone, assignedAdmin? }` | `Client` |
-| `confirmDeleteClient` | `ConfirmDeleteClient` mutation | `{ id }` | void |
-| `deleteClientBySuperAdmin` | `DeleteClientBySuperAdmin` mutation | `{ id }` | void |
-| `forceDeleteClient` | `ForceDeleteClient` mutation | `{ id }` | void |
-| `assignAdmin` | `AssignAdmin` mutation | `{ id, assignedAdmin }` | `Client` |
-
-#### projectApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getProjects` | `GetProjects` query | — | `Project[]` |
-| `addProject` | `CreateProject` mutation | `{ name, clientId, description?, status? }` | `Project` |
-| `updateProject` | `UpdateProject` mutation | `{ id, name?, description?, status? }` | `Project` |
-| `deleteProject` | `DeleteProject` mutation | `{ id }` | void |
-| `addUserToProject` | `AddUserToProject` mutation | `{ id, users: string[] }` | `Project` |
-| `removeUserFromProject` | `RemoveUserFromProject` mutation | `{ id, users: string[] }` | `Project` |
-
-#### taskApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getTasks` | `GetTasks` query | `{ projectId }` | `Task[]` |
-| `createTask` | `CreateTask` mutation | `{ title, projectId, assignedTo?, deadline?, priority? }` | `Task` |
-| `updateTask` | `UpdateTask` mutation | `{ id, title?, assignedTo?, deadline?, priority? }` | `Task` |
-| `updateTaskStatus` | `UpdateTaskStatus` mutation | `{ id, status }` | `Task` |
-| `deleteTask` | `DeleteTask` mutation | `{ id }` | void |
-
-#### subTaskApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getSubTasks` | `GetSubTasks` query | `{ taskId }` | `SubTask[]` |
-| `createSubTask` | `CreateSubTask` mutation | `{ title, taskId, assignedTo?, deadline?, priority? }` | `SubTask` |
-| `updateSubTask` | `UpdateSubTask` mutation | `{ id, title?, assignedTo?, deadline?, priority? }` | `SubTask` |
-| `updateSubTaskStatus` | `UpdateSubTaskStatus` mutation | `{ id, status }` | `SubTask` |
-| `deleteSubTask` | `DeleteSubTask` mutation | `{ id }` | void |
-
-#### notificationApi.ts
-
-| Function | Operation | Args | Returns |
-|---|---|---|---|
-| `getNotifications` | `GetNotifications` query | — | `Notification[]` |
-| `markAsRead` | `MarkAsRead` mutation | `{ id }` | void |
-| `markAllAsRead` | `MarkAllAsRead` mutation | — | void |
-| `deleteNotification` | `DeleteNotification` mutation | `{ id }` | void |
-| `deleteAllNotifications` | `DeleteAllNotifications` mutation | — | void |
+`frontend/Routes.md` maps each function to its GraphQL operation name.
 
 ---
 
 ## 11. GraphQL Queries Reference
 
-The raw GraphQL strings sent to the backend.
+The raw GraphQL strings in `src/queries/`, reproduced from the source (including the notification subscription). Copy changes here from the source; the source wins if they differ.
 
-### Profile
+### `queries/clientQueries.ts`
 
-```graphql
-query GetProfile {
-  profile {
-    name
-    email
-    number
-    dob
-    gender
-    role
-  }
-}
-```
-
-### Users
-
-```graphql
-query GetUsers {
-  users {
-    id
-    name
-    email
-    number
-    dob
-    gender
-    role
-  }
-}
-```
-
-### Clients
+**`GET_CLIENTS`**
 
 ```graphql
 query GetClients {
-  clients {
-    id
-    name
-    email
-    phone
-    deleteRequest
-    assignedAdmin {
-      id
-      name
-      email
+    clients {
+        id
+        name
+        email
+        phone
+        deleteRequest
+        assignedAdmin {
+            id
+            name
+            email
+        }
     }
-  }
 }
 ```
 
-### Projects
+**`GET_CLIENT`**
 
 ```graphql
-query GetProjects {
-  projects {
-    id
-    name
-    description
-    status
-    client {
-      id
-      name
+query GetClient($id: ID!) {
+    client(id: $id) {
+        id
+        name
+        email
+        phone
+        deleteRequest
+        assignedAdmin {
+            id
+            name
+            email
+        }
     }
-    user {
-      id
-      name
-      email
-    }
-  }
 }
 ```
 
-### Tasks
+### `queries/notificationQueries.ts`
 
-```graphql
-query GetTasks($projectId: ID!) {
-  tasks(projectId: $projectId) {
-    id
-    title
-    priority
-    deadline
-    currentStatus
-    assignedTo {
-      id
-      name
-      email
-    }
-    createdBy {
-      id
-      name
-      email
-    }
-    project {
-      id
-      name
-    }
-  }
-}
-```
-
-### Sub-Tasks
-
-```graphql
-query GetSubTasks($taskId: ID!) {
-  subTasks(taskId: $taskId) {
-    id
-    title
-    priority
-    deadline
-    currentStatus
-    assignedTo {
-      id
-      name
-      email
-    }
-    createdBy {
-      id
-      name
-      email
-    }
-  }
-}
-```
-
-### Notifications
+**`GET_NOTIFICATIONS`**
 
 ```graphql
 query GetNotifications {
-  notifications {
+    notifications {
+        id
+        content
+        status
+        createdAt
+    }
+}
+```
+
+**`NOTIFICATION_CREATED`**
+
+```graphql
+subscription OnNotificationCreated {
+    notificationCreated {
+        id
+        content
+        status
+        createdAt
+    }
+}
+```
+
+### `queries/preferenceQueries.ts`
+
+**`GET_PREFERENCE`**
+
+```graphql
+query GetPreference {
+  preference {
     id
-    content
-    status
-    createdAt
+    theme
+    language
   }
+}
+```
+
+### `queries/projectQueries.ts`
+
+**`GET_PROJECTS`**
+
+```graphql
+query GetProjects {
+    projects {
+        ${PROJECT_FIELDS}
+    }
+}
+```
+
+**`GET_PROJECT`**
+
+```graphql
+query GetProject($id: ID!) {
+    project(id: $id) {
+        ${PROJECT_FIELDS}
+    }
+}
+```
+
+### `queries/subTaskQueries.ts`
+
+**`GET_SUB_TASKS`**
+
+```graphql
+query GetSubTasks($taskId: ID!) {
+    subTasks(taskId: $taskId) {
+        ${SUB_TASK_FIELDS}
+    }
+}
+```
+
+### `queries/taskQueries.ts`
+
+**`GET_TASKS`**
+
+```graphql
+query GetTasks($projectId: ID!) {
+    tasks(projectId: $projectId) {
+        ${TASK_FIELDS}
+    }
+}
+```
+
+**`GET_TASK`**
+
+```graphql
+query GetTask($id: ID!) {
+    task(id: $id) {
+        ${TASK_FIELDS}
+    }
+}
+```
+
+**`GET_ALL_TASKS`**
+
+```graphql
+query GetAllTasks {
+    allTasks {
+        ${TASK_FIELDS}
+    }
+}
+```
+
+### `queries/userQueries.ts`
+
+**`PROFILE`**
+
+```graphql
+query GetProfile {
+    profile{
+        id,
+        name,
+        email,
+        number,
+        dob,
+        gender,
+        role
+    }
+}
+```
+
+**`GET_USERS`**
+
+```graphql
+query GetUsers {
+    users {
+        id
+        name
+        email
+        number
+        dob
+        gender
+        role
+        status
+        lastLoginAt
+    }
+}
+```
+
+**`GET_USER`**
+
+```graphql
+query GetUser($id: ID!) {
+    user(id: $id) {
+        id
+        name
+        email
+        number
+        dob
+        gender
+        role
+        status
+        lastLoginAt
+    }
 }
 ```
 
@@ -1075,7 +873,11 @@ query GetNotifications {
 
 ## 12. GraphQL Mutations Reference
 
-### Login
+The raw GraphQL strings in `src/mutations/`, reproduced from the source. GraphQL enum values are sent as-is (`"IN_PROGRESS"`, `"URGENT"`); only `Gender` on register uses `M` / `F` / `O`.
+
+### `mutations/authMutations.ts`
+
+**`LOGIN`**
 
 ```graphql
 mutation LoginMutation($email: String!, $password: String!) {
@@ -1085,7 +887,7 @@ mutation LoginMutation($email: String!, $password: String!) {
 }
 ```
 
-### Register
+**`REGISTER`**
 
 ```graphql
 mutation RegisterMutation(
@@ -1094,7 +896,7 @@ mutation RegisterMutation(
   $number: String!
   $dob: String!
   $password: String!
-  $gender: String!
+  $gender: Gender!
 ) {
   register(
     name: $name
@@ -1109,180 +911,592 @@ mutation RegisterMutation(
 }
 ```
 
-### Forgot Password
+### `mutations/clientMutations.ts`
+
+**`ADD_CLIENT`**
 
 ```graphql
-mutation ForgotPasswordMutation($email: String!) {
-  forgotPassword(email: $email) {
-    message
-  }
+mutation AddClient($name: String!, $email: String, $phone: String, $assignedAdmin: ID) {
+    addClient(name: $name, email: $email, phone: $phone, assignedAdmin: $assignedAdmin) {
+        ${CLIENT_FIELDS}
+    }
 }
 ```
 
-### Reset Password
+**`UPDATE_CLIENT`**
 
 ```graphql
-mutation ResetPasswordMutation($token: String!, $password: String!) {
-  resetPassword(token: $token, password: $password) {
-    message
-  }
+mutation UpdateClient($id: ID!, $name: String!, $email: String, $phone: String, $assignedAdmin: ID) {
+    updateClient(id: $id, name: $name, email: $email, phone: $phone, assignedAdmin: $assignedAdmin) {
+        ${CLIENT_FIELDS}
+    }
 }
 ```
 
-### Update Profile
+**`CONFIRM_DELETE_CLIENT`**
 
 ```graphql
-mutation UpdateProfile($name: String, $number: String, $dob: String, $gender: String) {
-  updateProfile(name: $name, number: $number, dob: $dob, gender: $gender) {
+mutation ConfirmDeleteClient($id: ID!) {
+    confirmDeleteClient(id: $id) {
+        id
+    }
+}
+```
+
+**`DELETE_CLIENT_BY_SUPER_ADMIN`**
+
+```graphql
+mutation DeleteClientBySuperAdmin($id: ID!) {
+    deleteClientBySuperAdmin(id: $id) {
+        id
+    }
+}
+```
+
+**`FORCE_DELETE_CLIENT`**
+
+```graphql
+mutation ForceDeleteClient($id: ID!) {
+    forceDeleteClient(id: $id) {
+        id
+    }
+}
+```
+
+**`ASSIGN_ADMIN`**
+
+```graphql
+mutation AssignAdmin($id: ID!, $assignedAdmin: ID!) {
+    assignAdmin(id: $id, assignedAdmin: $assignedAdmin) {
+        ${CLIENT_FIELDS}
+    }
+}
+```
+
+**`DECLINE_CLIENT_DELETION`**
+
+```graphql
+mutation DeclineClientDeletion($id: ID!, $message: String) {
+    declineClientDeletion(id: $id, message: $message) {
+        ${CLIENT_FIELDS}
+    }
+}
+```
+
+### `mutations/commentMutations.ts`
+
+**`GET_TASK_COMMENTS`**
+
+```graphql
+query GetTaskComments($taskId: ID!) {
+    taskComments(taskId: $taskId) {
+        ${COMMENT_FIELDS}
+    }
+}
+```
+
+**`ADD_TASK_COMMENT`**
+
+```graphql
+mutation AddTaskComment($taskId: ID!, $content: String!) {
+    addTaskComment(taskId: $taskId, content: $content) {
+        ${COMMENT_FIELDS}
+    }
+}
+```
+
+**`DELETE_COMMENT`**
+
+```graphql
+mutation DeleteComment($id: ID!) {
+    deleteComment(id: $id) {
+        id
+    }
+}
+```
+
+### `mutations/notificationMutations.ts`
+
+**`MARK_AS_READ`**
+
+```graphql
+mutation MarkAsRead($id: ID!) {
+    markAsRead(id: $id) {
+        id
+        status
+    }
+}
+```
+
+**`MARK_ALL_AS_READ`**
+
+```graphql
+mutation MarkAllAsRead {
+    markAllAsRead {
+        id
+        status
+    }
+}
+```
+
+**`DELETE_NOTIFICATION`**
+
+```graphql
+mutation DeleteNotification($id: ID!) {
+    deleteNotification(id: $id) {
+        id
+    }
+}
+```
+
+**`DELETE_ALL_NOTIFICATIONS`**
+
+```graphql
+mutation DeleteAllNotifications {
+    deleteAllNotifications {
+        id
+    }
+}
+```
+
+**`MARK_NOTIFICATIONS_READ`**
+
+```graphql
+mutation MarkNotificationsRead($ids: [ID!]!) {
+    markNotificationsRead(ids: $ids) {
+        id
+        status
+    }
+}
+```
+
+### `mutations/preferenceMutations.ts`
+
+**`UPDATE_PREFERENCE`**
+
+```graphql
+mutation UpdatePreference($theme: Theme, $language: Language) {
+  updatePreference(theme: $theme, language: $language) {
     id
-    name
-    email
-    number
-    dob
-    gender
-    role
+    theme
+    language
   }
 }
 ```
 
-### Create Task
+### `mutations/projectMutations.ts`
+
+**`ADD_PROJECT`**
 
 ```graphql
-mutation CreateTask(
-  $title: String!
-  $projectId: ID!
-  $assignedTo: ID
-  $deadline: String
-  $priority: TaskPriority
-) {
-  createTask(
-    title: $title
-    projectId: $projectId
-    assignedTo: $assignedTo
-    deadline: $deadline
-    priority: $priority
-  ) {
-    id
-    title
-    priority
-    deadline
-    currentStatus
-    assignedTo { id name email }
-    createdBy { id name email }
-    project { id name }
-  }
+mutation CreateProject($name: String!, $description: String, $clientId: ID!, $status: ProjectStatus, $dueDate: String) {
+    addProject(name: $name, description: $description, clientId: $clientId, status: $status, dueDate: $dueDate) {
+        ${PROJECT_FIELDS}
+    }
 }
 ```
 
-### Update Task Status
+**`UPDATE_PROJECT`**
+
+```graphql
+mutation UpdateProject($id: ID!, $name: String, $description: String, $status: UpdateProjectStatus, $dueDate: String) {
+    updateProject(id: $id, name: $name, description: $description, status: $status, dueDate: $dueDate) {
+        ${PROJECT_FIELDS}
+    }
+}
+```
+
+**`DELETE_PROJECT`**
+
+```graphql
+mutation DeleteProject($id: ID!) {
+    deleteProject(id: $id) {
+        id
+    }
+}
+```
+
+**`ADD_USER_TO_PROJECT`**
+
+```graphql
+mutation AddUserToProject($id: ID!, $users: [ID]!) {
+    addUserToProject(id: $id, users: $users) {
+        ${PROJECT_FIELDS}
+    }
+}
+```
+
+**`REMOVE_USER_FROM_PROJECT`**
+
+```graphql
+mutation RemoveUserFromProject($id: ID!, $users: [ID]!) {
+    removeUserFromProject(id: $id, users: $users) {
+        ${PROJECT_FIELDS}
+    }
+}
+```
+
+### `mutations/subTaskMutations.ts`
+
+**`CREATE_SUB_TASK`**
+
+```graphql
+mutation CreateSubTask($title: String!, $taskId: ID!, $assignedTo: ID, $deadline: String, $priority: SubTaskPriority) {
+    createSubTask(title: $title, taskId: $taskId, assignedTo: $assignedTo, deadline: $deadline, priority: $priority) {
+        ${SUB_TASK_FIELDS}
+    }
+}
+```
+
+**`UPDATE_SUB_TASK`**
+
+```graphql
+mutation UpdateSubTask($id: ID!, $title: String, $assignedTo: ID, $deadline: String, $priority: UpdateSubTaskPriority) {
+    updateSubTask(id: $id, title: $title, assignedTo: $assignedTo, deadline: $deadline, priority: $priority) {
+        ${SUB_TASK_FIELDS}
+    }
+}
+```
+
+**`UPDATE_SUB_TASK_STATUS`**
+
+```graphql
+mutation UpdateSubTaskStatus($id: ID!, $status: SubTaskStatus!) {
+    updateSubTaskStatus(id: $id, status: $status) {
+        ${SUB_TASK_FIELDS}
+    }
+}
+```
+
+**`DELETE_SUB_TASK`**
+
+```graphql
+mutation DeleteSubTask($id: ID!) {
+    deleteSubTask(id: $id) {
+        id
+    }
+}
+```
+
+### `mutations/taskMutations.ts`
+
+**`CREATE_TASK`**
+
+```graphql
+mutation CreateTask($title: String!, $projectId: ID!, $assignedTo: ID, $deadline: String, $priority: TaskPriority, $currentStatus: NewTaskStatus) {
+    createTask(title: $title, projectId: $projectId, assignedTo: $assignedTo, deadline: $deadline, priority: $priority, currentStatus: $currentStatus) {
+        ${TASK_FIELDS}
+    }
+}
+```
+
+**`UPDATE_TASK`**
+
+```graphql
+mutation UpdateTask($id: ID!, $title: String, $assignedTo: ID, $deadline: String, $priority: UpdateTaskPriority) {
+    updateTask(id: $id, title: $title, assignedTo: $assignedTo, deadline: $deadline, priority: $priority) {
+        ${TASK_FIELDS}
+    }
+}
+```
+
+**`UPDATE_TASK_STATUS`**
 
 ```graphql
 mutation UpdateTaskStatus($id: ID!, $status: TaskStatus!) {
-  updateTaskStatus(id: $id, status: $status) {
-    id
-    currentStatus
-  }
+    updateTaskStatus(id: $id, status: $status) {
+        ${TASK_FIELDS}
+    }
 }
 ```
 
-*(Other mutations follow the same pattern — see the `/mutations` directory for the complete strings.)*
+**`DELETE_TASK`**
+
+```graphql
+mutation DeleteTask($id: ID!) {
+    deleteTask(id: $id) {
+        id
+    }
+}
+```
+
+### `mutations/userMutations.ts`
+
+**`UPDATE_PROFILE`**
+
+```graphql
+mutation UpdateProfile($name: String, $number: String, $dob: String, $gender: String) {
+    updateProfile(name: $name, number: $number, dob: $dob, gender: $gender) {
+        id
+        name
+        email
+        number
+        dob
+        gender
+        role
+    }
+}
+```
+
+**`FORGOT_PASSWORD`**
+
+```graphql
+mutation ForgotPasswordMutation($email: String!) {
+    forgotPassword(email: $email) {
+        message
+    }
+}
+```
+
+**`RESET_PASSWORD`**
+
+```graphql
+mutation ResetPasswordMutation($token: String!, $password: String!) {
+    resetPassword(token: $token, password: $password) {
+        message
+    }
+}
+```
+
+**`DELETE_USER`**
+
+```graphql
+mutation DeleteUser($userId: ID!) {
+    deleteUser(userId: $userId) {
+        id
+    }
+}
+```
+
+**`PROMOTE_TO_ADMIN`**
+
+```graphql
+mutation PromoteToAdmin($userId: ID!) {
+    promoteToAdmin(userId: $userId) {
+        id
+        role
+    }
+}
+```
+
+**`CREATE_USER`**
+
+```graphql
+mutation CreateUser($name: String!, $email: String!, $number: String!, $gender: String!, $dob: String, $role: String, $clientId: ID, $mode: String, $password: String) {
+    createUser(name: $name, email: $email, number: $number, gender: $gender, dob: $dob, role: $role, clientId: $clientId, mode: $mode, password: $password) {
+        ${USER_FIELDS}
+    }
+}
+```
+
+**`UPDATE_USER`**
+
+```graphql
+mutation UpdateUser($id: ID!, $name: String, $email: String, $number: String, $gender: String, $dob: String) {
+    updateUser(id: $id, name: $name, email: $email, number: $number, gender: $gender, dob: $dob) {
+        ${USER_FIELDS}
+    }
+}
+```
+
+**`CHANGE_USER_ROLES`**
+
+```graphql
+mutation ChangeUserRoles($ids: [ID!]!, $role: String!, $clientId: ID) {
+    changeUserRoles(ids: $ids, role: $role, clientId: $clientId) {
+        ${USER_FIELDS}
+    }
+}
+```
+
+**`UNLOCK_USERS`**
+
+```graphql
+mutation UnlockUsers($ids: [ID!]!) {
+    unlockUsers(ids: $ids) {
+        ${USER_FIELDS}
+    }
+}
+```
+
+**`RESEND_INVITE`**
+
+```graphql
+mutation ResendInvite($id: ID!) {
+    resendInvite(id: $id) {
+        message
+    }
+}
+```
+
+**`DELETE_USERS`**
+
+```graphql
+mutation DeleteUsers($ids: [ID!]!) {
+    deleteUsers(ids: $ids) {
+        id
+    }
+}
+```
+
+**`CHANGE_PASSWORD`**
+
+```graphql
+mutation ChangePassword($currentPassword: String!, $newPassword: String!) {
+    changePassword(currentPassword: $currentPassword, newPassword: $newPassword) {
+        message
+    }
+}
+```
 
 ---
 
 ## 13. TypeScript Types
 
-All entities have TypeScript interfaces defined in `src/types/`.
+API payload shapes live in `src/types/`. They are reproduced here from the source files.
 
-### User
+### `types/authTypes.ts`
 
 ```typescript
-interface User {
+export interface Login {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  login: {
+    token: string;
+  };
+}
+
+export interface Register {
+  email: string;
+  name: string;
+  number: string;
+  gender: string;
+  dob: string;
+  password: string;
+}
+```
+
+### `types/clientTypes.ts`
+
+```typescript
+import type { User } from './userTypes';
+
+export interface Client {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    deleteRequest: boolean;
+    assignedAdmin: Pick<User, 'id' | 'name' | 'email'> | null;
+}
+```
+
+### `types/commentTypes.ts`
+
+```typescript
+import type { User } from './userTypes';
+
+export interface Comment {
+    id: string;
+    content: string;
+    taskId: string;
+    subTaskId: string | null;
+    author: Pick<User, 'id' | 'name' | 'email'> | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+}
+```
+
+### `types/genericTypes.ts`
+
+```typescript
+export interface GraphqlResponse<T> {
+  data: T;
+  errors?: { message: string }[];
+}
+```
+
+### `types/projectTypes.ts`
+
+```typescript
+import type { Client } from './clientTypes';
+import type { User } from './userTypes';
+
+export interface Project {
+    id: string;
+    name: string;
+    description: string;
+    status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+    dueDate?: string | null;
+    client: Pick<Client, 'id' | 'name'> | null;
+    user: Pick<User, 'id' | 'name' | 'email'>[];
+}
+```
+
+### `types/subTaskTypes.ts`
+
+```typescript
+import type { User } from './userTypes';
+import type { Priority, TaskStatus } from './taskTypes';
+
+export interface SubTask {
+    id: string;
+    title: string;
+    priority: Priority;
+    deadline: string | null;
+    currentStatus: TaskStatus;
+    assignedTo: Pick<User, 'id' | 'name' | 'email'> | null;
+    createdBy: Pick<User, 'id' | 'name' | 'email'> | null;
+}
+```
+
+### `types/taskTypes.ts`
+
+```typescript
+import type { User } from './userTypes';
+
+export type Priority = 'URGENT' | 'HIGH' | 'NORMAL' | 'BACKLOG';
+export type TaskStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'REOPENED';
+
+export interface Task {
+    id: string;
+    title: string;
+    priority: Priority;
+    deadline: string | null;
+    currentStatus: TaskStatus;
+    assignedTo: Pick<User, 'id' | 'name' | 'email'> | null;
+    createdBy: Pick<User, 'id' | 'name' | 'email'> | null;
+    project: { id: string; name: string } | null;
+    createdAt?: string | null;
+    resolvedAt?: string | null;
+    subTaskStats?: { done: number; total: number };
+}
+```
+
+### `types/userTypes.ts`
+
+```typescript
+export type Role = 'SUPER_ADMIN' | 'CLIENT_ADMIN' | 'USER';
+export type AccountStatus = 'ACTIVE' | 'LOCKED' | 'INVITED';
+
+export interface User {
   id: string;
   name: string;
   email: string;
   number: string;
-  gender: string;       // "MALE" | "FEMALE" | "OTHERS"
-  dob: string;
-  role: string;         // "SUPER_ADMIN" | "CLIENT_ADMIN" | "USER"
+  gender: string;
+  dob: string | null;
+  role: Role;
+  /** Derived on the server: LOCKED after repeated failed sign-ins, INVITED until first sign-in */
+  status?: AccountStatus;
+  lastLoginAt?: string | null;
 }
-```
 
-### Client
-
-```typescript
-interface Client {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  deleteRequest: boolean;
-  assignedAdmin: {
-    id: string;
-    name: string;
-    email: string;
-  } | null;
-}
-```
-
-### Project
-
-```typescript
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
-  client: { id: string; name: string } | null;
-  user: { id: string; name: string; email: string }[];
-}
-```
-
-### Task
-
-```typescript
-interface Task {
-  id: string;
-  title: string;
-  priority: 'URGENT' | 'HIGH' | 'NORMAL' | 'BACKLOG';
-  deadline: string;
-  currentStatus: 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'REOPENED';
-  assignedTo: { id: string; name: string; email: string } | null;
-  createdBy: { id: string; name: string; email: string } | null;
-  project: { id: string; name: string } | null;
-}
-```
-
-### SubTask
-
-```typescript
-interface SubTask {
-  id: string;
-  title: string;
-  priority: 'URGENT' | 'HIGH' | 'NORMAL' | 'BACKLOG';
-  deadline: string;
-  currentStatus: 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'REOPENED';
-  assignedTo: { id: string; name: string; email: string } | null;
-  createdBy: { id: string; name: string; email: string } | null;
-}
-```
-
-### Notification
-
-```typescript
-interface Notification {
-  id: string;
-  content: string;
-  status: 'READ' | 'UNREAD';
-  createdAt: string;
-}
-```
-
-### Generic API Response
-
-```typescript
-interface GraphqlResponse<T> {
-  data?: T;
-  errors?: Array<{ message: string }>;
+export interface ProfileResponse {
+  profile: User;
 }
 ```
 
@@ -1313,12 +1527,15 @@ Show error   Store token in Redux + localStorage
 
 On every app load (including page refresh), the Redux store reads the token from `localStorage` and validates it is not expired. If valid, the user is considered logged in and `ProtectedRoute` allows access to protected pages.
 
-On every API request, the Axios interceptor attaches the token. The backend verifies it on every call — no separate session management is needed.
+On every API request, `gql()` attaches the token; the WebSocket sends it when it connects. The backend verifies it on every call — no separate session management is needed.
 
 ### Logout
 
 ```
-User clicks "Logout" in the sidebar user menu
+User clicks "Sign out" in the account menu
+         │
+         ▼
+logout() removes the token and calls closeSocket()
          │
          ▼
 Redux dispatches LOGOUT action
@@ -1330,9 +1547,6 @@ Root reducer receives LOGOUT — passes undefined to all slices
 All slices reset to initial state (token, profile, all lists cleared)
          │
          ▼
-localStorage.removeItem('token')
-         │
-         ▼
 React Router redirects to "/"
 ```
 
@@ -1340,73 +1554,123 @@ React Router redirects to "/"
 
 ## 15. Notification System
 
-### How the Frontend Receives Notifications
+### One live store
 
-The backend can push notifications via a GraphQL Subscription (WebSocket). If the WebSocket is not connected (or the browser tab is in the background), the frontend polls as a fallback.
+`src/hooks/use-notifications.ts` holds a single module-level list, shared by the header bell and the notifications sheet:
 
-**Polling setup** (in `SiteHeader`):
-
-```typescript
-useEffect(() => {
-  fetchNotifications();                      // Fetch immediately on mount
-
-  const interval = setInterval(() => {
-    fetchNotifications();                    // Re-fetch every 30 seconds
-  }, 30000);
-
-  return () => clearInterval(interval);      // Clean up on unmount
-}, []);
+```
+first subscriber (header mounts)
+   ├─► getNotifications()                    load once, newest first
+   ├─► subscribeToNotifications(cb)          WebSocket: notificationCreated
+   │       └─ cb(n): skip if already in list → prepend → tell onNewNotification listeners
+   ├─► onReconnect(refreshNotifications)     reload after the socket comes back
+   └─► setInterval(refresh, 5 min)           safety net only
+last unsubscribe (sign-out) → stop everything, clear the list
 ```
 
-### Notification Bell Badge
+- `useNotifications()` returns the list through `useSyncExternalStore`.
+- **The subscribe function must stay a stable module-level function.** An inline function re-subscribes on every render. That once caused a request loop of about 125k fetches, and `use-notifications.test.tsx` guards against it.
+- `site-header.tsx` listens with `onNewNotification` and shows a toast with an **Open** action that opens the sheet.
+- The bell shows a dot when anything is unread.
 
-The unread count is derived by filtering the notifications array for items with `status: 'UNREAD'`. The badge shows this count. If count is 0, no badge is shown.
+### Reading and clearing
 
-### Interacting with Notifications
+All actions update the list optimistically and roll back (with an error toast) if the server call fails.
 
-All notification interactions are immediate — they call the API and then update the local state:
-
-| Action | API Call | Local State Update |
+| Action | API call | Requests |
 |---|---|---|
-| Click notification | `markAsRead(id)` | Sets `status: 'READ'` for that item |
-| "Mark all read" | `markAllAsRead()` | Sets all to `status: 'READ'` |
-| Delete one | `deleteNotification(id)` | Removes item from list |
-| "Clear all" | `deleteAllNotifications()` | Empties list |
+| Opening the sheet | — | none (nothing is marked read) |
+| Click an unread notification | `markAsRead(id)` | 1 |
+| "Mark all read" | `markAllAsRead()` | 1, whatever the count |
+| Delete one | `deleteNotification(id)` | 1 |
+| "Clear all" | `deleteAllNotifications()` | 1 |
+
+`markNotificationsRead(ids)` is also available for marking a selection in one request.
+
+### Server side, briefly
+
+On the server, `notify()` queues the notification in BullMQ. The worker saves it and publishes it, and the server pushes it down this WebSocket. If Redis is down, the API saves it directly. See `docs/BACKEND.md` §14.
 
 ---
 
 ## 16. Theming and Styling
 
-### Tailwind CSS
+### Design tokens
 
-All styling is done with Tailwind utility classes applied directly in JSX. There are no separate `.css` files for individual components.
+`src/index.css` defines every colour as raw OKLCH channels on `:root`, with a second set under `.dark`:
+- surfaces: `background`, `card`, `surface-2`, `surface-3`;
+- text: `foreground`, `muted-foreground`, `subtle-foreground`;
+- `border`, `border-strong`, `primary`, `accent`;
+- charts: `chart-1` to `chart-4`.
 
-### Dark Mode
+`tailwind.config.js` maps them to classes such as `bg-card`, `text-muted-foreground` and `border-border-strong`. Screens use tokens and `components/pm/`, never raw palette colours or hex. That way both themes always work.
 
-Tailwind's `class` strategy is used for dark mode. When the `dark` class is present on the `<html>` element, Tailwind applies all `dark:` prefixed classes.
+- **Tones:** ad-hoc status colours use `.tone-<hue> .tone-bg .tone-fg` (e.g. `tone-red`). These classes are deliberately outside `@layer`, because their names are built dynamically.
+- **Numbers:** wrap figures in `.num` (Geist Mono, tabular) so columns line up.
+- **Motion:** keyframes for entrances, sheets, toasts and form shake live in `tailwind.config.js`; `motion` handles sliding pills and page transitions.
 
-**Toggling dark mode:**
+### Dark mode
 
-Updating the user's theme preference via `updatePreference({ theme: 'DARK' })` should trigger adding the `dark` class to the document root. The preference is stored in the backend and retrieved on login.
+Tailwind's `class` strategy: the `dark` class on `<html>` switches every token.
+- `useTheme()` (`components/hooks/use-theme.ts`) applies the saved Preference.
+- Toggling switches immediately, saves to the server in the background, and caches the choice in `localStorage['pm-theme']` as a **plain string** (`"DARK"` / `"LIGHT"`).
+- The inline script in `index.html` reads that value before React loads, so a reload never flashes the wrong theme.
 
-### CSS Variables
+### shadcn/ui
 
-Base colours are defined as CSS custom properties (CSS variables) in the global stylesheet. Tailwind classes reference these variables via the `@theme` configuration, ensuring consistent colours across light and dark modes.
+Accessible Radix-based primitives in `src/components/ui/` (Button, Dialog, Sheet, Popover, Select, Tooltip, Sidebar, …). They are owned by the project and restyled to the design. `Button` has the design's variants.
 
-### shadcn/ui Components
+---
 
-shadcn/ui is a collection of copy-pasted, customisable Radix UI components. They live in `src/components/ui/`. These are fully owned by the project — unlike a library, they can be modified directly:
+## 17. Reusable Hooks
 
-| Component | Used In |
+All in `src/hooks/`. `index.ts` re-exports them, along with `useTheme`, `useIsMobile`, `useForm`, `useForms`, `useAppData` and `useTaskActions`.
+
+| Hook | What it does | Used by |
+|---|---|---|
+| `useAsyncAction()` | `{ run, busy, error, setError }`. `run(fn)` ignores calls while one is in flight, so ⌘↵ plus a click can't double-submit. It stores the thrown message in `error` | Bulk role / unlock, decline request, manage team, request deletion |
+| `useLocalStorage(key, initial, { raw?, isValid? })` | `useState` remembered in localStorage. Survives blocked storage. `raw` stores plain strings; `isValid` rejects stale values. `readStorage` / `writeStorage` are the non-hook versions | Dashboard range, theme cache |
+| `useSelection(ids)` | Checkbox selection: `selected`, `isSelected`, `toggle`, `toggleAll`, `clear`, `allSelected`, `mixed`. Ids that leave the list drop out | Users table |
+| `useOutside(ref, fn, active)` | Calls the latest `fn` on a mouse press outside `ref` | Combo, date picker |
+| `useSubscription(query, onData, { variables?, enabled? })` | Keeps a GraphQL subscription open while mounted; resubscribes only when variables change | Ready for live task updates |
+| `useNotifications()` / `onNewNotification()` | The live notification store (§15) | Header, notifications sheet |
+
+`task-sheet.tsx` keeps its own save helper on purpose. It counts overlapping saves (several fields can save at once), and `useAsyncAction`'s single-flight guard would drop one of them.
+
+---
+
+## 18. Testing
+
+```bash
+npm test                                         # watch mode
+npm run test:run                                 # single run
+npx vitest run src/hooks/use-selection.test.ts   # one file
+```
+
+**Setup:**
+- Vitest 0.34 (pinned for Vite 4), jsdom, Testing Library (React 14, user-event 14) and `@testing-library/jest-dom`.
+- Globals (`describe`, `it`, `vi`) are on.
+- `src/test/setup.ts` stubs `IntersectionObserver`, `ResizeObserver` and `matchMedia`, and cleans up the DOM, localStorage and mocks after each test.
+
+**Test first:**
+- Write the test, see it fail for the expected reason, then implement.
+- For existing code without tests, add the test and prove it can fail (break the code on purpose, see red, restore).
+
+**Conventions:**
+- `🟢` marks happy paths, `🔴` marks failure and edge cases.
+- Mock at the API boundary (`@/api/*Api`, `@/api/ws`) with `vi.mock`.
+- Mock `react-redux` with a fake state object.
+- For module-level stores, call `vi.resetModules()` and import dynamically per test. Import anything that must share a module instance with the component (e.g. `FormsContext`) dynamically as well.
+
+**What's covered** (82 tests in 15 files):
+
+| Area | Files |
 |---|---|
-| `Button` | Everywhere |
-| `Dialog` | Confirmation dialogs (delete, promote) |
-| `Sheet` | Slide-in detail panels |
-| `Popover` | Notification bell, date picker |
-| `Select` | Dropdowns (status, role, client, assignee) |
-| `Input` | All text input fields |
-| `Table` | Users, Clients, Projects, Tasks pages |
-| `Badge` | Priority and status indicators |
-| `Separator` | Visual dividers |
-| `Calendar` | Date of birth and deadline picker |
-| `Tooltip` | Action button hints |
+| Hooks | `use-async-action`, `use-local-storage`, `use-selection`, `use-outside`, `use-subscription`, `use-notifications`, `use-theme` |
+| API | `graphql` (error mapping), `ws` (URL, token, 4403, reconnect, dispose) |
+| Notifications | `notifications-sheet` (click / bulk mark-read, rollback, live push), `site-header` (unread count, toast) |
+| Forms | `async-forms` — five forms: save once, Saving…, errors, no double submit |
+| Screens | `Users` (selection, filter, tabs), `AdminDashboard` (range remembered) |
+| Auth | `authActions` (logout closes the socket) |
+
+Most screens and the Tasks board don't have tests yet.

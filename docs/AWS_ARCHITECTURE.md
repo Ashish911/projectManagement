@@ -2,6 +2,13 @@
 
 > Production infrastructure for the ProjoMan GraphQL API. Designed around **defence in depth**, **high availability** (multi-AZ), and **operational consistency** (managed services, immutable deployments).
 
+| | |
+|---|---|
+| **Audience** | Platform / DevOps |
+| **Last reviewed** | 2026-10-06 |
+| **Status** | Proposed target architecture. Not yet provisioned; the app currently runs with Docker Compose |
+| **Related** | [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) · [BACKEND.md §18 Docker](BACKEND.md#18-docker) · [docs index](README.md) |
+
 ---
 
 ## Table of Contents
@@ -55,7 +62,7 @@ flowchart TD
 
     Internet --> R53 --> WAF --> ALB
     ALB --> API1 & API2
-    API1 & API2 --> Worker
+    API1 & API2 -. "jobs via Redis" .-> Worker
     API1 & API2 --> DocDB & Redis
     Worker --> DocDB & Redis
     ECS --> CW
@@ -90,7 +97,7 @@ Internet
 - Latency-based routing available if multi-region is introduced later
 
 > [!TIP]
-> When a React frontend is added, split at the DNS level: `api.projoman.com` → ALB, `app.projoman.com` → CloudFront + S3. The ALB never serves static assets.
+> The React frontend (`frontend/`) is a static build: serve it from CloudFront + S3 and split at the DNS level, with `api.projoman.com` → ALB and `app.projoman.com` → CloudFront. The ALB never serves static assets. Build the frontend with `VITE_API_URL=https://api.projoman.com/graphql`; `VITE_WS_URL` defaults to the same host over `wss://`.
 
 ---
 
@@ -125,7 +132,7 @@ WAF logs stream to CloudWatch Logs for audit and tuning.
 | WebSocket support | ✅ | ✅ |
 | TLS termination | ✅ | ✅ |
 
-ALB is correct here because all traffic is HTTP/HTTPS, WAF requires ALB, and ALB supports WebSocket upgrades for when GraphQL Subscriptions are added.
+ALB is correct here because all traffic is HTTP/HTTPS, WAF requires ALB, and ALB supports the WebSocket upgrades used by the `notificationCreated` GraphQL subscription (`graphql-ws` on the same `/graphql` path).
 
 **Configuration:**
 
@@ -134,7 +141,8 @@ ALB is correct here because all traffic is HTTP/HTTPS, WAF requires ALB, and ALB
 | HTTPS listener | `:443` → ECS target group |
 | HTTP listener | `:80` → 301 redirect to HTTPS |
 | TLS certificate | AWS Certificate Manager (auto-renewed) |
-| Idle timeout | 60 s (extend when subscriptions added) |
+| Idle timeout | 300 s or more, so idle notification sockets aren't cut. `graphql-ws` keep-alive pings keep them open, and the client reconnects (and refetches) if one drops |
+| Stickiness | Not required. Any API task can serve a socket, because notifications fan out through Redis PubSub to every task |
 | Access logs | S3 bucket, 90-day retention |
 
 ---
@@ -149,6 +157,8 @@ No instance management, no patching, no capacity planning. A new Docker image = 
 |---|:---:|:---:|:---:|:---:|
 | `api` (Apollo Server) | 2 – 10 | 0.5 | 1 GB | Private |
 | `notification-worker` | 1 – 3 | 0.25 | 512 MB | Private |
+
+The worker runs `node worker/notification.worker.js` (command override on the API image, or the `projoman/worker` image), with the same `MONGO_URI` and Redis settings as the API. It must be running in every environment, or queued notifications wait until it starts. The API saves notifications directly only when Redis itself is unreachable. On SIGTERM (ECS stop or deploy) it finishes its in-flight jobs before exiting.
 
 **Auto Scaling:**
 
@@ -213,7 +223,7 @@ One cluster serves two purposes:
 | Application cache (`cache.get/set`) | `entity:{id}`, `entity:all` | 5 min |
 | BullMQ notification queue | `bull:notifications:*` | Job-controlled |
 
-Keys are namespaced and do not collide.
+Keys are namespaced and do not collide. Redis PubSub (`NOTIFICATION_CREATED:{userId}`) also runs on this cluster, to push notifications to whichever API task holds the user's WebSocket.
 
 **Configuration:**
 
@@ -225,6 +235,10 @@ Keys are namespaced and do not collide.
 | Multi-AZ | Enabled with automatic failover |
 | Encryption | In transit (TLS) + at rest |
 | AUTH token | Stored in Secrets Manager |
+| Eviction policy | `noeviction`. BullMQ must never lose job keys; the 5-minute TTL keeps cache keys small. If memory pressure grows, move the cache to its own cluster with `allkeys-lru` |
+
+> [!WARNING]
+> **Cluster mode needs code changes.** The app currently connects with a single-node ioredis client (`config/redis.js`). With cluster mode enabled you need an `ioredis` `Cluster` client, and BullMQ needs a hash-tagged prefix (e.g. `prefix: "{bull}"`) so a queue's keys share one slot. Alternatively, use cluster mode **disabled** (one primary plus replicas), which works with the current code.
 
 ---
 

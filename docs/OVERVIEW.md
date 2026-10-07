@@ -2,6 +2,12 @@
 
 > A plain-English guide to what this system is, why it was built, and how it all fits together.
 
+| | |
+|---|---|
+| **Audience** | Product, stakeholders, new joiners |
+| **Last reviewed** | 2026-10-06 |
+| **Related** | [BACKEND.md](BACKEND.md) · [FRONTEND.md](FRONTEND.md) · [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) · [docs index](README.md) |
+
 ---
 
 ## Table of Contents
@@ -52,9 +58,9 @@ There are three types of people in the system, called **roles**:
 
 | Role | Who They Are | What They Can Do |
 |---|---|---|
-| **Super Admin** | The system owner / platform operator | Manages everything — creates companies (clients), promotes managers, has full access to all data |
-| **Client Admin** | A manager at a company | Manages their company's projects, tasks, and team members |
-| **User** | A regular team member | Works on tasks and sub-tasks they have been assigned to |
+| **Super Admin** | The system owner / platform operator | Manages everything — creates companies (clients), invites and manages people (roles, unlocking, removal), approves or declines requests to delete a company, has full access to all data |
+| **Client Admin** | A manager at a company | Manages their company's projects, tasks, and team members; can ask for their company to be deleted |
+| **User** | A regular team member | Works on tasks and sub-tasks they have been assigned to, and comments on work in their projects |
 
 Each person only ever sees and does what their role allows. A regular user cannot see another company's data. A manager cannot touch another company's settings. This is enforced at the server — not just hidden in the interface.
 
@@ -110,7 +116,7 @@ This section explains every major technology in plain language, why it was chose
 **What it is:** GraphQL is a way to ask a server for exactly the data you need — no more, no less. Traditional APIs (called REST) give you a fixed set of data per request. GraphQL lets the client say "I only want the project name and status" and the server returns just that.
 
 **Why we use it:**
-- **Efficient data fetching.** The frontend never over-fetches or under-fetches. For example, on the Kanban board we only ask for `id, title, currentStatus, assignedTo` — we do not waste bandwidth fetching descriptions or dates we do not need on that page.
+- **Efficient data fetching.** The frontend never over-fetches or under-fetches. For example, the task board asks only for the fields its cards show (`id, title, currentStatus, priority, deadline, assignedTo`) — we do not waste bandwidth fetching descriptions or dates we do not need on that page.
 - **Self-documenting.** GraphQL has a built-in schema that describes every query, mutation, and data type. Developers can explore the API without needing a separate manual.
 - **Single endpoint.** Everything goes to `/graphql`. There is no need to manage dozens of REST routes.
 - **Strong typing.** Every field in the schema has a defined type, which catches mistakes early.
@@ -171,7 +177,7 @@ This section explains every major technology in plain language, why it was chose
 
 **What it is:** BullMQ is a library that lets you queue background jobs — tasks that should run asynchronously, after the request has already returned a response to the user.
 
-> **Status:** the queue and worker are built but not wired in yet. Services currently save notifications directly and publish them over Redis PubSub.
+> **Status:** in use. Every notification goes through the queue. A separate worker process saves it and pushes it to the user's browser. If Redis can't be reached, the API saves the notification itself so nothing is lost.
 
 **Why we use it:**
 - Creating and delivering notifications happens in the background. The API responds immediately and the notification delivery happens separately, so the user never waits for it.
@@ -227,8 +233,29 @@ This section explains every major technology in plain language, why it was chose
 **Why we use it:**
 - "Works on my machine" is eliminated. The container runs the same in development, on CI, and in production.
 - We have separate profiles: `dev` (with hot-reload and observability tools) and `prod` (optimised multi-stage build).
-- The notification worker has its own container definition, isolated from the main API (commented out until the queue is wired in).
+- The notification worker runs in its own container (`worker` in dev, `worker-prod` in prod), separate from the main API.
 - The `dev` profile includes Prometheus and Grafana, with alert rules and a dashboard set up automatically.
+
+---
+
+### 5.11 Tailwind CSS and the design system — How the App Looks
+
+**What it is:** Tailwind is a CSS toolkit where you style elements with small utility classes (`p-4`, `rounded-lg`) instead of writing separate stylesheets.
+
+**Why we use it:**
+- The interface was redesigned from a single design file, and its colours, spacing and type are stored as *tokens* (named colours such as "card" or "muted text"). Light and dark themes are two sets of the same tokens, so every screen gets dark mode for free.
+- Shared building blocks (panels, stat cards, status badges, charts) live in one folder, so screens look consistent.
+- Charts are small hand-written SVG components rather than a heavy chart library.
+
+---
+
+### 5.12 Automated Tests — Proving It Works
+
+**What it is:** Code that checks the application's code. The server uses Jest (386 tests); the frontend uses Vitest with Testing Library (82 tests), which renders components the way a user would see them.
+
+**Why we use it:**
+- Every rule that matters — who may see what, who gets notified, that "Mark all read" is one request — has a test, so a change that breaks it is caught before release.
+- New features are written **test first**: the test is written and seen failing, then the code is written to make it pass.
 
 ---
 
@@ -316,10 +343,13 @@ When something important happens — a task is assigned to you, your task is res
 **How it works:**
 
 1. A service method (e.g., `createTask`) calls `NotificationService.notify(userId, message)`.
-2. A notification record is saved to MongoDB with `status: UNREAD`.
-3. The notification is published to a Redis PubSub channel specific to that user: `NOTIFICATION_CREATED:{userId}`.
-4. If the user's browser is connected via a GraphQL Subscription (WebSocket), the notification is delivered **instantly**.
-5. If the browser is not connected via WebSocket, the frontend polls every 30 seconds and picks up the notification on the next poll.
+2. That adds a job to the BullMQ `notifications` queue and returns straight away. If Redis can't be reached within 3 seconds, the API saves the notification directly instead.
+3. The notification worker picks up the job and saves the notification to MongoDB with `status: UNREAD`. A failed job is retried up to 3 times.
+4. The worker publishes it to a Redis PubSub channel for that user: `NOTIFICATION_CREATED:{userId}`.
+5. The user's browser is subscribed over a WebSocket (it signs in with the user's token when it connects), so the notification appears **instantly**: the bell dot lights up and a toast offers "Open".
+6. If the connection drops, the browser reconnects and refreshes the list. A slow 5-minute check also catches anything missed.
+
+**Reading notifications:** clicking one marks just that notification read; "Mark all read" marks everything in one request. Opening the list doesn't mark anything.
 
 **Notification Events:**
 
@@ -337,6 +367,9 @@ When something important happens — a task is assigned to you, your task is res
 | A sub-task you are on was resolved | Creator and assignee |
 | A sub-task you created was reopened | You |
 | A sub-task assigned to you was deleted | You |
+| Someone commented on a task or sub-task | Its assignee and creator (not the person who commented) |
+| Your role was changed | You |
+| Your request to delete your company was declined | You (with the Super Admin's message) |
 
 ---
 
@@ -366,16 +399,15 @@ A production system needs to be observable — you need to know it is healthy, h
 
 ## 10. What Is Still Being Built
 
-The system is functionally complete and production-ready for its core use case. The following features are planned:
+The system is functionally complete for its core use case. Recently finished: comments, the notification queue with live delivery, user administration and the redesigned interface (see `CHANGELOG.md`). Still to do:
 
 | Feature | Status | Notes |
 |---|---|---|
-| **Comment System** | In progress | The database model is built. The service, resolver, and frontend UI are next |
-| **Notification Queue** | In progress | BullMQ queue and worker exist; services don't use them yet |
+| **Comments in the UI** | In progress | Task comments are in the task sheet; sub-task comments and editing comments are next (the API supports both) |
 | **CI/CD Pipeline** | Planned | GitHub Actions for automated testing and Docker deployment |
 | **AWS Deployment** | Planned | Architecture designed (see `docs/AWS_ARCHITECTURE.md`) |
-| **E2E Tests** | Planned | Full integration tests with Playwright for the frontend |
-| **Real-time Task Updates** | Planned | Replace 30-second polling with GraphQL Subscriptions (infrastructure already exists) |
+| **E2E Tests** | Planned | Browser tests with Playwright (unit and component tests already exist: Jest on the server, Vitest on the frontend) |
+| **Real-time Task Updates** | Planned | Notifications are already live; task and project lists still refresh on load. The WebSocket client and a `useSubscription` hook are ready for it |
 | **Mobile Improvements** | Planned | Better responsive layouts for small screens |
 
 ---

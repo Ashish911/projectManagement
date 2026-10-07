@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Structure
 
-This is a full-stack project management application. Active development is in `server/` (Node.js GraphQL API). The `frontend/` directory also exists but is not covered here.
+This is a full-stack project management application: `server/` (Node.js GraphQL API, covered here) and `frontend/` (React + Vite; see `frontend/CLAUDE.md`). Longer docs live in `docs/`, and `CHANGELOG.md` records what changed.
 
 All commands below are run from inside `server/`.
 
@@ -23,12 +23,20 @@ npm test
 # Run a single test file
 npm run test:auth
 npm run test:client
+npm run test:comment
 npm run test:task
 npm run test:project
 npm run test:subTask
 npm run test:notification
 npm run test:preference
+npm run test:userAdmin
+npm run test:indexes
+npm run test:graphqlTypes
 npm run test:server
+
+# Apply schema indexes to the database (dev / prod); add `-- --dry-run` to preview
+npm run db:indexes
+npm run db:indexes:prod
 
 # Run a specific test by name (no dedicated script — use jest directly)
 node --experimental-vm-modules node_modules/.bin/jest tests/client.test.js --verbose -t "should add a client"
@@ -47,7 +55,7 @@ Validated at startup via Zod in `config/env.js`. The server will exit on missing
 | `MONGO_URI` | required |
 | `SECRET_KEY` | min 32 characters |
 
-Optional, not validated by Zod: `REDIS_HOST` (default `localhost`), `REDIS_PORT` (`6379`), `REDIS_PASSWORD`, `CORS_ORIGIN` (`*`), `METRICS_PORT` (`9090`), `BIRD_API_KEY` (password-reset email; without it no email is sent), `EMAIL_FROM` (`onboarding@messagebird.dev`), `APP_URL` (frontend base for reset links, `http://localhost:4000`).
+Optional, not validated by Zod: `REDIS_HOST` (default `localhost`), `REDIS_PORT` (`6379`), `REDIS_PASSWORD`, `CORS_ORIGIN` (`*`), `METRICS_PORT` (`9090`), `BIRD_API_KEY` (password-reset and invite emails; without it no email is sent), `EMAIL_FROM` (`onboarding@messagebird.dev`), `APP_URL` (frontend base for reset and invite links, `http://localhost:4000`).
 
 Dev env is `.env.local`, prod env is `.env.prod`. Both are git-ignored (`.env*`); `server/.env.example` is the committed template. Never commit real env files.
 
@@ -75,9 +83,9 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 | Role | Key capabilities |
 |---|---|
-| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; `assignAdmin` (assign CLIENT_ADMIN to a client); `promoteToAdmin` (USER → CLIENT_ADMIN); `deleteUser`; queries all users |
-| `CLIENT_ADMIN` | Manages their assigned client and its projects/tasks; queries users in their client's projects |
-| `USER` | Access to assigned projects only; can update own tasks |
+| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; user admin (`createUser` invite/password, `updateUser`, `changeUserRoles`, `unlockUsers`, `resendInvite`, `deleteUser`/`deleteUsers`); `assignAdmin`; `promoteToAdmin`; approves or `declineClientDeletion`; queries all users |
+| `CLIENT_ADMIN` | Manages their assigned client and its projects/tasks; queries users in their client's projects; requests client deletion (`confirmDeleteClient`); can delete any comment in those projects |
+| `USER` | Access to assigned projects only; can update own tasks; can comment on tasks/subtasks in those projects |
 
 **Layered architecture.**
 - `graphql/resolvers/` — thin, delegate immediately to services
@@ -89,9 +97,13 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 **Field naming.** The Mongoose `Project` model field is `assignedUsers` (plural). Services, resolvers, and tests must all use `assignedUsers` — never the singular `assignedUser`. The GraphQL field exposed to API consumers is named `user` (in `graphql/types/project.type.js`).
 
+**Indexes.** Declare every index in the Mongoose schema (`index` / `unique`, or `Schema.index()`) with a comment naming the query it serves — never in startup code. `autoIndex` is on outside production; in production run `npm run db:indexes:prod` (`scripts/sync-indexes.js`, wraps `syncIndexes`) on each deploy. For optional unique fields use a partial index with `{ field: { $gt: "" } }` (not `$type`, which equality queries can't use). Add a case to `tests/indexes.test.js` for each new index.
+
 **GraphQL type resolvers.** When returning Mongoose query results from a `resolve()` function, always use `async/await` — never return a raw Mongoose Query object. Returning a Query (a thenable) causes GraphQL's executor to call `.then()` on it, which can re-execute the query and throw `MongooseError: Query was already executed`.
 
-**Notifications.** `NotificationService.notify()` saves the notification to MongoDB and publishes it via Redis PubSub for the `notificationCreated` subscription. It does not use the BullMQ queue yet: `queues/notification.queue.js` and `worker/notification.worker.js` exist, but nothing adds jobs. In tests, mock `../services/notification.service.js` directly.
+**Notifications.** `NotificationService.notify(userId, content)` adds a job to the BullMQ `notifications` queue (`queues/notification.queue.js`, created lazily by `getNotificationQueue()`; 3 attempts with exponential back-off). The worker process (`worker/notification.worker.js`, `processNotificationJob`) calls `NotificationService.deliver()`, which saves to MongoDB and publishes via Redis PubSub to the user's `notificationCreated` subscription. If the queue can't be reached within 3s (Redis down), `notify` calls `deliver()` directly so nothing is lost. `markAllAsRead` and `markNotificationsRead(ids)` are single `updateMany` writes scoped to the caller. WebSocket connections are authenticated once in `onConnect`; a bad token closes with 4403. In other services' tests, mock `../services/notification.service.js` directly; in `notification.test.js`, mock `../queues/notification.queue.js`.
+
+**Comments.** `CommentService` (`services/comment.service.js`) gates every comment operation on project membership: a `USER` in `assignedUsers`, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`. A sub-task comment stores both `subTaskId` and its parent `taskId`, so `taskComments` filters out comments that have a `subTaskId`. Deleting a task or sub-task also deletes its comments.
 
 **Error handling.** Custom error classes in `errors/` extend `AppError`. Throw these in services; Apollo's `formatError` maps them to structured GraphQL responses with `extensions.code` and `extensions.statusCode`.
 
@@ -111,14 +123,16 @@ Each test suite clears mocks in `beforeEach(() => jest.clearAllMocks())`.
 
 Test names use `🟢` for happy paths and `🔴` for failure/rejection cases.
 
+**Test first.** Write or change the test before the code, run it and see it fail for the expected reason, then implement until it passes. For code that already exists without a test, add the test and prove it can fail (temporarily break the code, see red, restore). Run the full suite before finishing.
+
 ### Docker
 
 `docker-compose.yml` has two profiles: `dev` and `prod`.
 
-- **dev**: app (nodemon, ports 8000 + 9090) + redis + prometheus (port 9091) + grafana (port 3001)
-- **prod**: app-prod (multi-stage build) + redis
+- **dev**: app (nodemon, ports 8000 + 9090) + worker + redis + prometheus (port 9091) + grafana (port 3001)
+- **prod**: app-prod (multi-stage build) + worker-prod + redis
 
-A `worker` service for `worker/notification.worker.js` is defined but commented out, since nothing enqueues notification jobs yet. Redis persists RDB snapshots to the `redis-data` volume.
+The notification worker runs as its own container: `worker` (dev, nodemon) and `worker-prod` (prod). If it is down, jobs wait in Redis and are delivered when it is back. Redis persists RDB snapshots to the `redis-data` volume.
 
 ### Observability
 
