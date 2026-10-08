@@ -119,6 +119,7 @@ export const ProjectService = {
       description: data.description,
       status: data.status || "NOT_STARTED",
       clientId: data.clientId,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
     });
 
     logger.info(
@@ -167,6 +168,8 @@ export const ProjectService = {
       name: data.name,
       description: data.description,
       status: data.status,
+      // undefined leaves the date alone; null or "" clears it
+      ...(data.dueDate !== undefined && { dueDate: data.dueDate ? new Date(data.dueDate) : null }),
     });
 
     logger.info(

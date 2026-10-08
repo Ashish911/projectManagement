@@ -9,12 +9,12 @@ import { NotificationService } from "./notification.service.js";
 import {
   addClientSchema,
   assignAdminSchema,
+  declineClientDeletionSchema,
   idSchema,
   updateClientSchema,
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { createLogger } from "../config/logger.js";
-import { notificationQueue } from "../queues/notification.queue.js";
 
 /** Business logic and role checks for clients. */
 export const ClientService = {
@@ -116,14 +116,16 @@ export const ClientService = {
       );
     }
 
-    const existingClient = await ClientRepo.findByEmail(data.email);
-
-    if (existingClient)
-      throw new ConflictError("Client with this email already exists");
+    // Email is optional; only check uniqueness when one is given
+    if (data.email) {
+      const existingClient = await ClientRepo.findByEmail(data.email);
+      if (existingClient)
+        throw new ConflictError("Client with this email already exists");
+    }
 
     // If an admin is supplied, it must be an unassigned CLIENT_ADMIN
     if (data.assignedAdmin != null) {
-      const clientUser = await UserRepo.findById(data.user?.id);
+      const clientUser = await UserRepo.findById(data.assignedAdmin);
 
       if (clientUser) {
         if (clientUser.role != "CLIENT_ADMIN")
@@ -131,7 +133,7 @@ export const ClientService = {
             "Current role does not have the permission to become admin for this client.",
           );
 
-        const user = await ClientRepo.findByUser(clientUser.id);
+        const user = await ClientRepo.findByAssignedAdmin(clientUser.id);
 
         if (user)
           throw new ConflictError("User is already assigned to a client.");
@@ -142,6 +144,9 @@ export const ClientService = {
 
     const client = await ClientRepo.create({
       ...data,
+      // Optional contact fields: store nothing rather than an empty string
+      email: data.email || undefined,
+      phone: data.phone || undefined,
     });
 
     logger.info(
@@ -170,11 +175,14 @@ export const ClientService = {
     const { user } = context;
     const logger = createLogger(context);
 
-    // Only a CLIENT_ADMIN can request deletion of a client
+    // Only a CLIENT_ADMIN can request deletion, and only of their own client
     if (user.role == "CLIENT_ADMIN") {
-      const updatedClient = await ClientRepo.update(id, {
-        set: { deleteRequest: true },
-      });
+      const client = await ClientRepo.findById(id);
+      if (!client) throw new NotFoundError("Client not found");
+      if (client.assignedAdmin?.toString() !== user.id)
+        throw new ForbiddenError("You are not assigned to this client");
+
+      const updatedClient = await ClientRepo.update(id, { deleteRequest: true });
 
       logger.info(
         {
@@ -284,6 +292,56 @@ export const ClientService = {
    * @returns {Promise<object>} The updated client.
    * @throws {ConflictError} If the user already administers a different client.
    */
+  /**
+   * Rejects a client admin's deletion request and tells them why. SUPER_ADMIN only.
+   * @param {object} data    `{ id, [message] }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object>} The client with `deleteRequest` cleared.
+   * @throws {ConflictError} If the client has no pending request.
+   */
+  async declineClientDeletion(data, context) {
+    const { id, message } = validate(declineClientDeletionSchema, data);
+
+    const { user } = context;
+    const logger = createLogger(context);
+
+    if (user.role !== "SUPER_ADMIN") {
+      throw new ForbiddenError(
+        "Current role does not have the permission to decline deletion requests.",
+      );
+    }
+
+    const client = await ClientRepo.findById(id);
+    if (!client) throw new NotFoundError("Client not found");
+    if (!client.deleteRequest)
+      throw new ConflictError("Delete request not found for this client.");
+
+    const updated = await ClientRepo.update(id, { deleteRequest: false });
+
+    logger.info(
+      {
+        audit: true,
+        userId: user.id,
+        targetClientId: id,
+        action: "CLIENT_DELETE_DECLINED",
+      },
+      "AUDIT",
+    );
+
+    await cache.invalidate(`clients:${id}`);
+    await cache.invalidate("clients:all");
+
+    // A failed notification should not undo the decision
+    if (client.assignedAdmin) {
+      const note = message?.trim() ? ` Message: ${message.trim()}` : "";
+      await NotificationService.notify(
+        client.assignedAdmin,
+        `Your request to delete "${client.name}" was declined.${note}`,
+      ).catch(() => {});
+    }
+
+    return updated;
+  },
   async assignAdmin(data, context) {
     validate(assignAdminSchema, data);
 

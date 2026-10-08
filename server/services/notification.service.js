@@ -1,20 +1,47 @@
 import logger, { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import { NotificationRepo } from "../repositories/import.repo.js";
-import { idSchema } from "../validation/schema.js";
+import { idSchema, notificationIdsSchema } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import pubsub, { NOTIFICATION_CREATED } from "../config/pubsub.js";
+import { getNotificationQueue } from "../queues/notification.queue.js";
+
+const ENQUEUE_TIMEOUT_MS = 3000; // Give up on the queue after 3s and deliver directly
 
 /** In-app notifications: creation, live delivery, and per-user management. */
 export const NotificationService = {
   /**
-   * Saves a notification and pushes it to the user's `notificationCreated` subscription.
+   * Queues a notification for the worker to deliver. If the queue is unavailable
+   * (e.g. Redis is down), delivers it directly so it is never lost.
    * Internal: called by other services, not by resolvers.
+   * @param {string} userId  Recipient user ID.
+   * @param {string} content Message text.
+   * @returns {Promise<void>}
+   */
+  async notify(userId, content) {
+    const user = userId?.toString(); // Job data is JSON, so ObjectIds become strings
+    try {
+      let timer;
+      await Promise.race([
+        getNotificationQueue().add("notify", { user, content }),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Enqueue timed out")), ENQUEUE_TIMEOUT_MS);
+        }),
+      ]).finally(() => clearTimeout(timer));
+    } catch (err) {
+      logger.warn({ err, userId: user }, "Notification queue unavailable, delivering directly");
+      await NotificationService.deliver(user, content);
+    }
+  },
+
+  /**
+   * Saves a notification and pushes it to the user's `notificationCreated` subscription.
+   * Called by the notification worker, or by `notify` as a fallback.
    * @param {string} userId  Recipient user ID.
    * @param {string} content Message text.
    * @returns {Promise<object>} The saved notification.
    */
-  async notify(userId, content) {
+  async deliver(userId, content) {
     const notification = await NotificationRepo.create({
       content,
       status: "UNREAD",
@@ -32,20 +59,14 @@ export const NotificationService = {
   },
 
   /**
-   * Lists the current user's notifications.
+   * Lists the current user's notifications, newest first.
    * @param {object} context GraphQL context with the current `user`.
-   * @returns {Promise<object[]>} The user's notifications.
-   * @throws {NotFoundError} If the user has none.
+   * @returns {Promise<object[]>} The user's notifications (empty if none).
    */
   async getNotifications(context) {
     const { user } = context;
 
-    const notification = await NotificationRepo.findByUser(user.id);
-
-    if (notification.length === 0)
-      throw new NotFoundError("No notifications found.");
-
-    return notification;
+    return await NotificationRepo.findByUser(user.id);
   },
 
   /**
@@ -95,28 +116,32 @@ export const NotificationService = {
   },
 
   /**
-   * Marks all of the current user's unread notifications as read.
+   * Marks all of the current user's unread notifications as read, in one write.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The user's notifications after the update.
-   * @throws {NotFoundError} If there are no notifications, or none unread.
    */
   async markAllAsRead(context) {
     const { user } = context;
 
-    const notifications = await NotificationRepo.findByUser(user.id);
+    await NotificationRepo.markRead(user.id);
 
-    if (notifications.length === 0)
-      throw new NotFoundError("No notifications found.");
+    return await NotificationRepo.findByUser(user.id);
+  },
 
-    const unread = notifications.filter((n) => n.status === "UNREAD");
-    if (!unread.length)
-      throw new NotFoundError("No unread notifications found");
+  /**
+   * Marks several of the current user's notifications as read, in one write.
+   * IDs belonging to other users are ignored.
+   * @param {string[]} ids    Notification IDs.
+   * @param {object}   context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The user's notifications after the update.
+   */
+  async markNotificationsRead(ids, context) {
+    validate(notificationIdsSchema, { ids });
 
-    await Promise.all(
-      unread.map((n) => NotificationRepo.update(n._id, { status: "READ" })),
-    );
+    const { user } = context;
 
-    // Re-fetch so the response reflects the new statuses
+    await NotificationRepo.markRead(user.id, ids);
+
     return await NotificationRepo.findByUser(user.id);
   },
 
@@ -177,7 +202,7 @@ export const NotificationService = {
     if (notifications.length === 0)
       throw new NotFoundError("No notifications found.");
 
-    await Promise.all(notifications.map((n) => NotificationRepo.delete(n._id)));
+    await NotificationRepo.deleteByUser(user.id);
 
     logger.info(
       {

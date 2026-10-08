@@ -4,6 +4,8 @@ import {
   TaskRepo,
   ProjectRepo,
   SubTaskRepo,
+  CommentRepo,
+  ClientRepo,
 } from "../repositories/import.repo.js";
 import {
   createTaskSchema,
@@ -16,6 +18,30 @@ import { NotificationService } from "./import.service.js";
 
 /** Business logic and role checks for tasks. Admins have full access; USERs are limited to their own. */
 export const TaskService = {
+  /**
+   * Lists tasks across every project the user can see: all for SUPER_ADMIN,
+   * their client's projects for CLIENT_ADMIN, assigned projects for USER.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The tasks.
+   */
+  async getAllTasks(context) {
+    const { user } = context;
+
+    if (user.role === "SUPER_ADMIN") return await TaskRepo.find();
+
+    let projects = [];
+    if (user.role === "CLIENT_ADMIN") {
+      const client = await ClientRepo.findByAssignedAdmin(user.id);
+      if (!client) return [];
+      projects = await ProjectRepo.findByClientId(client.id);
+    } else {
+      projects = await ProjectRepo.findByAssignedUser(user.id);
+    }
+
+    if (!projects.length) return [];
+    return await TaskRepo.findByProjects(projects.map((p) => p.id));
+  },
+
   /**
    * Lists a project's tasks.
    * @param {string} projectId Project ID.
@@ -98,7 +124,7 @@ export const TaskService = {
       title: data.title,
       priority: data.priority || "NORMAL",
       deadline: data.deadline,
-      currentStatus: "NEW",
+      currentStatus: data.currentStatus || "NEW",
       assignedTo: data.assignedTo,
       createdBy: user.id,
       project: data.projectId,
@@ -156,12 +182,12 @@ export const TaskService = {
       );
     }
 
-    // Only include fields that were provided
+    // Only include fields that were provided; null clears deadline / assignee
     const updated = await TaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
-      ...(data.deadline && { deadline: data.deadline }),
-      ...(data.assignedTo && { assignedTo: data.assignedTo }),
+      ...(data.deadline !== undefined && { deadline: data.deadline || null }),
+      ...(data.assignedTo !== undefined && { assignedTo: data.assignedTo || null }),
       ...(data.currentStatus && { currentStatus: data.currentStatus }),
     });
 
@@ -203,7 +229,11 @@ export const TaskService = {
       );
     }
 
-    const updatedTask = await TaskRepo.update(id, { currentStatus: status });
+    // resolvedAt feeds the dashboard's created-vs-resolved chart
+    const updatedTask = await TaskRepo.update(id, {
+      currentStatus: status,
+      resolvedAt: status === "RESOLVED" ? new Date() : null,
+    });
 
     // Notify creator when task is resolved
     if (status === "RESOLVED") {
@@ -269,6 +299,9 @@ export const TaskService = {
     if (subTasks.length) {
       await Promise.all(subTasks.map((st) => SubTaskRepo.delete(st._id)));
     }
+
+    // Delete the task's comments, including those on its subtasks
+    await CommentRepo.deleteByTask(id);
 
     // Notify assigned user that task was deleted
     if (task.assignedTo) {

@@ -7,3 +7,4 @@ export { PreferenceService } from "./preference.service.js";
 export { TaskService } from "./task.service.js";
 export { SubTaskService } from "./subTask.service.js";
 export { NotificationService } from "./notification.service.js";
+export { CommentService } from "./comment.service.js";

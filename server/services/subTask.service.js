@@ -1,6 +1,10 @@
 import { createLogger } from "../config/logger.js";
 import { NotFoundError, ForbiddenError } from "../errors/errors.js";
-import { SubTaskRepo, TaskRepo } from "../repositories/import.repo.js";
+import {
+  CommentRepo,
+  SubTaskRepo,
+  TaskRepo,
+} from "../repositories/import.repo.js";
 import {
   createSubTaskSchema,
   idSchema,
@@ -153,12 +157,12 @@ export const SubTaskService = {
       );
     }
 
-    // Only include fields that were provided
+    // Only include fields that were provided; null clears deadline / assignee
     const updated = await SubTaskRepo.update(data.id, {
       ...(data.title && { title: data.title }),
       ...(data.priority && { priority: data.priority }),
-      ...(data.deadline && { deadline: data.deadline }),
-      ...(data.assignedTo && { assignedTo: data.assignedTo }),
+      ...(data.deadline !== undefined && { deadline: data.deadline || null }),
+      ...(data.assignedTo !== undefined && { assignedTo: data.assignedTo || null }),
       ...(data.currentStatus && { currentStatus: data.currentStatus }),
     });
 
@@ -269,6 +273,8 @@ export const SubTaskService = {
         `Subtask "${subTask.title}" has been deleted`,
       );
     }
+
+    await CommentRepo.deleteBySubTask(id);
 
     const deleted = await SubTaskRepo.delete(id);
 
