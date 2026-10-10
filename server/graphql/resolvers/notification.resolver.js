@@ -14,6 +14,8 @@ export const notificationResolvers = {
       await NotificationService.markAsRead(id, context),
     markAllAsRead: async (_, args, context) =>
       await NotificationService.markAllAsRead(context),
+    markNotificationsRead: async (_, { ids }, context) =>
+      await NotificationService.markNotificationsRead(ids, context),
     deleteNotification: async (_, { id }, context) =>
       await NotificationService.deleteNotification(id, context),
     deleteAllNotifications: async (_, args, context) =>

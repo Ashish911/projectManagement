@@ -5,6 +5,7 @@ export const taskResolvers = {
     tasks: async (_, { projectId }, context) =>
       await TaskService.getTasks(projectId, context),
     task: async (_, { id }, context) => await TaskService.getTask(id, context),
+    allTasks: async (_, args, context) => await TaskService.getAllTasks(context),
   },
   Mutation: {
     createTask: async (_, args, context) =>
