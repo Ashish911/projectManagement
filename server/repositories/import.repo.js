@@ -7,3 +7,4 @@ export { PreferenceRepo } from "./preference.repo.js";
 export { TaskRepo } from "./task.repo.js";
 export { SubTaskRepo } from "./subTask.repo.js";
 export { NotificationRepo } from "./notification.repo.js";
+export { CommentRepo } from "./comment.repo.js";

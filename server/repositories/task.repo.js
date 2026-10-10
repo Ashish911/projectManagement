@@ -13,6 +13,11 @@ export const TaskRepo = {
       )
     )?.toObject() ?? null,
   delete: async (id) => (await Task.findByIdAndDelete(id))?.toObject() ?? null,
+  // Used when a user is deleted, so tasks don't point at a missing person
+  unassignUser: async (userId) =>
+    await Task.updateMany({ assignedTo: userId }, { $set: { assignedTo: null } }),
   findByProject: async (projectId) =>
     (await Task.find({ project: projectId })).map((t) => t.toObject()),
+  findByProjects: async (projectIds) =>
+    (await Task.find({ project: { $in: projectIds } })).map((t) => t.toObject()),
 };

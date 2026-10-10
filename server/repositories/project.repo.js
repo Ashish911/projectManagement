@@ -18,4 +18,7 @@ export const ProjectRepo = {
     (await Project.find({ assignedUsers: userId })).map((p) => p.toObject()),
   delete: async (id) =>
     (await Project.findByIdAndDelete(id))?.toObject() ?? null,
+  // Used when a user is deleted: takes them off every team
+  removeUserEverywhere: async (userId) =>
+    await Project.updateMany({ assignedUsers: userId }, { $pull: { assignedUsers: userId } }),
 };

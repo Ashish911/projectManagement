@@ -20,4 +20,7 @@ export const ClientRepo = {
     )?.toObject() ?? null,
   delete: async (id) =>
     (await Client.findByIdAndDelete(id))?.toObject() ?? null,
+  // Used when a user is deleted: frees any client they administered
+  clearAdmin: async (userId) =>
+    await Client.updateMany({ assignedAdmin: userId }, { $set: { assignedAdmin: null } }),
 };
