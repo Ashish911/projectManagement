@@ -7,3 +7,4 @@ export { PreferenceType } from "./preference.type.js";
 export { TaskType } from "./task.type.js";
 export { SubTaskType } from "./sub-task.type.js";
 export { NotificationType } from "./notification.type.js";
+export { CommentType } from "./comment.type.js";

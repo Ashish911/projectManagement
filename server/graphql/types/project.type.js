@@ -15,6 +15,10 @@ export const ProjectType = new GraphQLObjectType({
     name: { type: new GraphQLNonNull(GraphQLString) },
     description: { type: new GraphQLNonNull(GraphQLString) },
     status: { type: new GraphQLNonNull(GraphQLString) },
+    dueDate: {
+      type: GraphQLString,
+      resolve: (p) => (p.dueDate ? new Date(p.dueDate).toISOString() : null),
+    },
     client: {
       type: ClientType,
       resolve: async (parent) => {

@@ -13,7 +13,8 @@ export const SubTaskType = new GraphQLObjectType({
     id: { type: new GraphQLNonNull(GraphQLID) },
     title: { type: new GraphQLNonNull(GraphQLString) },
     priority: { type: new GraphQLNonNull(GraphQLString) },
-    deadline: { type: new GraphQLNonNull(GraphQLString) },
+    // Optional: subtasks can be created without a deadline
+    deadline: { type: GraphQLString, resolve: (s) => (s.deadline ? new Date(s.deadline).toISOString() : null) },
     currentStatus: { type: new GraphQLNonNull(GraphQLString) },
     assignedTo: {
       type: UserType,

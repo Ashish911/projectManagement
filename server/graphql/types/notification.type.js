@@ -13,7 +13,10 @@ export const NotificationType = new GraphQLObjectType({
     id: { type: new GraphQLNonNull(GraphQLID) },
     content: { type: new GraphQLNonNull(GraphQLString) },
     status: { type: new GraphQLNonNull(GraphQLString) },
-    createdAt: { type: GraphQLString },
+    createdAt: {
+      type: GraphQLString,
+      resolve: (n) => (n.createdAt ? new Date(n.createdAt).toISOString() : null),
+    },
     user: {
       type: UserType,
       resolve: async (parent) => {

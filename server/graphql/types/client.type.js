@@ -13,8 +13,8 @@ export const ClientType = new GraphQLObjectType({
   fields: {
     id: { type: new GraphQLNonNull(GraphQLID) },
     name: { type: new GraphQLNonNull(GraphQLString) },
-    email: { type: new GraphQLNonNull(GraphQLString) },
-    phone: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: GraphQLString }, // Optional: clients may be created without contact details
+    phone: { type: GraphQLString },
     deleteRequest: { type: new GraphQLNonNull(GraphQLBoolean) },
     assignedAdmin: {
       type: UserType,
