@@ -2,6 +2,7 @@
 // so the app keeps working (falling back to the database) if Redis is down.
 import { redis } from "./redis.js";
 import logger from "./logger.js";
+import { cacheOperationsCounter } from "./metrics.js";
 
 const DEFAULT_TTL = 60 * 5; // 5 minutes, in seconds
 
@@ -19,12 +20,15 @@ export const cache = {
     try {
       const data = await redis.get(key);
       if (data) {
+        cacheOperationsCounter.inc({ op: "get", result: "hit" });
         logger.debug({ key }, "Cache HIT");
         return JSON.parse(data);
       }
+      cacheOperationsCounter.inc({ op: "get", result: "miss" });
       logger.debug({ key }, "Cache MISS");
       return null;
     } catch (err) {
+      cacheOperationsCounter.inc({ op: "get", result: "error" });
       logger.warn({ err, key }, "Cache get failed, falling through to DB");
       return null; // never crash if Redis is down
     }
@@ -39,7 +43,9 @@ export const cache = {
   async set(key, value, ttl = DEFAULT_TTL) {
     try {
       await redis.set(key, JSON.stringify(value), "EX", ttl);
+      cacheOperationsCounter.inc({ op: "set", result: "ok" });
     } catch (err) {
+      cacheOperationsCounter.inc({ op: "set", result: "error" });
       logger.warn({ err, key }, "Cache set failed");
     }
   },
@@ -51,8 +57,10 @@ export const cache = {
   async invalidate(key) {
     try {
       await redis.del(key);
+      cacheOperationsCounter.inc({ op: "invalidate", result: "ok" });
       logger.debug({ key }, "Cache invalidated");
     } catch (err) {
+      cacheOperationsCounter.inc({ op: "invalidate", result: "error" });
       logger.warn({ err, key }, "Cache invalidation failed");
     }
   },

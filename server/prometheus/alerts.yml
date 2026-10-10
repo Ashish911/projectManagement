@@ -1,0 +1,34 @@
+# Alert rules for the API. With no Alertmanager configured, firing alerts show in
+# the Prometheus UI under "Alerts" (http://localhost:9091/alerts).
+groups:
+  - name: projoman-api
+    rules:
+      - alert: ApiDown
+        expr: up{job="ProjoMan-GraphQl"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Metrics endpoint is not responding"
+
+      # More than 5% of requests returned GraphQL errors over 5 minutes
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(graphql_requests_total{status="error"}[5m]))
+            / sum(rate(graphql_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GraphQL error rate above 5%"
+
+      # 95th percentile latency above 1 second
+      - alert: SlowRequests
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(graphql_request_duration_ms_bucket[5m]))) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 GraphQL latency above 1s"

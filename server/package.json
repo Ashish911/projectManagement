@@ -8,13 +8,20 @@
     "test": "node --experimental-vm-modules node_modules/.bin/jest --watchAll",
     "test:auth": "node --experimental-vm-modules node_modules/.bin/jest tests/auth.test.js --verbose",
     "test:client": "node --experimental-vm-modules node_modules/.bin/jest tests/client.test.js --verbose",
+    "test:comment": "node --experimental-vm-modules node_modules/.bin/jest tests/comment.test.js --verbose",
     "test:notification": "node --experimental-vm-modules node_modules/.bin/jest tests/notification.test.js --verbose",
     "test:preference": "node --experimental-vm-modules node_modules/.bin/jest tests/preference.test.js --verbose",
     "test:project": "node --experimental-vm-modules node_modules/.bin/jest tests/project.test.js --verbose",
     "test:subTask": "node --experimental-vm-modules node_modules/.bin/jest tests/subTask.test.js --verbose",
     "test:task": "node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbose",
+    "test:userAdmin": "node --experimental-vm-modules node_modules/.bin/jest tests/userAdmin.test.js --verbose",
+    "test:server": "node --experimental-vm-modules node_modules/.bin/jest tests/server.test.js --verbose",
     "dev": "env-cmd -f .env.local nodemon app.js",
-    "start": "env-cmd -f .env.prod node app.js"
+    "start": "env-cmd -f .env.prod node app.js",
+    "test:indexes": "node --experimental-vm-modules node_modules/.bin/jest tests/indexes.test.js --verbose",
+    "db:indexes": "env-cmd -f .env.local node scripts/sync-indexes.js",
+    "db:indexes:prod": "env-cmd -f .env.prod node scripts/sync-indexes.js",
+    "test:graphqlTypes": "node --experimental-vm-modules node_modules/.bin/jest tests/graphqlTypes.test.js --verbose"
   },
   "jest": {
     "testEnvironment": "node",
@@ -26,6 +33,7 @@
   "dependencies": {
     "@apollo/server": "^5.4.0",
     "@as-integrations/express5": "^1.1.2",
+    "@messagebird/sdk": "^0.84.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.73.5",
     "colors": "^1.4.0",

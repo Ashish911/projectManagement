@@ -25,5 +25,15 @@ export const graphqlRequestDuration = new client.Histogram({
   buckets: [10, 50, 100, 200, 500, 1000, 2000], // Latency buckets in ms, from 10ms to 2s
 });
 
+/**
+ * Counts cache operations.
+ * Labels: `op` ("get", "set" or "invalidate") and `result` ("hit", "miss", "ok" or "error").
+ */
+export const cacheOperationsCounter = new client.Counter({
+  name: "cache_operations_total",
+  help: "Total number of cache operations",
+  labelNames: ["op", "result"],
+});
+
 // Shared Prometheus client, used to serve all metrics at /metrics.
 export { client };
