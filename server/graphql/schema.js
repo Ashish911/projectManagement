@@ -20,6 +20,7 @@ import {
   PreferenceType,
   ForgotPasswordType,
   MessageType,
+  CommentType,
 } from "./types/import.type.js";
 
 import {
@@ -30,6 +31,7 @@ import {
   preferenceResolvers,
   subTaskResolvers,
   notificationResolvers,
+  commentResolvers,
 } from "./resolvers/import.resolver.js";
 
 // Root Query
@@ -77,6 +79,10 @@ const RootQuery = new GraphQLObjectType({
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: taskResolvers.Query.task,
     },
+    allTasks: {
+      type: new GraphQLList(TaskType),
+      resolve: taskResolvers.Query.allTasks,
+    },
     subTasks: {
       type: new GraphQLList(SubTaskType),
       args: { taskId: { type: new GraphQLNonNull(GraphQLID) } },
@@ -86,6 +92,16 @@ const RootQuery = new GraphQLObjectType({
       type: SubTaskType,
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: subTaskResolvers.Query.subTask,
+    },
+    taskComments: {
+      type: new GraphQLList(CommentType),
+      args: { taskId: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: commentResolvers.Query.taskComments,
+    },
+    subTaskComments: {
+      type: new GraphQLList(CommentType),
+      args: { subTaskId: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: commentResolvers.Query.subTaskComments,
     },
     notifications: {
       type: new GraphQLList(NotificationType),
@@ -154,6 +170,65 @@ const Mutation = new GraphQLObjectType({
       },
       resolve: userResolvers.Mutation.resetPassword,
     },
+    createUser: {
+      type: UserType,
+      args: {
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        email: { type: new GraphQLNonNull(GraphQLString) },
+        number: { type: new GraphQLNonNull(GraphQLString) },
+        gender: { type: new GraphQLNonNull(GraphQLString) },
+        dob: { type: GraphQLString },
+        role: { type: GraphQLString },
+        clientId: { type: GraphQLID },
+        mode: { type: GraphQLString }, // "INVITE" (default) or "PASSWORD"
+        password: { type: GraphQLString },
+      },
+      resolve: userResolvers.Mutation.createUser,
+    },
+    updateUser: {
+      type: UserType,
+      args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
+        name: { type: GraphQLString },
+        email: { type: GraphQLString },
+        number: { type: GraphQLString },
+        gender: { type: GraphQLString },
+        dob: { type: GraphQLString },
+      },
+      resolve: userResolvers.Mutation.updateUser,
+    },
+    changeUserRoles: {
+      type: new GraphQLList(UserType),
+      args: {
+        ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
+        role: { type: new GraphQLNonNull(GraphQLString) },
+        clientId: { type: GraphQLID },
+      },
+      resolve: userResolvers.Mutation.changeUserRoles,
+    },
+    unlockUsers: {
+      type: new GraphQLList(UserType),
+      args: { ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) } },
+      resolve: userResolvers.Mutation.unlockUsers,
+    },
+    resendInvite: {
+      type: MessageType,
+      args: { id: { type: new GraphQLNonNull(GraphQLID) } },
+      resolve: userResolvers.Mutation.resendInvite,
+    },
+    deleteUsers: {
+      type: new GraphQLList(UserType),
+      args: { ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) } },
+      resolve: userResolvers.Mutation.deleteUsers,
+    },
+    changePassword: {
+      type: MessageType,
+      args: {
+        currentPassword: { type: new GraphQLNonNull(GraphQLString) },
+        newPassword: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: userResolvers.Mutation.changePassword,
+    },
     register: {
       type: UserType,
       args: {
@@ -162,21 +237,11 @@ const Mutation = new GraphQLObjectType({
         number: { type: new GraphQLNonNull(GraphQLString) },
         dob: { type: new GraphQLNonNull(GraphQLString) },
         password: { type: new GraphQLNonNull(GraphQLString) },
-        role: {
-          type: new GraphQLEnumType({
-            name: "UserRole",
-            values: {
-              su: { value: "SUPER_ADMIN" },
-              ca: { value: "CLIENT_ADMIN" },
-              u: { value: "USER" },
-            },
-          }),
-          defaultValue: "USER",
-        },
         gender: {
           type: new GraphQLEnumType({
             name: "Gender",
             values: {
+              // Short names are what the registration form sends
               M: { value: "MALE" },
               F: { value: "FEMALE" },
               O: { value: "OTHERS" },
@@ -191,8 +256,8 @@ const Mutation = new GraphQLObjectType({
       type: ClientType,
       args: {
         name: { type: new GraphQLNonNull(GraphQLString) },
-        email: { type: new GraphQLNonNull(GraphQLString) },
-        phone: { type: new GraphQLNonNull(GraphQLString) },
+        email: { type: GraphQLString },
+        phone: { type: GraphQLString },
         assignedAdmin: { type: GraphQLID },
         deleteRequest: { type: GraphQLBoolean },
       },
@@ -203,12 +268,20 @@ const Mutation = new GraphQLObjectType({
       args: {
         id: { type: new GraphQLNonNull(GraphQLID) },
         name: { type: new GraphQLNonNull(GraphQLString) },
-        email: { type: new GraphQLNonNull(GraphQLString) },
-        phone: { type: new GraphQLNonNull(GraphQLString) },
+        email: { type: GraphQLString },
+        phone: { type: GraphQLString },
         assignedAdmin: { type: GraphQLID },
         deleteRequest: { type: GraphQLBoolean },
       },
       resolve: clientResolvers.Mutation.updateClient,
+    },
+    declineClientDeletion: {
+      type: ClientType,
+      args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
+        message: { type: GraphQLString },
+      },
+      resolve: clientResolvers.Mutation.declineClientDeletion,
     },
     confirmDeleteClient: {
       type: ClientType,
@@ -245,6 +318,7 @@ const Mutation = new GraphQLObjectType({
         name: { type: new GraphQLNonNull(GraphQLString) },
         description: { type: GraphQLString },
         clientId: { type: new GraphQLNonNull(GraphQLID) },
+        dueDate: { type: GraphQLString },
         status: {
           type: new GraphQLEnumType({
             name: "ProjectStatus",
@@ -265,13 +339,14 @@ const Mutation = new GraphQLObjectType({
         id: { type: new GraphQLNonNull(GraphQLID) },
         name: { type: GraphQLString },
         description: { type: GraphQLString },
+        dueDate: { type: GraphQLString },
         status: {
           type: new GraphQLEnumType({
             name: "UpdateProjectStatus",
             values: {
-              not_started: { value: "NOT_STARTED" },
-              in_progress: { value: "IN_PROGRESS" },
-              completed: { value: "COMPLETED" },
+              NOT_STARTED: { value: "NOT_STARTED" },
+              IN_PROGRESS: { value: "IN_PROGRESS" },
+              COMPLETED: { value: "COMPLETED" },
             },
           }),
         },
@@ -308,14 +383,23 @@ const Mutation = new GraphQLObjectType({
         projectId: { type: new GraphQLNonNull(GraphQLID) },
         assignedTo: { type: GraphQLID },
         deadline: { type: GraphQLString },
+        currentStatus: {
+          type: new GraphQLEnumType({
+            name: "NewTaskStatus",
+            values: {
+              NEW: { value: "NEW" },
+              IN_PROGRESS: { value: "IN_PROGRESS" },
+            },
+          }),
+        },
         priority: {
           type: new GraphQLEnumType({
             name: "TaskPriority",
             values: {
-              urgent: { value: "URGENT" },
-              high: { value: "HIGH" },
-              normal: { value: "NORMAL" },
-              backlog: { value: "BACKLOG" },
+              URGENT: { value: "URGENT" },
+              HIGH: { value: "HIGH" },
+              NORMAL: { value: "NORMAL" },
+              BACKLOG: { value: "BACKLOG" },
             },
           }),
           defaultValue: "NORMAL",
@@ -334,10 +418,10 @@ const Mutation = new GraphQLObjectType({
           type: new GraphQLEnumType({
             name: "UpdateTaskPriority",
             values: {
-              urgent: { value: "URGENT" },
-              high: { value: "HIGH" },
-              normal: { value: "NORMAL" },
-              backlog: { value: "BACKLOG" },
+              URGENT: { value: "URGENT" },
+              HIGH: { value: "HIGH" },
+              NORMAL: { value: "NORMAL" },
+              BACKLOG: { value: "BACKLOG" },
             },
           }),
         },
@@ -353,10 +437,10 @@ const Mutation = new GraphQLObjectType({
             new GraphQLEnumType({
               name: "TaskStatus",
               values: {
-                new: { value: "NEW" },
-                in_progress: { value: "IN_PROGRESS" },
-                resolved: { value: "RESOLVED" },
-                reopened: { value: "REOPENED" },
+                NEW: { value: "NEW" },
+                IN_PROGRESS: { value: "IN_PROGRESS" },
+                RESOLVED: { value: "RESOLVED" },
+                REOPENED: { value: "REOPENED" },
               },
             }),
           ),
@@ -382,10 +466,10 @@ const Mutation = new GraphQLObjectType({
           type: new GraphQLEnumType({
             name: "SubTaskPriority",
             values: {
-              urgent: { value: "URGENT" },
-              high: { value: "HIGH" },
-              normal: { value: "NORMAL" },
-              backlog: { value: "BACKLOG" },
+              URGENT: { value: "URGENT" },
+              HIGH: { value: "HIGH" },
+              NORMAL: { value: "NORMAL" },
+              BACKLOG: { value: "BACKLOG" },
             },
           }),
           defaultValue: "NORMAL",
@@ -404,10 +488,10 @@ const Mutation = new GraphQLObjectType({
           type: new GraphQLEnumType({
             name: "UpdateSubTaskPriority",
             values: {
-              urgent: { value: "URGENT" },
-              high: { value: "HIGH" },
-              normal: { value: "NORMAL" },
-              backlog: { value: "BACKLOG" },
+              URGENT: { value: "URGENT" },
+              HIGH: { value: "HIGH" },
+              NORMAL: { value: "NORMAL" },
+              BACKLOG: { value: "BACKLOG" },
             },
           }),
         },
@@ -423,10 +507,10 @@ const Mutation = new GraphQLObjectType({
             new GraphQLEnumType({
               name: "SubTaskStatus",
               values: {
-                new: { value: "NEW" },
-                in_progress: { value: "IN_PROGRESS" },
-                resolved: { value: "RESOLVED" },
-                reopened: { value: "REOPENED" },
+                NEW: { value: "NEW" },
+                IN_PROGRESS: { value: "IN_PROGRESS" },
+                RESOLVED: { value: "RESOLVED" },
+                REOPENED: { value: "REOPENED" },
               },
             }),
           ),
@@ -441,6 +525,37 @@ const Mutation = new GraphQLObjectType({
       },
       resolve: subTaskResolvers.Mutation.deleteSubTask,
     },
+    addTaskComment: {
+      type: CommentType,
+      args: {
+        taskId: { type: new GraphQLNonNull(GraphQLID) },
+        content: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: commentResolvers.Mutation.addTaskComment,
+    },
+    addSubTaskComment: {
+      type: CommentType,
+      args: {
+        subTaskId: { type: new GraphQLNonNull(GraphQLID) },
+        content: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: commentResolvers.Mutation.addSubTaskComment,
+    },
+    updateComment: {
+      type: CommentType,
+      args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
+        content: { type: new GraphQLNonNull(GraphQLString) },
+      },
+      resolve: commentResolvers.Mutation.updateComment,
+    },
+    deleteComment: {
+      type: CommentType,
+      args: {
+        id: { type: new GraphQLNonNull(GraphQLID) },
+      },
+      resolve: commentResolvers.Mutation.deleteComment,
+    },
     markAsRead: {
       type: NotificationType,
       args: {
@@ -451,6 +566,13 @@ const Mutation = new GraphQLObjectType({
     markAllAsRead: {
       type: new GraphQLList(NotificationType),
       resolve: notificationResolvers.Mutation.markAllAsRead,
+    },
+    markNotificationsRead: {
+      type: new GraphQLList(NotificationType),
+      args: {
+        ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
+      },
+      resolve: notificationResolvers.Mutation.markNotificationsRead,
     },
     deleteNotification: {
       type: NotificationType,
