@@ -12,6 +12,7 @@ Where to find what, who each document is for, and which one wins when two disagr
 | [`FRONTEND.md`](FRONTEND.md) | Frontend engineers | App structure, screens, components, state, API layer, hooks, theming, testing | Reference |
 | [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) | Senior engineers, reviewers | Capacity, data model, caching, async processing, failure modes, ADRs | Design rationale |
 | [`AWS_ARCHITECTURE.md`](AWS_ARCHITECTURE.md) | Platform / DevOps | Target production deployment on AWS (proposed, not yet provisioned) | Infrastructure |
+| [`TEST_PLAN.md`](TEST_PLAN.md) | QA, anyone testing a build | Manual end-to-end test cases per role and area, setup, seed data, smoke checklist | Test plan |
 | [`../server/Routes.md`](../server/Routes.md) | API consumers | Every GraphQL operation: arguments, return type, who may call it | Quick reference |
 | [`../frontend/Routes.md`](../frontend/Routes.md) | Frontend engineers | Every route, its guard, what each screen shows and opens | Quick reference |
 | [`../server/STATUS.md`](../server/STATUS.md) · [`../frontend/STATUS.md`](../frontend/STATUS.md) | Everyone | What's done, what's partial, known issues by severity | Status |

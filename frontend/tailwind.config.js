@@ -1,160 +1,101 @@
 /** @type {import('tailwindcss').Config} */
+const c = (v) => `oklch(var(--${v}) / <alpha-value>)`;
+
 module.exports = {
   darkMode: ["class"],
-  content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
-  	container: {
-  		center: true,
-  		padding: '2rem',
-  		screens: {
-  			'2xl': '1400px'
-  		}
-  	},
-  	extend: {
-  		colors: {
-  			gray: {
-  				'100': '#EBF1F5',
-  				'200': '#D9E3EA',
-  				'300': '#C5D2DC',
-  				'400': '#9BA9B4',
-  				'500': '#707D86',
-  				'600': '#55595F',
-  				'700': '#33363A',
-  				'800': '#25282C',
-  				'900': '#151719'
-  			},
-  			purple: {
-  				'100': '#F4F4FF',
-  				'200': '#E2E1FF',
-  				'300': '#CBCCFF',
-  				'400': '#ABABFF',
-  				'500': '#8D8DFF',
-  				'600': '#5D5DFF',
-  				'700': '#4B4ACF',
-  				'800': '#38379C',
-  				'900': '#262668'
-  			},
-  			border: 'hsl(var(--border))',
-  			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
-  			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
-  			},
-  			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
-  			},
-  			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
-  			},
-  			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
-  			},
-  			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
-  			popover: {
-  				DEFAULT: 'hsl(var(--popover))',
-  				foreground: 'hsl(var(--popover-foreground))'
-  			},
-  			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
-  			},
-  			sidebar: {
-  				DEFAULT: 'hsl(var(--sidebar-background))',
-  				foreground: 'hsl(var(--sidebar-foreground))',
-  				primary: 'hsl(var(--sidebar-primary))',
-  				'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-  				accent: 'hsl(var(--sidebar-accent))',
-  				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-  				border: 'hsl(var(--sidebar-border))',
-  				ring: 'hsl(var(--sidebar-ring))'
-  			}
-  		},
-  		spacing: {
-  			'9/16': '56.25%',
-  			'3/4': '75%',
-  			'1/1': '100%'
-  		},
-  		fontFamily: {
-  			inter: [
-  				'var(--font-inter)',
-  				'sans-serif'
-  			],
-  			'architects-daughter': [
-  				'var(--font-architects-daughter)',
-  				'sans-serif'
-  			]
-  		},
-  		fontSize: {
-  			xs: '0.75rem',
-  			sm: '0.875rem',
-  			base: '1rem',
-  			lg: '1.125rem',
-  			xl: '1.25rem',
-  			'2xl': '1.5rem',
-  			'3xl': '2rem',
-  			'4xl': '2.5rem',
-  			'5xl': '3.25rem',
-  			'6xl': '4rem'
-  		},
-  		inset: {
-  			full: '100%'
-  		},
-  		letterSpacing: {
-  			tighter: '-0.02em',
-  			tight: '-0.01em',
-  			normal: '0',
-  			wide: '0.01em',
-  			wider: '0.02em',
-  			widest: '0.4em'
-  		},
-  		minWidth: {
-  			'10': '2.5rem'
-  		},
-  		scale: {
-  			'98': '.98'
-  		},
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
-  		keyframes: {
-  			'accordion-down': {
-  				from: {
-  					height: 0
-  				},
-  				to: {
-  					height: 'var(--radix-accordion-content-height)'
-  				}
-  			},
-  			'accordion-up': {
-  				from: {
-  					height: 'var(--radix-accordion-content-height)'
-  				},
-  				to: {
-  					height: 0
-  				}
-  			}
-  		},
-  		animation: {
-  			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
-  	}
+    container: { center: true, padding: "2rem", screens: { "2xl": "1440px" } },
+    extend: {
+      colors: {
+        border: c("border"), "border-strong": c("border-strong"), input: c("input"), ring: c("ring"),
+        background: c("background"), foreground: c("foreground"),
+        "subtle-foreground": c("subtle-foreground"),
+        "surface-2": c("surface-2"), "surface-3": c("surface-3"),
+        primary: { DEFAULT: c("primary"), hover: c("primary-hover"), foreground: c("primary-foreground") },
+        secondary: { DEFAULT: c("secondary"), foreground: c("secondary-foreground") },
+        destructive: { DEFAULT: c("destructive"), foreground: c("destructive-foreground") },
+        muted: { DEFAULT: c("muted"), foreground: c("muted-foreground") },
+        accent: { DEFAULT: c("accent"), foreground: c("accent-foreground") },
+        popover: { DEFAULT: c("popover"), foreground: c("popover-foreground") },
+        card: { DEFAULT: c("card"), foreground: c("card-foreground") },
+        chart: { 1: c("chart-1"), 2: c("chart-2"), 3: c("chart-3"), 4: c("chart-4"), grid: c("chart-grid") },
+        sidebar: {
+          DEFAULT: c("sidebar-background"), foreground: c("sidebar-foreground"),
+          primary: c("sidebar-primary"), "primary-foreground": c("sidebar-primary-foreground"),
+          accent: c("sidebar-accent"), "accent-foreground": c("sidebar-accent-foreground"),
+          border: c("sidebar-border"), ring: c("sidebar-ring"),
+        },
+      },
+      fontFamily: {
+        sans: ['"Geist Variable"', '"Geist"', "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ['"Geist Mono Variable"', '"Geist Mono"', "ui-monospace", "monospace"],
+      },
+      borderRadius: { xl: "0.75rem", lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+      boxShadow: {
+        sm: "0 1px 2px oklch(0.3 0.02 65 / .06)",
+        md: "0 1px 2px oklch(0.3 0.02 65 / .05), 0 8px 24px -8px oklch(0.3 0.02 65 / .14)",
+        lg: "0 12px 40px -12px oklch(0.25 0.02 65 / .22)",
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(.22,1,.36,1)", spring: "cubic-bezier(.34,1.4,.64,1)",
+      },
+      transitionDuration: { fast: "120ms", base: "200ms", slow: "360ms", draw: "1100ms" },
+      keyframes: {
+        "accordion-down": { from: { height: 0 }, to: { height: "var(--radix-accordion-content-height)" } },
+        "accordion-up": { from: { height: "var(--radix-accordion-content-height)" }, to: { height: 0 } },
+        "pm-in": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "none" } },
+        "pm-grow": { from: { transform: "scaleX(0)" }, to: { transform: "scaleX(1)" } },
+        "pm-page": { from: { opacity: 0, transform: "translateY(10px)", filter: "blur(3px)" }, to: { opacity: 1, transform: "none", filter: "none" } },
+        "pm-fade": { from: { opacity: 0 }, to: { opacity: 1 } },
+        "pm-draw": { to: { strokeDashoffset: 0 } },
+        "grow-y": { from: { transform: "scaleY(0)" }, to: { transform: "scaleY(1)" } },
+        "spin-in": { from: { transform: "rotate(-90deg) scale(.5)", opacity: 0 }, to: { transform: "none", opacity: 1 } },
+        "slide-in": { from: { opacity: 0, transform: "translateX(16px)" }, to: { opacity: 1, transform: "none" } },
+        "pulse-live": { "70%": { boxShadow: "0 0 0 7px oklch(0.68 0.15 152 / 0)" }, "100%": { boxShadow: "0 0 0 0 oklch(0.68 0.15 152 / 0)" } },
+        // Forms, sheets and toasts
+        "fm-fade-out": { to: { opacity: 0 } },
+        "fm-pop": { from: { opacity: 0, transform: "translateY(10px) scale(.97)" }, to: { opacity: 1, transform: "none" } },
+        "fm-pop-out": { to: { opacity: 0, transform: "translateY(6px) scale(.98)" } },
+        "fm-drop": { from: { opacity: 0, transform: "translateY(-4px) scale(.98)" }, to: { opacity: 1, transform: "none" } },
+        // Two identical shakes: alternating between them replays the animation without remounting
+        "fm-shake": { "0%,100%": { transform: "none" }, "20%": { transform: "translateX(-7px)" }, "40%": { transform: "translateX(6px)" }, "60%": { transform: "translateX(-4px)" }, "80%": { transform: "translateX(2px)" } },
+        "fm-shake-b": { "0%,100%": { transform: "none" }, "20%": { transform: "translateX(-7px)" }, "40%": { transform: "translateX(6px)" }, "60%": { transform: "translateX(-4px)" }, "80%": { transform: "translateX(2px)" } },
+        "fm-err": { from: { opacity: 0, transform: "translateY(-3px)" }, to: { opacity: 1, transform: "none" } },
+        "fm-chip": { from: { opacity: 0, transform: "scale(.8)" }, to: { opacity: 1, transform: "none" } },
+        "fm-flash": { "0%": { boxShadow: "0 0 0 0 transparent" }, "25%": { boxShadow: "0 0 0 4px oklch(var(--ring) / .35)" }, "100%": { boxShadow: "0 0 0 0 transparent" } },
+        "fm-toast": { from: { opacity: 0, transform: "translateY(14px) scale(.96)" }, to: { opacity: 1, transform: "none" } },
+        "sh-in": { from: { opacity: 0, transform: "translateX(28px)" }, to: { opacity: 1, transform: "none" } },
+        "sh-out": { to: { opacity: 0, transform: "translateX(18px)" } },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+        "pm-in": "pm-in 360ms cubic-bezier(.22,1,.36,1) both",
+        "pm-grow": "pm-grow 1.1s cubic-bezier(.22,1,.36,1) both",
+        "pm-page": "pm-page 420ms cubic-bezier(.22,1,.36,1) both",
+        "pm-tab": "pm-page 320ms cubic-bezier(.22,1,.36,1) both",
+        "pm-fade-late": "pm-fade 600ms cubic-bezier(.22,1,.36,1) 500ms both",
+        "pm-draw": "pm-draw 1.1s cubic-bezier(.22,1,.36,1) forwards",
+        "grow-y": "grow-y 1.1s cubic-bezier(.22,1,.36,1) both",
+        "spin-in": "spin-in 420ms cubic-bezier(.34,1.4,.64,1) both",
+        "slide-in": "slide-in 380ms cubic-bezier(.22,1,.36,1) both",
+        "pulse-live": "pulse-live 2s infinite",
+        "fm-fade": "pm-fade 200ms cubic-bezier(.22,1,.36,1) both",
+        "fm-fade-out": "fm-fade-out 170ms cubic-bezier(.22,1,.36,1) both",
+        "fm-pop": "fm-pop 340ms cubic-bezier(.34,1.4,.64,1) both",
+        "fm-pop-out": "fm-pop-out 170ms cubic-bezier(.22,1,.36,1) both",
+        "fm-drop": "fm-drop 200ms cubic-bezier(.22,1,.36,1) both",
+        "fm-shake": "fm-shake 380ms cubic-bezier(.22,1,.36,1)",
+        "fm-shake-b": "fm-shake-b 380ms cubic-bezier(.22,1,.36,1)",
+        "fm-err": "fm-err 220ms cubic-bezier(.22,1,.36,1) both",
+        "fm-chip": "fm-chip 260ms cubic-bezier(.34,1.4,.64,1) both",
+        "fm-flash": "fm-flash 900ms cubic-bezier(.22,1,.36,1)",
+        "fm-toast": "fm-toast 460ms cubic-bezier(.34,1.4,.64,1) both",
+        "sh-in": "sh-in 380ms cubic-bezier(.22,1,.36,1) both",
+        "sh-out": "sh-out 170ms cubic-bezier(.22,1,.36,1) both",
+      },
+    },
   },
-  plugins: [require("tailwindcss-animate", "@tailwindcss/forms")],
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/forms")({ strategy: "class" })],
 };
