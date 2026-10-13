@@ -1,77 +1,41 @@
-import axios, { AxiosResponse } from "axios";
-import { GET_TASKS } from "@/queries/taskQueries";
+import { GET_ALL_TASKS, GET_TASKS } from "@/queries/taskQueries";
 import {
     CREATE_TASK,
     UPDATE_TASK,
     UPDATE_TASK_STATUS,
     DELETE_TASK,
 } from "@/mutations/taskMutations";
+import { gql } from "@/api/graphql";
 import type { Task } from "@/types/taskTypes";
-import type { GraphqlResponse } from "@/types/genericTypes";
 
-const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
-    headers: { "Content-Type": "application/json" },
-});
+export const getTasks = async (projectId: string): Promise<Task[]> =>
+    (await gql<{ tasks: Task[] }>(GET_TASKS, { projectId })).tasks;
 
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-});
-
-export const getTasks = async (projectId: string): Promise<Task[]> => {
-    const response: AxiosResponse<GraphqlResponse<{ tasks: Task[] }>> = await api.post("", {
-        query: GET_TASKS,
-        variables: { projectId },
-    });
-    if (response.data.errors) throw new Error(response.data.errors[0].message);
-    return response.data.data.tasks;
-};
+/** Every task the user can see, across all their projects. */
+export const getAllTasks = async (): Promise<Task[]> =>
+    (await gql<{ allTasks: Task[] }>(GET_ALL_TASKS)).allTasks;
 
 export const createTask = async (vars: {
     title: string;
     projectId: string;
-    assignedTo?: string;
-    deadline?: string;
+    assignedTo?: string | null;
+    deadline?: string | null;
     priority?: string;
-}): Promise<Task> => {
-    const response: AxiosResponse<GraphqlResponse<{ createTask: Task }>> = await api.post("", {
-        query: CREATE_TASK,
-        variables: vars,
-    });
-    if (response.data.errors) throw new Error(response.data.errors[0].message);
-    return response.data.data.createTask;
-};
+    currentStatus?: "NEW" | "IN_PROGRESS";
+}): Promise<Task> => (await gql<{ createTask: Task }>(CREATE_TASK, vars)).createTask;
 
+/** null for `assignedTo` / `deadline` clears it. */
 export const updateTask = async (vars: {
     id: string;
     title?: string;
-    assignedTo?: string;
-    deadline?: string;
+    assignedTo?: string | null;
+    deadline?: string | null;
     priority?: string;
-}): Promise<Task> => {
-    const response: AxiosResponse<GraphqlResponse<{ updateTask: Task }>> = await api.post("", {
-        query: UPDATE_TASK,
-        variables: vars,
-    });
-    if (response.data.errors) throw new Error(response.data.errors[0].message);
-    return response.data.data.updateTask;
-};
+}): Promise<Task> => (await gql<{ updateTask: Task }>(UPDATE_TASK, vars)).updateTask;
 
-export const updateTaskStatus = async (id: string, status: string): Promise<Task> => {
-    const response: AxiosResponse<GraphqlResponse<{ updateTaskStatus: Task }>> = await api.post("", {
-        query: UPDATE_TASK_STATUS,
-        variables: { id, status },
-    });
-    if (response.data.errors) throw new Error(response.data.errors[0].message);
-    return response.data.data.updateTaskStatus;
-};
+export const updateTaskStatus = async (id: string, status: string): Promise<Task> =>
+    (await gql<{ updateTaskStatus: Task }>(UPDATE_TASK_STATUS, { id, status })).updateTaskStatus;
 
 export const deleteTask = async (id: string): Promise<void> => {
-    const response: AxiosResponse<GraphqlResponse<{ deleteTask: { id: string } }>> = await api.post("", {
-        query: DELETE_TASK,
-        variables: { id },
-    });
-    if (response.data.errors) throw new Error(response.data.errors[0].message);
+    await gql(DELETE_TASK, { id });
 };
