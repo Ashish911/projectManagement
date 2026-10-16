@@ -38,6 +38,9 @@ npm run test:server
 npm run db:indexes
 npm run db:indexes:prod
 
+# Seed a local throwaway DB for the frontend e2e suite (Playwright runs this itself; refuses non-local URIs)
+MONGO_URI=mongodb://127.0.0.1:27018/projoman-e2e REDIS_PORT=6380 node scripts/seed-e2e.js
+
 # Run a specific test by name (no dedicated script — use jest directly)
 node --experimental-vm-modules node_modules/.bin/jest tests/client.test.js --verbose -t "should add a client"
 ```

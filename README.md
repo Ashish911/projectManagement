@@ -60,8 +60,8 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 | Health Checks (`/health/live`, `/health/ready`) | Complete |
 | Docker (dev + prod profiles, incl. notification worker) | Complete |
 | CPU Clustering (production multi-process) | Complete |
-| E2E Testing | Planned |
-| CI/CD (GitHub Actions) | Planned |
+| E2E Testing (Playwright, real stack, in `frontend/e2e/`) | Complete — auth, roles, clients, projects, tasks board, comments, live notifications |
+| CI (GitHub Actions: server Jest, frontend Vitest, Playwright e2e) | Complete — deployment (CD) still planned |
 
 ## Backend Tech Stack
 
@@ -169,6 +169,17 @@ node --experimental-vm-modules node_modules/.bin/jest tests/task.test.js --verbo
 ```
 
 Tests use Jest with `unstable_mockModule` to mock at the repository boundary — no real DB connection required. New behaviour is written test first: the test is seen failing before the code makes it pass.
+
+### End-to-end tests (Playwright)
+
+From `frontend/` (Node ≥ 20.19):
+
+```bash
+npm run e2e:redis   # Redis for e2e on port 6380 (Docker), once per boot
+npm run e2e         # Starts in-memory MongoDB, the API, the worker and Vite on their own ports, seeds, runs the specs
+```
+
+Details in [`frontend/CLAUDE.md`](frontend/CLAUDE.md#e2e-playwright). CI runs the server tests, the frontend tests, then the e2e suite on every push and pull request to `main`.
 
 ## Architecture Overview
 

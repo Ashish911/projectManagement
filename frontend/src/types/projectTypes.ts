@@ -6,6 +6,7 @@ export interface Project {
     name: string;
     description: string;
     status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+    dueDate?: string | null;
     client: Pick<Client, 'id' | 'name'> | null;
     user: Pick<User, 'id' | 'name' | 'email'>[];
 }

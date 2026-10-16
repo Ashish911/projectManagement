@@ -17,7 +17,7 @@ This file gives Claude Code context about the frontend app. Keep it updated as f
 | State | Redux + Redux Thunk (session, profile, and the users / clients / projects / tasks lists) |
 | API | Axios via one `gql()` helper → raw GraphQL strings → `VITE_API_URL` |
 | Live updates | `graphql-ws` client (`src/api/ws.ts`) for GraphQL subscriptions |
-| Tests | Vitest 0.34 + Testing Library (jsdom) |
+| Tests | Vitest 0.34 + Testing Library (jsdom); Playwright for e2e (`e2e/`) |
 | Icons | Tabler Icons + Lucide React |
 
 ## Commands
@@ -29,6 +29,10 @@ npm run preview    # Preview production build
 npm test           # Vitest, watch mode
 npm run test:run   # Vitest, single run
 npx vitest run src/hooks/use-selection.test.ts   # One file
+npm run e2e:redis  # Once per boot: Redis for e2e on port 6380 (Docker)
+npm run e2e        # Playwright e2e against the real stack
+npm run e2e:ui     # Same, in Playwright's UI mode
+npx playwright test e2e/tasks.spec.ts   # One spec
 ```
 
 `tsc` has a baseline of 35 errors in older files (`useInputFields`, `useInputMap`, `ui/dialog`, `user-auth-form`, legacy redux files). Don't add to it.
@@ -134,6 +138,16 @@ Also re-exported from `@/hooks`: `useTheme`, `useIsMobile`, `useForm`, `useForms
 - Mock at the API boundary (`@/api/*Api`, `@/api/ws`) with `vi.mock`, and mock `react-redux` with a fake state.
 - For module-level stores, `vi.resetModules()` and import dynamically per test. Then import anything that shares a module instance (e.g. `FormsContext`) dynamically too.
 - Test names use `🟢` for happy paths and `🔴` for failure/edge cases, as on the server.
+
+### E2E (Playwright)
+
+`npm run e2e` starts its own stack on ports that don't clash with dev, in this order: in-memory MongoDB (27018, `e2e/mongo-server.mjs`), the API (8001, `NODE_ENV=test`), the notification worker, and Vite (4001). It needs Redis on 6380 (`npm run e2e:redis`; CI uses a service container). Node ≥ 20.19.
+- `e2e/global-setup.ts` reseeds the database with `server/scripts/seed-e2e.js` (one user per role, client "Acme Corp", project "Website Revamp", one task; password `Password123!`) and saves a signed-in browser state per role.
+- Start a spec signed in with `signedInAs("user" | "clientAdmin" | "superAdmin")`; seeded ids and names come from the `seed` fixture (`e2e/fixtures.ts`). For two users at once, open contexts with `browser.newContext({ storageState: roleState(role) })` (see `comments.spec.ts`).
+- Specs run in file order on one database, so give records you create a unique name (`Date.now()`).
+- Select by role, label or placeholder. Form fields have no `<label>`, so use placeholders inside the dialog. Board columns have `data-testid="column-<STATUS>"`.
+- Same test-first rule: if a new spec passes on its first run, break the feature on purpose and watch it fail.
+- `E2E_BROWSER_CHANNEL=chrome` uses the installed Google Chrome instead of Playwright's Chromium.
 
 ## Key Conventions
 
