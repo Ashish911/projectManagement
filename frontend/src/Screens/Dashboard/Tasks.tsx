@@ -1,693 +1,225 @@
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { AppLayout } from "@/Screens/Components/AppLayout";
-import { createTask, updateTask, updateTaskStatus, deleteTask } from "@/api/taskApi";
-import { createSubTask, updateSubTask, updateSubTaskStatus, deleteSubTask } from "@/api/subTaskApi";
-import { fetchTasks, addTaskToStore, updateTaskInStore, removeTaskFromStore } from "@/redux/actions/tasksActions";
-import { fetchSubTasks, addSubTaskToStore, updateSubTaskInStore, removeSubTaskFromStore } from "@/redux/actions/subTasksActions";
-import { fetchProjects } from "@/redux/actions/projectsActions";
-import { fetchUsers } from "@/redux/actions/usersListActions";
-import type { Task } from "@/types/taskTypes";
-import type { SubTask } from "@/types/subTaskTypes";
-import type { Project } from "@/types/projectTypes";
-import type { User } from "@/types/userTypes";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog";
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from "@/components/ui/sheet";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import React, { useState } from "react"
+import { createPortal } from "react-dom"
+import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
+import { IconChevronRight, IconListCheck, IconMessagePlus, IconPlus, IconArrowUpRight } from "@tabler/icons-react"
+import { getSubTasks } from "@/api/subTaskApi"
+import { Button } from "@/components/ui/button"
+import { PageHead } from "@/components/pm/page-head"
+import { Segmented } from "@/components/pm/segmented"
+import { StatusBadge } from "@/components/pm/status-badge"
+import { Avatar } from "@/components/pm/avatar"
+import { Check } from "@/components/pm/check"
+import { EmptyState } from "@/components/pm/empty-state"
+import { TaskRow, dueBucket, isOverdue, type DueBucket } from "@/components/pm/task-row"
+import { daysFrom, dueLabel, parseDate } from "@/components/pm/dates"
+import { SubtaskChip } from "@/components/forms/task-sheet"
+import { useForms } from "@/components/forms/forms-context"
+import { useAppData } from "@/components/forms/use-app-data"
+import { useTaskActions } from "@/components/forms/task-actions"
+import { cn } from "@/lib/utils"
+import type { Task, TaskStatus } from "@/types/taskTypes"
+import type { SubTask } from "@/types/subTaskTypes"
 
-// ── constants ─────────────────────────────────────────────────────────────────
+const COLUMNS: TaskStatus[] = ["NEW", "IN_PROGRESS", "REOPENED", "RESOLVED"]
+const COLUMN_LABEL: Record<TaskStatus, string> = { NEW: "New", IN_PROGRESS: "In progress", REOPENED: "Reopened", RESOLVED: "Resolved" }
+const GROUPS: [DueBucket, string][] = [["overdue", "Overdue"], ["today", "Today"], ["week", "This week"], ["later", "Later"], ["done", "Resolved"]]
 
-const PRIORITY_LABELS: Record<string, string> = {
-    URGENT: "Urgent",
-    HIGH: "High",
-    NORMAL: "Normal",
-    BACKLOG: "Backlog",
-};
-
-const PRIORITY_VARIANT: Record<string, "destructive" | "default" | "secondary" | "outline"> = {
-    URGENT: "destructive",
-    HIGH: "default",
-    NORMAL: "secondary",
-    BACKLOG: "outline",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-    NEW: "New",
-    IN_PROGRESS: "In Progress",
-    RESOLVED: "Resolved",
-    REOPENED: "Reopened",
-};
-
-const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline" | "destructive"> = {
-    NEW: "secondary",
-    IN_PROGRESS: "default",
-    RESOLVED: "outline",
-    REOPENED: "destructive",
-};
-
-const PRIORITY_OPTIONS = ["URGENT", "HIGH", "NORMAL", "BACKLOG"];
-const STATUS_OPTIONS = ["NEW", "IN_PROGRESS", "RESOLVED", "REOPENED"];
-
-// ── reusable form fields ──────────────────────────────────────────────────────
-
-function TaskFormFields({
-    form,
-    onChange,
-    users,
-}: {
-    form: { title: string; assignedTo: string; deadline: string; priority: string };
-    onChange: (f: any) => void;
-    users: User[];
-}) {
+/** Board card: priority, due date, title, project, subtask chip, assignee. */
+function TaskCard({ task, dragging, overlay }: { task: Task; dragging?: boolean; overlay?: boolean }) {
+    const due = parseDate(task.deadline)
+    const overdue = isOverdue(task)
     return (
-        <div className="space-y-4">
-            <div className="space-y-1.5">
-                <Label>Title</Label>
-                <Input value={form.title} onChange={(e) => onChange({ ...form, title: e.target.value })} />
+        <div
+            className={cn(
+                "grid gap-2.5 rounded-xl border bg-card p-3 shadow-sm transition duration-base ease-out",
+                overlay ? "rotate-[1.5deg] cursor-grabbing shadow-lg" : "cursor-grab hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
+                dragging && "opacity-40",
+            )}
+        >
+            <div className="flex items-center justify-between">
+                <StatusBadge value={task.priority} />
+                <span className={cn("num text-xs", overdue ? "tone-red tone-fg font-semibold" : "text-subtle-foreground")}>{due ? dueLabel(due) : ""}</span>
             </div>
-            <div className="space-y-1.5">
-                <Label>Assign To (optional)</Label>
-                <Select value={form.assignedTo} onValueChange={(v) => onChange({ ...form, assignedTo: v === "none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {users.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1.5">
-                <Label>Deadline (optional)</Label>
-                <Input type="date" value={form.deadline} onChange={(e) => onChange({ ...form, deadline: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-                <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={(v) => onChange({ ...form, priority: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        {PRIORITY_OPTIONS.map((p) => (
-                            <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+            <div className="text-[13.5px] font-medium leading-[1.35]">{task.title}</div>
+            <div className="flex items-center gap-2.5">
+                <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{task.project?.name}</span>
+                <SubtaskChip task={task} />
+                {task.assignedTo && <Avatar name={task.assignedTo.name} seed={task.assignedTo.id} size={22} />}
             </div>
         </div>
-    );
+    )
 }
 
-const EMPTY_FORM = { title: "", assignedTo: "", deadline: "", priority: "NORMAL" };
+/** Card wrapper that can be dragged to another column; a click (without dragging) opens the task. */
+function DraggableCard({ task, canDrag, onOpen }: { task: Task; canDrag: boolean; onOpen: () => void }) {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !canDrag })
+    return (
+        <div ref={setNodeRef} {...attributes} {...listeners} onClick={onOpen} className="animate-pm-in outline-none" aria-label={task.title}>
+            <TaskCard task={task} dragging={isDragging} />
+        </div>
+    )
+}
 
-// ── page ──────────────────────────────────────────────────────────────────────
+/** Board column that accepts dropped cards and highlights while one hovers over it. */
+function Column({ status, count, dragging, canAdd, onAdd, children }: { status: TaskStatus; count: number; dragging: boolean; canAdd: boolean; onAdd: () => void; children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({ id: status })
+    return (
+        <div
+            ref={setNodeRef}
+            data-testid={`column-${status}`} // e2e drag-and-drop target
+            className={cn(
+                "grid min-h-[320px] content-start gap-2.5 rounded-xl border bg-surface-2 p-2.5 transition-colors duration-base",
+                isOver && "border-primary bg-accent",
+            )}
+        >
+            <div className="flex items-center gap-2 px-1 pb-1 pt-0.5">
+                <StatusBadge value={status} />
+                <span className="num rounded-full bg-surface-3 px-1.5 py-px text-[11px] text-muted-foreground">{count}</span>
+                {canAdd && (
+                    <Button variant="ghost" size="icon" className="ml-auto size-7" aria-label={`Add task to ${COLUMN_LABEL[status]}`} onClick={onAdd}><IconPlus /></Button>
+                )}
+            </div>
+            {children}
+            {isOver && dragging && (
+                <div className="animate-pm-in rounded-lg border-[1.5px] border-dashed border-primary p-3.5 text-center text-[12.5px] text-accent-foreground">Drop to mark {COLUMN_LABEL[status]}</div>
+            )}
+        </div>
+    )
+}
+
+/** List row with a caret that reveals the task's subtasks (loaded on first expand). */
+function ExpandableRow({ task, onOpen, onToggle }: { task: Task; onOpen: () => void; onToggle: () => void }) {
+    const [open, setOpen] = useState(false)
+    const [subs, setSubs] = useState<SubTask[] | null>(null)
+    const hasSubs = (task.subTaskStats?.total ?? 0) > 0
+    const toggleOpen = () => {
+        setOpen(!open)
+        if (!subs) getSubTasks(task.id).then(setSubs).catch(() => setSubs([]))
+    }
+    return (
+        <div>
+            <div className="grid grid-cols-[24px_minmax(0,1fr)] items-center">
+                {hasSubs ? (
+                    <button type="button" onClick={toggleOpen} aria-expanded={open} aria-label={open ? "Hide subtasks" : "Show subtasks"}
+                        className={cn("grid size-[22px] place-items-center rounded-md text-subtle-foreground transition-transform duration-base ease-out hover:bg-surface-3 hover:text-foreground", open && "rotate-90")}>
+                        <IconChevronRight size={15} />
+                    </button>
+                ) : <span />}
+                <TaskRow task={task} showStatus onOpen={onOpen} onToggle={onToggle} />
+            </div>
+            {open && (
+                <div className="mb-2 ml-9 grid animate-pm-in gap-px border-l-[1.5px] pl-3">
+                    {subs === null ? (
+                        <div className="px-2 py-1.5 text-xs text-subtle-foreground">Loading…</div>
+                    ) : subs.map((s) => {
+                        const due = parseDate(s.deadline)
+                        const done = s.currentStatus === "RESOLVED"
+                        return (
+                            <div key={s.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-surface-2">
+                                <Check checked={done} label={s.title} onChange={() => {}} disabled />
+                                <span className={cn("min-w-0 flex-1 truncate", done && "text-subtle-foreground line-through")}>{s.title}</span>
+                                {s.currentStatus === "IN_PROGRESS" && <span className="size-[7px] flex-none rounded-full bg-primary shadow-[0_0_0_3px_oklch(var(--accent))]" />}
+                                {s.priority !== "NORMAL" && !done && <StatusBadge value={s.priority} />}
+                                {due && <span className={cn("num w-[52px] text-right text-xs", !done && daysFrom(due) < 0 ? "tone-red tone-fg" : "text-subtle-foreground")}>{dueLabel(due)}</span>}
+                                {s.assignedTo ? <Avatar name={s.assignedTo.name} seed={s.assignedTo.id} size={20} /> : <span className="size-5" />}
+                            </div>
+                        )
+                    })}
+                    <button type="button" onClick={onOpen} className="flex h-7 items-center gap-2 justify-self-start rounded-lg px-2 text-[12.5px] font-medium text-muted-foreground hover:bg-surface-2 hover:text-foreground">
+                        <IconArrowUpRight size={15} />Open task to edit subtasks
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
 
 export const Tasks: React.FC = () => {
-    const dispatch = useDispatch();
-    const { tasks, loading: tasksLoading, error: tasksError, selectedProjectId } = useSelector((state: any) => state.tasks);
-    const { subTasks, loading: subTasksLoading, error: subTasksError, selectedTaskId } = useSelector((state: any) => state.subTasks);
-    const { projects } = useSelector((state: any) => state.projects);
-    const { users } = useSelector((state: any) => state.usersList);
+    const openForm = useForms()
+    const { profile, role, tasks, tasksLoaded } = useAppData()
+    const { setStatus, toggleResolved } = useTaskActions()
+    const isMember = role === "USER"
+    const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
 
-    const [activeProjectId, setActiveProjectId] = useState<string>("");
-    const [activeTaskId, setActiveTaskId] = useState<string>("");
-    const [taskSearch, setTaskSearch] = useState("");
-    const [subTaskSearch, setSubTaskSearch] = useState("");
+    const [view, setView] = useState<"board" | "list">("board")
+    const [who, setWho] = useState<"all" | "mine">("all")
+    const [dragId, setDragId] = useState<string | null>(null)
+    // A small movement threshold, so a plain click still opens the card
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-    useEffect(() => {
-        dispatch(fetchProjects() as any);
-        dispatch(fetchUsers() as any);
-    }, [dispatch]);
+    const mine = (t: Task) => t.assignedTo?.id === profile?.id
+    const visible = tasks.filter((t) => (isMember || who === "mine" ? mine(t) : true))
+    const open = visible.filter((t) => t.currentStatus !== "RESOLVED").length
+    const overdue = visible.filter(isOverdue).length
+    // Members may only move their own tasks; admins can move any
+    const canMove = (t: Task) => isAdmin || mine(t)
 
-    useEffect(() => {
-        if (activeProjectId) dispatch(fetchTasks(activeProjectId) as any);
-        setActiveTaskId(""); // reset task selection on project change
-    }, [activeProjectId, dispatch]);
-
-    useEffect(() => {
-        if (activeTaskId) dispatch(fetchSubTasks(activeTaskId) as any);
-    }, [activeTaskId, dispatch]);
-
-    // ── task dialog state ─────────────────────────────────────────────────────
-    const [viewTask, setViewTask] = useState<Task | null>(null);
-    const [taskCreateOpen, setTaskCreateOpen] = useState(false);
-    const [taskEditTarget, setTaskEditTarget] = useState<Task | null>(null);
-    const [taskDeleteTarget, setTaskDeleteTarget] = useState<Task | null>(null);
-    const [taskStatusUpdate, setTaskStatusUpdate] = useState<{ task: Task; status: string } | null>(null);
-
-    const [taskCreateForm, setTaskCreateForm] = useState(EMPTY_FORM);
-    const [taskEditForm, setTaskEditForm] = useState(EMPTY_FORM);
-
-    const [taskCreating, setTaskCreating] = useState(false);
-    const [taskUpdating, setTaskUpdating] = useState(false);
-    const [taskDeleting, setTaskDeleting] = useState(false);
-    const [taskStatusUpdating, setTaskStatusUpdating] = useState(false);
-
-    // ── subtask dialog state ──────────────────────────────────────────────────
-    const [viewSubTask, setViewSubTask] = useState<SubTask | null>(null);
-    const [subTaskCreateOpen, setSubTaskCreateOpen] = useState(false);
-    const [subTaskEditTarget, setSubTaskEditTarget] = useState<SubTask | null>(null);
-    const [subTaskDeleteTarget, setSubTaskDeleteTarget] = useState<SubTask | null>(null);
-    const [subTaskStatusUpdate, setSubTaskStatusUpdate] = useState<{ subTask: SubTask; status: string } | null>(null);
-
-    const [subTaskCreateForm, setSubTaskCreateForm] = useState(EMPTY_FORM);
-    const [subTaskEditForm, setSubTaskEditForm] = useState(EMPTY_FORM);
-
-    const [subTaskCreating, setSubTaskCreating] = useState(false);
-    const [subTaskUpdating, setSubTaskUpdating] = useState(false);
-    const [subTaskDeleting, setSubTaskDeleting] = useState(false);
-    const [subTaskStatusUpdating, setSubTaskStatusUpdating] = useState(false);
-
-    const [actionError, setActionError] = useState<string | null>(null);
-
-    // ── task handlers ─────────────────────────────────────────────────────────
-    const handleTaskCreate = async () => {
-        setTaskCreating(true); setActionError(null);
-        try {
-            const task = await createTask({
-                title: taskCreateForm.title,
-                projectId: activeProjectId,
-                assignedTo: taskCreateForm.assignedTo || undefined,
-                deadline: taskCreateForm.deadline || undefined,
-                priority: taskCreateForm.priority || undefined,
-            });
-            dispatch(addTaskToStore(task));
-            setTaskCreateOpen(false);
-            setTaskCreateForm(EMPTY_FORM);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setTaskCreating(false); }
-    };
-
-    const handleTaskUpdate = async () => {
-        if (!taskEditTarget) return;
-        setTaskUpdating(true); setActionError(null);
-        try {
-            const updated = await updateTask({
-                id: taskEditTarget.id,
-                title: taskEditForm.title,
-                assignedTo: taskEditForm.assignedTo || undefined,
-                deadline: taskEditForm.deadline || undefined,
-                priority: taskEditForm.priority || undefined,
-            });
-            dispatch(updateTaskInStore(updated));
-            setTaskEditTarget(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setTaskUpdating(false); }
-    };
-
-    const handleTaskStatusUpdate = async () => {
-        if (!taskStatusUpdate) return;
-        setTaskStatusUpdating(true); setActionError(null);
-        try {
-            const updated = await updateTaskStatus(taskStatusUpdate.task.id, taskStatusUpdate.status);
-            dispatch(updateTaskInStore(updated));
-            setTaskStatusUpdate(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setTaskStatusUpdating(false); }
-    };
-
-    const handleTaskDelete = async () => {
-        if (!taskDeleteTarget) return;
-        setTaskDeleting(true); setActionError(null);
-        try {
-            await deleteTask(taskDeleteTarget.id);
-            dispatch(removeTaskFromStore(taskDeleteTarget.id));
-            if (activeTaskId === taskDeleteTarget.id) setActiveTaskId("");
-            setTaskDeleteTarget(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setTaskDeleting(false); }
-    };
-
-    const openTaskEdit = (task: Task) => {
-        setTaskEditForm({ title: task.title, assignedTo: task.assignedTo?.id ?? "", deadline: task.deadline ?? "", priority: task.priority });
-        setActionError(null);
-        setTaskEditTarget(task);
-    };
-
-    // ── subtask handlers ──────────────────────────────────────────────────────
-    const handleSubTaskCreate = async () => {
-        setSubTaskCreating(true); setActionError(null);
-        try {
-            const subTask = await createSubTask({
-                title: subTaskCreateForm.title,
-                taskId: activeTaskId,
-                assignedTo: subTaskCreateForm.assignedTo || undefined,
-                deadline: subTaskCreateForm.deadline || undefined,
-                priority: subTaskCreateForm.priority || undefined,
-            });
-            dispatch(addSubTaskToStore(subTask));
-            setSubTaskCreateOpen(false);
-            setSubTaskCreateForm(EMPTY_FORM);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setSubTaskCreating(false); }
-    };
-
-    const handleSubTaskUpdate = async () => {
-        if (!subTaskEditTarget) return;
-        setSubTaskUpdating(true); setActionError(null);
-        try {
-            const updated = await updateSubTask({
-                id: subTaskEditTarget.id,
-                title: subTaskEditForm.title,
-                assignedTo: subTaskEditForm.assignedTo || undefined,
-                deadline: subTaskEditForm.deadline || undefined,
-                priority: subTaskEditForm.priority || undefined,
-            });
-            dispatch(updateSubTaskInStore(updated));
-            setSubTaskEditTarget(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setSubTaskUpdating(false); }
-    };
-
-    const handleSubTaskStatusUpdate = async () => {
-        if (!subTaskStatusUpdate) return;
-        setSubTaskStatusUpdating(true); setActionError(null);
-        try {
-            const updated = await updateSubTaskStatus(subTaskStatusUpdate.subTask.id, subTaskStatusUpdate.status);
-            dispatch(updateSubTaskInStore(updated));
-            setSubTaskStatusUpdate(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setSubTaskStatusUpdating(false); }
-    };
-
-    const handleSubTaskDelete = async () => {
-        if (!subTaskDeleteTarget) return;
-        setSubTaskDeleting(true); setActionError(null);
-        try {
-            await deleteSubTask(subTaskDeleteTarget.id);
-            dispatch(removeSubTaskFromStore(subTaskDeleteTarget.id));
-            setSubTaskDeleteTarget(null);
-        } catch (e: any) { setActionError(e.message); }
-        finally { setSubTaskDeleting(false); }
-    };
-
-    const openSubTaskEdit = (subTask: SubTask) => {
-        setSubTaskEditForm({ title: subTask.title, assignedTo: subTask.assignedTo?.id ?? "", deadline: subTask.deadline ?? "", priority: subTask.priority });
-        setActionError(null);
-        setSubTaskEditTarget(subTask);
-    };
-
-    // Only regular users can be assigned tasks — no admins
-    const assignableUsers: User[] = users.filter((u: User) => u.role === "USER");
-
-    const allTasks = selectedProjectId === activeProjectId ? tasks : [];
-    const allSubTasks = selectedTaskId === activeTaskId ? subTasks : [];
-    const visibleTasks = allTasks.filter((t: Task) =>
-        !taskSearch || t.title.toLowerCase().includes(taskSearch.toLowerCase())
-    );
-    const visibleSubTasks = allSubTasks.filter((st: SubTask) =>
-        !subTaskSearch || st.title.toLowerCase().includes(subTaskSearch.toLowerCase())
-    );
-    const activeTask = visibleTasks.find((t: Task) => t.id === activeTaskId) ?? null;
+    const onDragStart = (e: DragStartEvent) => setDragId(String(e.active.id))
+    const onDragEnd = (e: DragEndEvent) => {
+        setDragId(null)
+        const task = tasks.find((t) => t.id === e.active.id)
+        if (task && e.over) setStatus(task, e.over.id as TaskStatus)
+    }
+    const dragged = tasks.find((t) => t.id === dragId)
 
     return (
-        <AppLayout>
+        <>
+            <PageHead title={isMember ? "My tasks" : "Tasks"} sub={`${open} open · ${overdue} overdue`}>
+                <Segmented value={view} onChange={setView} options={[{ value: "board", label: "Board" }, { value: "list", label: "List" }]} />
+                {!isMember && <Segmented value={who} onChange={setWho} options={[{ value: "all", label: "Everyone" }, { value: "mine", label: "Assigned to me" }]} />}
+                {isAdmin && <Button onClick={() => openForm("task")}><IconPlus />New task</Button>}
+                {isMember && <Button onClick={() => openForm("log-update")}><IconMessagePlus />Log update</Button>}
+            </PageHead>
 
-            {/* ══ TASKS SECTION ════════════════════════════════════════════════ */}
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-semibold tracking-tight">Tasks</h2>
-                    <p className="text-muted-foreground text-sm">View and manage tasks by project.</p>
-                </div>
-                <Button onClick={() => { setTaskCreateForm(EMPTY_FORM); setActionError(null); setTaskCreateOpen(true); }} disabled={!activeProjectId}>
-                    <Plus className="mr-2 h-4 w-4" /> Create Task
-                </Button>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-                <Label className="shrink-0 text-sm font-medium">Project</Label>
-                <Select value={activeProjectId} onValueChange={setActiveProjectId}>
-                    <SelectTrigger className="w-64"><SelectValue placeholder="Select a project…" /></SelectTrigger>
-                    <SelectContent>
-                        {projects.map((p: Project) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {activeProjectId && (
-                    <div className="relative ml-auto">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                            placeholder="Search tasks…"
-                            value={taskSearch}
-                            onChange={(e) => setTaskSearch(e.target.value)}
-                            className="pl-9 w-52"
-                        />
+            {!tasksLoaded ? (
+                <div className="py-16 text-center text-sm text-muted-foreground">Loading tasks…</div>
+            ) : view === "board" ? (
+                <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+                    <div key={`b-${who}`} className="grid animate-pm-tab grid-cols-[repeat(4,minmax(240px,1fr))] items-start gap-3.5 overflow-x-auto pb-1.5">
+                        {COLUMNS.map((s) => {
+                            const col = visible.filter((t) => t.currentStatus === s)
+                            return (
+                                <Column key={s} status={s} count={col.length} dragging={!!dragId} canAdd={isAdmin && (s === "NEW" || s === "IN_PROGRESS")} onAdd={() => openForm("task", { status: s })}>
+                                    {col.map((t) => (
+                                        <DraggableCard key={t.id} task={t} canDrag={canMove(t)} onOpen={() => openForm("task-view", { id: t.id })} />
+                                    ))}
+                                </Column>
+                            )
+                        })}
                     </div>
-                )}
-            </div>
-
-            <div className="rounded-lg border bg-card">
-                {!activeProjectId ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Select a project to view its tasks.</div>
-                ) : tasksLoading ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Loading tasks…</div>
-                ) : tasksError ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-destructive">Failed to load tasks.</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b bg-muted/50 text-muted-foreground">
-                                    <th className="px-4 py-3 text-center font-medium">Title</th>
-                                    <th className="px-4 py-3 text-center font-medium">Priority</th>
-                                    <th className="px-4 py-3 text-center font-medium">Status</th>
-                                    <th className="px-4 py-3 text-center font-medium">Deadline</th>
-                                    <th className="px-4 py-3 text-center font-medium">Assigned To</th>
-                                    <th className="px-4 py-3 text-center font-medium">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {visibleTasks.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No tasks found for this project.</td></tr>
-                                ) : (
-                                    visibleTasks.map((task: Task) => (
-                                        <tr
-                                            key={task.id}
-                                            className={`cursor-pointer border-b last:border-0 transition-colors duration-150 hover:bg-muted/50 ${activeTaskId === task.id ? "bg-muted/30" : ""}`}
-                                            onClick={() => { setViewTask(task); }}
-                                        >
-                                            <td className="px-4 py-3 font-medium">{task.title}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                <Badge variant={PRIORITY_VARIANT[task.priority] ?? "secondary"}>{PRIORITY_LABELS[task.priority] ?? task.priority}</Badge>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <Badge variant={STATUS_VARIANT[task.currentStatus] ?? "secondary"}>{STATUS_LABELS[task.currentStatus] ?? task.currentStatus}</Badge>
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-muted-foreground">{task.deadline ?? "—"}</td>
-                                            <td className="px-4 py-3 text-center text-muted-foreground">{task.assignedTo?.name ?? "—"}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="icon" title="Update status"
-                                                        onClick={(e) => { e.stopPropagation(); setTaskStatusUpdate({ task, status: task.currentStatus }); setActionError(null); }}>
-                                                        <Pencil className="h-4 w-4 text-blue-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" title="Delete task"
-                                                        onClick={(e) => { e.stopPropagation(); setTaskDeleteTarget(task); setActionError(null); }}>
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-
-            {/* ══ SUBTASKS SECTION ═════════════════════════════════════════════ */}
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-semibold tracking-tight">Sub Tasks</h2>
-                    <p className="text-muted-foreground text-sm">View and manage sub tasks by task.</p>
-                </div>
-                <Button onClick={() => { setSubTaskCreateForm(EMPTY_FORM); setActionError(null); setSubTaskCreateOpen(true); }} disabled={!activeTaskId}>
-                    <Plus className="mr-2 h-4 w-4" /> Create Sub Task
-                </Button>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-                <Label className="shrink-0 text-sm font-medium">Task</Label>
-                <Select value={activeTaskId} onValueChange={setActiveTaskId} disabled={!activeProjectId || allTasks.length === 0}>
-                    <SelectTrigger className="w-64"><SelectValue placeholder="Select a task…" /></SelectTrigger>
-                    <SelectContent>
-                        {allTasks.map((t: Task) => (
-                            <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {activeTaskId && (
-                    <div className="relative ml-auto">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                            placeholder="Search sub tasks…"
-                            value={subTaskSearch}
-                            onChange={(e) => setSubTaskSearch(e.target.value)}
-                            className="pl-9 w-52"
-                        />
-                    </div>
-                )}
-                {activeTask && (
-                    <Badge variant={STATUS_VARIANT[activeTask.currentStatus] ?? "secondary"}>
-                        {STATUS_LABELS[activeTask.currentStatus] ?? activeTask.currentStatus}
-                    </Badge>
-                )}
-            </div>
-
-            <div className="rounded-lg border bg-card">
-                {!activeTaskId ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Select a task to view its sub tasks.</div>
-                ) : subTasksLoading ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Loading sub tasks…</div>
-                ) : subTasksError ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-destructive">Failed to load sub tasks.</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b bg-muted/50 text-muted-foreground">
-                                    <th className="px-4 py-3 text-center font-medium">Title</th>
-                                    <th className="px-4 py-3 text-center font-medium">Priority</th>
-                                    <th className="px-4 py-3 text-center font-medium">Status</th>
-                                    <th className="px-4 py-3 text-center font-medium">Deadline</th>
-                                    <th className="px-4 py-3 text-center font-medium">Assigned To</th>
-                                    <th className="px-4 py-3 text-center font-medium">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {visibleSubTasks.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No sub tasks found for this task.</td></tr>
-                                ) : (
-                                    visibleSubTasks.map((subTask: SubTask) => (
-                                        <tr
-                                            key={subTask.id}
-                                            className="cursor-pointer border-b last:border-0 transition-colors duration-150 hover:bg-muted/50"
-                                            onClick={() => setViewSubTask(subTask)}
-                                        >
-                                            <td className="px-4 py-3 font-medium">{subTask.title}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                <Badge variant={PRIORITY_VARIANT[subTask.priority] ?? "secondary"}>{PRIORITY_LABELS[subTask.priority] ?? subTask.priority}</Badge>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <Badge variant={STATUS_VARIANT[subTask.currentStatus] ?? "secondary"}>{STATUS_LABELS[subTask.currentStatus] ?? subTask.currentStatus}</Badge>
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-muted-foreground">{subTask.deadline ?? "—"}</td>
-                                            <td className="px-4 py-3 text-center text-muted-foreground">{subTask.assignedTo?.name ?? "—"}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="icon" title="Update status"
-                                                        onClick={(e) => { e.stopPropagation(); setSubTaskStatusUpdate({ subTask, status: subTask.currentStatus }); setActionError(null); }}>
-                                                        <Pencil className="h-4 w-4 text-blue-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" title="Delete sub task"
-                                                        onClick={(e) => { e.stopPropagation(); setSubTaskDeleteTarget(subTask); setActionError(null); }}>
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-
-            {/* ══ TASK DIALOGS ═════════════════════════════════════════════════ */}
-
-            <Sheet open={!!viewTask} onOpenChange={(open) => !open && setViewTask(null)}>
-                <SheetContent>
-                    <SheetHeader><SheetTitle>Task Details</SheetTitle><SheetDescription>Full information for this task.</SheetDescription></SheetHeader>
-                    {viewTask && (
-                        <div className="mt-6 space-y-4">
-                            {([
-                                ["Title", viewTask.title],
-                                ["Priority", PRIORITY_LABELS[viewTask.priority] ?? viewTask.priority],
-                                ["Status", STATUS_LABELS[viewTask.currentStatus] ?? viewTask.currentStatus],
-                                ["Deadline", viewTask.deadline ?? "—"],
-                                ["Assigned To", viewTask.assignedTo?.name ?? "—"],
-                                ["Created By", viewTask.createdBy?.name ?? "—"],
-                                ["Project", viewTask.project?.name ?? "—"],
-                            ] as [string, string][]).map(([label, value]) => (
-                                <div key={label} className="space-y-1">
-                                    <Label className="text-muted-foreground text-xs">{label}</Label>
-                                    <Input value={value} readOnly disabled />
-                                </div>
-                            ))}
-                            <div className="pt-2 space-y-2">
-                                <Button className="w-full" onClick={() => { setViewTask(null); openTaskEdit(viewTask); }}>
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit Task
-                                </Button>
-                                <Button className="w-full" variant="outline" onClick={() => { setActiveTaskId(viewTask.id); setViewTask(null); }}>
-                                    View Sub Tasks
-                                </Button>
-                            </div>
-                        </div>
+                    {/* Portalled: PageTransition's filter/transform would make the fixed overlay sit off the pointer and drop into the wrong column */}
+                    {createPortal(
+                        <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(.22,1,.36,1)" }}>{dragged ? <TaskCard task={dragged} overlay /> : null}</DragOverlay>,
+                        document.body,
                     )}
-                </SheetContent>
-            </Sheet>
-
-            <Dialog open={taskCreateOpen} onOpenChange={(open) => { if (!open) { setTaskCreateOpen(false); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Create Task</DialogTitle><DialogDescription>Add a new task to this project.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={taskCreateForm} onChange={setTaskCreateForm} users={assignableUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setTaskCreateOpen(false); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleTaskCreate} disabled={taskCreating || !taskCreateForm.title}>{taskCreating ? "Creating…" : "Create"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!taskEditTarget} onOpenChange={(open) => { if (!open) { setTaskEditTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Edit Task</DialogTitle><DialogDescription>Update details for <strong>{taskEditTarget?.title}</strong>.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={taskEditForm} onChange={setTaskEditForm} users={assignableUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setTaskEditTarget(null); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleTaskUpdate} disabled={taskUpdating || !taskEditForm.title}>{taskUpdating ? "Saving…" : "Save Changes"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!taskStatusUpdate} onOpenChange={(open) => { if (!open) { setTaskStatusUpdate(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Update Task Status</DialogTitle><DialogDescription>Change the status of <strong>{taskStatusUpdate?.task.title}</strong>.</DialogDescription></DialogHeader>
-                    <div className="space-y-1.5">
-                        <Label>Status</Label>
-                        <Select value={taskStatusUpdate?.status ?? ""} onValueChange={(v) => setTaskStatusUpdate((prev) => prev ? { ...prev, status: v } : null)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>{STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setTaskStatusUpdate(null); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleTaskStatusUpdate} disabled={taskStatusUpdating}>{taskStatusUpdating ? "Updating…" : "Update"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!taskDeleteTarget} onOpenChange={(open) => { if (!open) { setTaskDeleteTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Delete Task</DialogTitle><DialogDescription>Permanently delete <strong>{taskDeleteTarget?.title}</strong>? This cannot be undone.</DialogDescription></DialogHeader>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setTaskDeleteTarget(null); setActionError(null); }}>Cancel</Button>
-                        <Button variant="destructive" onClick={handleTaskDelete} disabled={taskDeleting}>{taskDeleting ? "Deleting…" : "Delete"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ══ SUBTASK DIALOGS ══════════════════════════════════════════════ */}
-
-            <Sheet open={!!viewSubTask} onOpenChange={(open) => !open && setViewSubTask(null)}>
-                <SheetContent>
-                    <SheetHeader><SheetTitle>Sub Task Details</SheetTitle><SheetDescription>Full information for this sub task.</SheetDescription></SheetHeader>
-                    {viewSubTask && (
-                        <div className="mt-6 space-y-4">
-                            {([
-                                ["Title", viewSubTask.title],
-                                ["Priority", PRIORITY_LABELS[viewSubTask.priority] ?? viewSubTask.priority],
-                                ["Status", STATUS_LABELS[viewSubTask.currentStatus] ?? viewSubTask.currentStatus],
-                                ["Deadline", viewSubTask.deadline ?? "—"],
-                                ["Assigned To", viewSubTask.assignedTo?.name ?? "—"],
-                                ["Created By", viewSubTask.createdBy?.name ?? "—"],
-                            ] as [string, string][]).map(([label, value]) => (
-                                <div key={label} className="space-y-1">
-                                    <Label className="text-muted-foreground text-xs">{label}</Label>
-                                    <Input value={value} readOnly disabled />
+                </DndContext>
+            ) : (
+                <div key={`l-${who}`} className="grid animate-pm-tab gap-4">
+                    {GROUPS.map(([bucket, label], gi) => {
+                        const list = visible.filter((t) => dueBucket(t) === bucket)
+                        if (!list.length) return null
+                        return (
+                            <section key={bucket} className="animate-pm-in rounded-xl border bg-card px-2.5 py-2 shadow-sm" style={{ animationDelay: `${gi * 50}ms` }}>
+                                <div className="flex items-center gap-2 px-2 pb-1.5 pt-2">
+                                    <span className={cn("text-[15px] font-semibold tracking-[-0.01em]", bucket === "overdue" && "tone-red tone-fg")}>{label}</span>
+                                    <span className="num rounded-full bg-surface-3 px-1.5 py-px text-[11px] text-muted-foreground">{list.length}</span>
                                 </div>
-                            ))}
-                            <div className="pt-2">
-                                <Button className="w-full" onClick={() => { setViewSubTask(null); openSubTaskEdit(viewSubTask); }}>
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit Sub Task
-                                </Button>
-                            </div>
-                        </div>
+                                {list.map((t) => (
+                                    <ExpandableRow
+                                        key={t.id}
+                                        task={t}
+                                        onOpen={() => openForm("task-view", { id: t.id })}
+                                        onToggle={() => (canMove(t) ? toggleResolved(t) : openForm("task-view", { id: t.id }))}
+                                    />
+                                ))}
+                            </section>
+                        )
+                    })}
+                    {!visible.length && (
+                        <div className="rounded-xl border bg-card"><EmptyState icon={IconListCheck} title={isMember || who === "mine" ? "Nothing assigned to you" : "No tasks yet"} /></div>
                     )}
-                </SheetContent>
-            </Sheet>
-
-            <Dialog open={subTaskCreateOpen} onOpenChange={(open) => { if (!open) { setSubTaskCreateOpen(false); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Create Sub Task</DialogTitle><DialogDescription>Add a new sub task to this task.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={subTaskCreateForm} onChange={setSubTaskCreateForm} users={assignableUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setSubTaskCreateOpen(false); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleSubTaskCreate} disabled={subTaskCreating || !subTaskCreateForm.title}>{subTaskCreating ? "Creating…" : "Create"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!subTaskEditTarget} onOpenChange={(open) => { if (!open) { setSubTaskEditTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Edit Sub Task</DialogTitle><DialogDescription>Update details for <strong>{subTaskEditTarget?.title}</strong>.</DialogDescription></DialogHeader>
-                    <TaskFormFields form={subTaskEditForm} onChange={setSubTaskEditForm} users={assignableUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setSubTaskEditTarget(null); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleSubTaskUpdate} disabled={subTaskUpdating || !subTaskEditForm.title}>{subTaskUpdating ? "Saving…" : "Save Changes"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!subTaskStatusUpdate} onOpenChange={(open) => { if (!open) { setSubTaskStatusUpdate(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Update Sub Task Status</DialogTitle><DialogDescription>Change the status of <strong>{subTaskStatusUpdate?.subTask.title}</strong>.</DialogDescription></DialogHeader>
-                    <div className="space-y-1.5">
-                        <Label>Status</Label>
-                        <Select value={subTaskStatusUpdate?.status ?? ""} onValueChange={(v) => setSubTaskStatusUpdate((prev) => prev ? { ...prev, status: v } : null)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>{STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setSubTaskStatusUpdate(null); setActionError(null); }}>Cancel</Button>
-                        <Button onClick={handleSubTaskStatusUpdate} disabled={subTaskStatusUpdating}>{subTaskStatusUpdating ? "Updating…" : "Update"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!subTaskDeleteTarget} onOpenChange={(open) => { if (!open) { setSubTaskDeleteTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Delete Sub Task</DialogTitle><DialogDescription>Permanently delete <strong>{subTaskDeleteTarget?.title}</strong>? This cannot be undone.</DialogDescription></DialogHeader>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setSubTaskDeleteTarget(null); setActionError(null); }}>Cancel</Button>
-                        <Button variant="destructive" onClick={handleSubTaskDelete} disabled={subTaskDeleting}>{subTaskDeleting ? "Deleting…" : "Delete"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-        </AppLayout>
-    );
-};
+                </div>
+            )}
+        </>
+    )
+}

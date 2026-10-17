@@ -1,588 +1,379 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AppLayout } from "@/Screens/Components/AppLayout";
+import { useNavigate } from "react-router-dom";
 import {
-    addClient,
-    updateClient,
-    confirmDeleteClient,
-    forceDeleteClient,
-    assignAdmin,
-} from "@/api/clientApi";
-import {
-    fetchClients,
-    addClientToStore,
-    updateClientInStore,
-    removeClientFromStore,
-    flagClientDeleteRequest,
-    setClientsFilter,
-} from "@/redux/actions/clientsActions";
-import { fetchUsers } from "@/redux/actions/usersListActions";
+    IconBuilding,
+    IconMail,
+    IconPencil,
+    IconPhone,
+    IconPlus,
+    IconSelector,
+    IconTrash,
+    IconUserPlus,
+} from "@tabler/icons-react";
+import { confirmDeleteClient, getClient } from "@/api/clientApi";
+import { flagClientDeleteRequest, setClientsFilter } from "@/redux/actions/clientsActions";
 import type { Client } from "@/types/clientTypes";
-import type { User } from "@/types/userTypes";
-import { Badge } from "@/components/ui/badge";
+import type { Project } from "@/types/projectTypes";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog";
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from "@/components/ui/sheet";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Pencil, Trash2, UserPlus, Plus, ShieldOff, Search } from "lucide-react";
+import { PageHead } from "@/components/pm/page-head";
+import { SearchBox } from "@/components/pm/search-box";
+import { AnimatedTabs } from "@/components/pm/animated-tabs";
+import { TableCard, tableCls } from "@/components/pm/table";
+import { Avatar } from "@/components/pm/avatar";
+import { StatusBadge, Tag } from "@/components/pm/status-badge";
+import { EmptyState } from "@/components/pm/empty-state";
+import { projectProgress } from "@/components/pm/project-card";
+import { Progress } from "@/components/pm/progress";
+import { FormFoot, FormModal, SubmitButton } from "@/components/forms/form-kit";
+import { useForms } from "@/components/forms/forms-context";
+import { useAppData } from "@/components/forms/use-app-data";
+import { toast, toastError } from "@/components/forms/toaster";
+import { cn } from "@/lib/utils";
+import type { Task } from "@/types/taskTypes";
+import { useAsyncAction } from "@/hooks/use-async-action";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+type Tab = "all" | "attn" | "del";
 
-const EMPTY_FORM = { name: "", email: "", phone: "", assignedAdmin: "" };
+const needsAttention = (c: Client) => !c.assignedAdmin || c.deleteRequest;
 
-type ClientForm = typeof EMPTY_FORM;
+/** First letter of the client on a neutral tile, standing in for a logo. */
+const LogoChip = ({ name, large }: { name: string; large?: boolean }) => (
+    <span className={cn("grid flex-none place-items-center rounded-lg bg-surface-3 font-semibold text-muted-foreground", large ? "size-11 text-lg" : "size-8")}>
+        {name[0]?.toUpperCase()}
+    </span>
+);
 
-function ClientFormFields({
-    form,
-    onChange,
-    adminUsers,
-}: {
-    form: ClientForm;
-    onChange: (f: ClientForm) => void;
-    adminUsers: User[];
-}) {
-    return (
-        <div className="space-y-4">
-            <div className="space-y-1.5">
-                <Label>Name</Label>
-                <Input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={(e) => onChange({ ...form, email: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-                <Label>Assigned Admin (optional)</Label>
-                <Select
-                    value={form.assignedAdmin}
-                    onValueChange={(v) => onChange({ ...form, assignedAdmin: v === "none" ? "" : v })}
-                >
-                    <SelectTrigger>
-                        <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {adminUsers.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                                {u.name} ({u.email})
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-        </div>
-    );
-}
+const ClientFlags = ({ client }: { client: Client }) => (
+    <div className="flex flex-wrap gap-1.5">
+        {!client.assignedAdmin && <Tag tone="amber">No admin</Tag>}
+        {client.deleteRequest && <Tag tone="red">Delete requested</Tag>}
+        {!needsAttention(client) && <Tag tone="green">Healthy</Tag>}
+    </div>
+);
 
-// ── page ──────────────────────────────────────────────────────────────────────
+/** Resolved share of every task across the client's projects. */
+const clientProgress = (tasks: Task[], ps: Project[]) => {
+    const mine = tasks.filter((t) => ps.some((p) => p.id === t.project?.id));
+    return {
+        open: mine.filter((t) => t.currentStatus !== "RESOLVED").length,
+        pct: mine.length ? Math.round((mine.filter((t) => t.currentStatus === "RESOLVED").length / mine.length) * 100) : 0,
+    };
+};
 
 export const Clients: React.FC = () => {
     const dispatch = useDispatch();
-    const { clients, loading, error, activeFilter } = useSelector((state: any) => state.clients);
-    const { users } = useSelector((state: any) => state.usersList);
-    const { profile } = useSelector((state: any) => state.profile);
+    const openForm = useForms();
+    const { loading, error, activeFilter } = useSelector((state: any) => state.clients);
+    const { profile, clients, projects, tasks } = useAppData();
     const isSuperAdmin = profile?.role === "SUPER_ADMIN";
+
+    // A dashboard drill-down may arrive with a filter; adopt it as the active tab once
+    const [tab, setTab] = useState<Tab>(activeFilter === "pending" ? "del" : activeFilter === "unassigned" ? "attn" : "all");
     const [search, setSearch] = useState("");
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [requesting, setRequesting] = useState<Client | null>(null);
 
-    const FILTER_LABELS: Record<string, string> = {
-        pending: "Pending Deletion",
-        unassigned: "Unassigned",
-    };
-
-    const visibleClients: Client[] = (activeFilter
-        ? activeFilter === "pending"
-            ? clients.filter((c: Client) => c.deleteRequest)
-            : clients.filter((c: Client) => !c.assignedAdmin)
-        : clients
-    ).filter((c: Client) =>
-        !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
-    );
+    // CLIENT_ADMINs can't list clients; they load their own one, found via their projects
+    const [ownClient, setOwnClient] = useState<Client | null>(null);
+    const ownClientId = !isSuperAdmin ? projects.find((p) => p.client)?.client?.id : undefined;
 
     useEffect(() => {
-        dispatch(fetchClients() as any);
-        dispatch(fetchUsers() as any);
+        if (activeFilter) dispatch(setClientsFilter(null));
     }, [dispatch]);
 
-    // For create form: CLIENT_ADMIN users not assigned to any client
-    const assignedAdminIds = new Set(
-        clients.map((c: Client) => c.assignedAdmin?.id).filter(Boolean)
+    useEffect(() => {
+        if (ownClientId) getClient(ownClientId).then(setOwnClient).catch(() => setOwnClient(null));
+    }, [ownClientId]);
+
+    const allClients: Client[] = isSuperAdmin ? clients : ownClient ? [ownClient] : [];
+    const projectsOf = (clientId: string) => projects.filter((p) => p.client?.id === clientId);
+
+    const counts = {
+        all: allClients.length,
+        attn: allClients.filter(needsAttention).length,
+        del: allClients.filter((c) => c.deleteRequest).length,
+    };
+    const rows = allClients.filter(
+        (c) =>
+            (tab === "all" || (tab === "attn" && needsAttention(c)) || (tab === "del" && c.deleteRequest)) &&
+            (!search || `${c.name} ${c.email ?? ""}`.toLowerCase().includes(search.toLowerCase())),
     );
-    const adminUsers: User[] = users.filter(
-        (u: User) => u.role === "CLIENT_ADMIN" && !assignedAdminIds.has(u.id)
+    const selected = allClients.find((c) => c.id === selectedId) ?? rows[0] ?? null;
+
+    const detail = selected && (
+        <ClientDetail
+            key={selected.id}
+            client={selected}
+            projects={projectsOf(selected.id)}
+            tasks={tasks}
+            isSuperAdmin={isSuperAdmin}
+            onEdit={() => openForm("client", isSuperAdmin ? { clientId: selected.id } : { client: selected, onSaved: setOwnClient })}
+            onAssign={() => openForm("client", { clientId: selected.id })}
+            onRequestDeletion={() => setRequesting(selected)}
+            onApproveDeletion={() => openForm("delete-client", { clientId: selected.id })}
+            onDeclineDeletion={() => openForm("decline-request", { clientId: selected.id })}
+            onDelete={() => openForm("delete-client", { clientId: selected.id })}
+        />
     );
-
-    // For assign dialog: exclude only admins assigned to OTHER clients so re-assignment works
-    const adminUsersForAssign = (targetClientId: string): User[] => {
-        const otherAssignedIds = new Set(
-            clients
-                .filter((c: Client) => c.id !== targetClientId)
-                .map((c: Client) => c.assignedAdmin?.id)
-                .filter(Boolean)
-        );
-        return users.filter(
-            (u: User) => u.role === "CLIENT_ADMIN" && !otherAssignedIds.has(u.id)
-        );
-    };
-
-    // ── dialogs state ─────────────────────────────────────────────────────────
-    const [viewClient, setViewClient] = useState<Client | null>(null);
-    const [createOpen, setCreateOpen] = useState(false);
-    const [editTarget, setEditTarget] = useState<Client | null>(null);
-    const [assignTarget, setAssignTarget] = useState<Client | null>(null);
-    const [deleteRequestTarget, setDeleteRequestTarget] = useState<Client | null>(null);
-    const [forceDeleteTarget, setForceDeleteTarget] = useState<Client | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
-
-    const [createForm, setCreateForm] = useState<ClientForm>(EMPTY_FORM);
-    const [editForm, setEditForm] = useState<ClientForm>(EMPTY_FORM);
-    const [assignAdminId, setAssignAdminId] = useState("");
-
-    // ── mutation loading flags ────────────────────────────────────────────────
-    const [creating, setCreating] = useState(false);
-    const [updating, setUpdating] = useState(false);
-    const [deletingRequest, setDeletingRequest] = useState(false);
-    const [forceDeleting, setForceDeleting] = useState(false);
-    const [assigning, setAssigning] = useState(false);
-
-    // ── mutation handlers ─────────────────────────────────────────────────────
-    const handleCreate = async () => {
-        setCreating(true);
-        setActionError(null);
-        try {
-            const newClient = await addClient({
-                name: createForm.name,
-                email: createForm.email,
-                phone: createForm.phone,
-                ...(createForm.assignedAdmin ? { assignedAdmin: createForm.assignedAdmin } : {}),
-            });
-            dispatch(addClientToStore(newClient));
-            setCreateOpen(false);
-            setCreateForm(EMPTY_FORM);
-        } catch (e: any) {
-            setActionError(e.message);
-        } finally {
-            setCreating(false);
-        }
-    };
-
-    const handleUpdate = async () => {
-        if (!editTarget) return;
-        setUpdating(true);
-        setActionError(null);
-        try {
-            const updated = await updateClient({
-                id: editTarget.id,
-                name: editForm.name,
-                email: editForm.email,
-                phone: editForm.phone,
-                ...(editForm.assignedAdmin ? { assignedAdmin: editForm.assignedAdmin } : {}),
-            });
-            dispatch(updateClientInStore(updated));
-            setEditTarget(null);
-        } catch (e: any) {
-            setActionError(e.message);
-        } finally {
-            setUpdating(false);
-        }
-    };
-
-    const handleDeleteRequest = async () => {
-        if (!deleteRequestTarget) return;
-        setDeletingRequest(true);
-        setActionError(null);
-        try {
-            await confirmDeleteClient(deleteRequestTarget.id);
-            dispatch(flagClientDeleteRequest(deleteRequestTarget.id));
-            setDeleteRequestTarget(null);
-        } catch (e: any) {
-            setActionError(e.message);
-        } finally {
-            setDeletingRequest(false);
-        }
-    };
-
-    const handleForceDelete = async () => {
-        if (!forceDeleteTarget) return;
-        setForceDeleting(true);
-        setActionError(null);
-        try {
-            await forceDeleteClient(forceDeleteTarget.id);
-            dispatch(removeClientFromStore(forceDeleteTarget.id));
-            setForceDeleteTarget(null);
-        } catch (e: any) {
-            setActionError(e.message);
-        } finally {
-            setForceDeleting(false);
-        }
-    };
-
-    const handleAssignAdmin = async () => {
-        if (!assignTarget) return;
-        setAssigning(true);
-        setActionError(null);
-        try {
-            const updated = await assignAdmin({ id: assignTarget.id, assignedAdmin: assignAdminId });
-            dispatch(updateClientInStore(updated));
-            setAssignTarget(null);
-            setAssignAdminId("");
-        } catch (e: any) {
-            setActionError(e.message);
-        } finally {
-            setAssigning(false);
-        }
-    };
-
-    // ── open edit dialog ──────────────────────────────────────────────────────
-    const openEdit = (client: Client) => {
-        setEditForm({
-            name: client.name,
-            email: client.email,
-            phone: client.phone,
-            assignedAdmin: client.assignedAdmin?.id ?? "",
-        });
-        setActionError(null);
-        setEditTarget(client);
-    };
-
-    const openAssign = (client: Client) => {
-        setAssignAdminId(client.assignedAdmin?.id ?? "");
-        setActionError(null);
-        setAssignTarget(client);
-    };
 
     return (
-        <AppLayout>
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-semibold tracking-tight">Clients</h2>
-                    <p className="text-muted-foreground text-sm">View and manage clients.</p>
+        <>
+            <PageHead
+                title={isSuperAdmin ? "Clients" : "Your client"}
+                sub={isSuperAdmin ? `${counts.all} ${counts.all === 1 ? "client" : "clients"} · ${counts.attn} need${counts.attn === 1 ? "s" : ""} attention` : "Details and projects for the client you manage"}
+            >
+                {isSuperAdmin && <Button onClick={() => openForm("client")}><IconPlus />New client</Button>}
+            </PageHead>
+
+            {!isSuperAdmin ? (
+                // CLIENT_ADMIN: just their client's card
+                detail ? (
+                    <div className="max-w-[640px]">{detail}</div>
+                ) : (
+                    <TableCard><EmptyState icon={IconBuilding} title="No client to show" hint="You'll see your client here once it has at least one project." /></TableCard>
+                )
+            ) : (
+                <>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                        <SearchBox value={search} onChange={setSearch} placeholder="Search name or email" />
+                        <div className="[&_[role=tablist]]:border-b-0">
+                            <AnimatedTabs
+                                value={tab}
+                                onChange={setTab}
+                                tabs={[
+                                    { value: "all", label: "All", count: counts.all },
+                                    { value: "attn", label: "Needs attention", count: counts.attn, alert: true },
+                                    { value: "del", label: "Delete requested", count: counts.del, alert: true },
+                                ]}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
+                        <TableCard>
+                            {loading && allClients.length === 0 ? (
+                                <div className="py-16 text-center text-sm text-muted-foreground">Loading clients…</div>
+                            ) : error ? (
+                                <div className="tone-red tone-fg py-16 text-center text-sm">Failed to load clients.</div>
+                            ) : rows.length === 0 ? (
+                                <EmptyState icon={IconBuilding} title="No clients found" />
+                            ) : (
+                                <table className={tableCls.table}>
+                                    <thead>
+                                        <tr>
+                                            <th className={tableCls.th}>Client</th>
+                                            <th className={tableCls.th}>Client admin</th>
+                                            <th className={tableCls.th}>Projects</th>
+                                            <th className={tableCls.th}>Open tasks</th>
+                                            <th className={tableCls.th}>Progress</th>
+                                            <th className={tableCls.th}>Flags</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody key={tab + search}>
+                                        {rows.map((c, k) => {
+                                            const ps = projectsOf(c.id);
+                                            const prog = clientProgress(tasks, ps);
+                                            return (
+                                                <tr
+                                                    key={c.id}
+                                                    onClick={() => setSelectedId(c.id)}
+                                                    className={cn(tableCls.tr, "cursor-pointer", selected?.id === c.id && tableCls.trSelected)}
+                                                    style={{ animationDelay: `${k * 40}ms` }}
+                                                >
+                                                    <td className={tableCls.td}>
+                                                        <div className="flex items-center gap-2.5">
+                                                            <LogoChip name={c.name} />
+                                                            <div className="min-w-0">
+                                                                <div className="font-medium">{c.name}</div>
+                                                                <div className="text-xs text-subtle-foreground">{c.email ?? "No email"}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className={tableCls.td}>
+                                                        {c.assignedAdmin ? (
+                                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                                                <Avatar name={c.assignedAdmin.name} seed={c.assignedAdmin.id} size={24} />
+                                                                <span>{c.assignedAdmin.name}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-subtle-foreground">Unassigned</span>
+                                                        )}
+                                                    </td>
+                                                    <td className={cn(tableCls.td, "num")}>{ps.length}</td>
+                                                    <td className={cn(tableCls.td, "num")}>{prog.open}</td>
+                                                    <td className={tableCls.td}>
+                                                        <div className="flex items-center gap-2">
+                                                            <Progress value={prog.pct} className="w-[70px]" />
+                                                            <span className="num text-xs text-subtle-foreground">{prog.pct}%</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className={tableCls.td}><ClientFlags client={c} /></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </TableCard>
+                        {detail}
+                    </div>
+                </>
+            )}
+
+            {requesting && (
+                <RequestDeletionDialog
+                    client={requesting}
+                    onClose={() => setRequesting(null)}
+                    onDone={() => setOwnClient((c) => (c ? { ...c, deleteRequest: true } : c))}
+                />
+            )}
+        </>
+    );
+};
+
+/** CLIENT_ADMIN asks a super admin to delete their client. */
+export function RequestDeletionDialog({ client, onClose, onDone }: { client: Client; onClose: () => void; onDone: () => void }) {
+    const dispatch = useDispatch();
+    const { run, busy, error } = useAsyncAction();
+    useEffect(() => { if (error) toastError(error); }, [error]);
+    const submit = () => run(async () => {
+        await confirmDeleteClient(client.id);
+        dispatch(flagClientDeleteRequest(client.id));
+        onDone();
+        toast({ text: <span>Deletion of <b>{client.name}</b> requested</span> });
+        onClose();
+    });
+    return (
+        <FormModal
+            title={`Request deletion of ${client.name}?`}
+            desc="A super admin reviews the request. Nothing is deleted until they approve."
+            icon={IconTrash}
+            tone="red"
+            width={480}
+            onClose={onClose}
+            onSubmit={submit}
+            closing={false}
+            footer={<FormFoot onClose={onClose}><SubmitButton busy={busy} danger onClick={submit}>Request deletion</SubmitButton></FormFoot>}
+        >
+            <div className="text-[13.5px] text-muted-foreground">You’ll get a notification when a super admin approves or declines.</div>
+        </FormModal>
+    );
+}
+
+// ── detail panel ──────────────────────────────────────────────────────────────
+
+function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign, onRequestDeletion, onApproveDeletion, onDeclineDeletion, onDelete }: {
+    client: Client;
+    projects: Project[];
+    tasks: Task[];
+    isSuperAdmin: boolean;
+    onEdit: () => void;
+    onAssign: () => void;
+    onRequestDeletion: () => void;
+    onApproveDeletion: () => void;
+    onDeclineDeletion: () => void;
+    onDelete: () => void;
+}) {
+    const navigate = useNavigate();
+    const prog = clientProgress(tasks, projects);
+    const stats = [["Projects", projects.length], ["Open tasks", prog.open], ["Resolved", `${prog.pct}%`]] as const;
+
+    return (
+        <aside className="sticky top-[76px] grid animate-slide-in gap-[18px] rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+                <LogoChip name={client.name} large />
+                <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-xl font-semibold tracking-[-0.02em]">{client.name}</h2>
+                    <ClientFlags client={client} />
                 </div>
-                {isSuperAdmin && (
-                    <Button onClick={() => { setCreateForm(EMPTY_FORM); setActionError(null); setCreateOpen(true); }}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Client
-                    </Button>
-                )}
+                <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Edit client"><IconPencil /></Button>
             </div>
 
-            {isSuperAdmin && activeFilter && (
-                <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
-                    <span>Filtered by: <strong>{FILTER_LABELS[activeFilter] ?? activeFilter}</strong></span>
-                    <button
-                        className="ml-auto rounded px-2 py-0.5 text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
-                        onClick={() => dispatch(setClientsFilter(null))}
-                    >
-                        Clear filter ×
-                    </button>
+            <div className="flex flex-wrap gap-x-[18px] gap-y-2 text-[13px] text-muted-foreground">
+                <span className="flex items-center gap-1.5"><IconMail size={15} className="text-subtle-foreground" />{client.email || "No email"}</span>
+                <span className="flex items-center gap-1.5"><IconPhone size={15} className="text-subtle-foreground" />{client.phone || "No phone"}</span>
+            </div>
+
+            {client.deleteRequest && (
+                <div className="tone-red tone-bg flex gap-3 rounded-lg px-3.5 py-3 text-[13.5px] text-foreground">
+                    <IconTrash size={18} className="tone-fg mt-px flex-none" />
+                    <div className="flex-1">
+                        <div className="font-medium">Deletion requested</div>
+                        <div className="text-xs text-muted-foreground">
+                            {isSuperAdmin
+                                ? `By ${client.assignedAdmin?.name ?? "the client admin"}. ${projects.length} ${projects.length === 1 ? "project" : "projects"} and ${prog.open} open tasks are affected.`
+                                : "Waiting for a super admin to approve."}
+                        </div>
+                        {isSuperAdmin && (
+                            <div className="mt-2.5 flex gap-2">
+                                <Button size="sm" variant="outline" onClick={onDeclineDeletion}>Decline</Button>
+                                <Button size="sm" onClick={onApproveDeletion}>Approve deletion</Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
-            <div className="relative w-full max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                    placeholder="Search by name or email…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                />
-            </div>
-
-            <div className="rounded-lg border bg-card">
-                {loading ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                        Loading clients…
-                    </div>
-                ) : error ? (
-                    <div className="flex h-48 items-center justify-center text-sm text-destructive">
-                        Failed to load clients.
-                    </div>
+            <div>
+                <div className="mb-2 text-[13px] font-medium text-muted-foreground">Client admin</div>
+                {client.assignedAdmin ? (
+                    <button
+                        disabled={!isSuperAdmin}
+                        onClick={onAssign}
+                        className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-border-strong px-3 text-left transition-colors duration-fast enabled:hover:border-primary disabled:cursor-default"
+                    >
+                        <Avatar name={client.assignedAdmin.name} seed={client.assignedAdmin.id} size={26} />
+                        <span className="flex-1 truncate">{client.assignedAdmin.name}</span>
+                        {isSuperAdmin && <IconSelector size={16} className="text-subtle-foreground" />}
+                    </button>
+                ) : isSuperAdmin ? (
+                    <button
+                        onClick={onAssign}
+                        className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 text-left text-muted-foreground transition-colors duration-fast hover:border-primary"
+                    >
+                        <IconUserPlus size={16} />
+                        <span className="flex-1">Assign a client admin</span>
+                        <IconSelector size={16} />
+                    </button>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b bg-muted/50 text-muted-foreground">
-                                    <th className="px-4 py-3 text-center font-medium">Name</th>
-                                    <th className="px-4 py-3 text-center font-medium">Email</th>
-                                    <th className="px-4 py-3 text-center font-medium">Phone</th>
-                                    <th className="px-4 py-3 text-center font-medium">Delete Request</th>
-                                    <th className="px-4 py-3 text-center font-medium">Assigned Admin</th>
-                                    <th className="px-4 py-3 text-center font-medium">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {visibleClients.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
-                                            {activeFilter ? `No ${FILTER_LABELS[activeFilter] ?? activeFilter} clients found.` : "No clients found."}
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    visibleClients.map((client: Client) => (
-                                        <tr
-                                            key={client.id}
-                                            className="cursor-pointer border-b last:border-0 transition-colors duration-150 hover:bg-muted/50"
-                                            onClick={() => setViewClient(client)}
-                                        >
-                                            <td className="px-4 py-3 font-medium">{client.name}</td>
-                                            <td className="px-4 py-3 text-muted-foreground">{client.email}</td>
-                                            <td className="px-4 py-3 text-muted-foreground">{client.phone}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                <Badge variant={client.deleteRequest ? "destructive" : "secondary"}>
-                                                    {client.deleteRequest ? "Requested" : "None"}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-muted-foreground">
-                                                {client.assignedAdmin ? client.assignedAdmin.name : "—"}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    {isSuperAdmin && (
-                                                        <>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                title="Assign admin"
-                                                                onClick={(e) => { e.stopPropagation(); openAssign(client); }}
-                                                            >
-                                                                <UserPlus className="h-4 w-4 text-blue-500" />
-                                                            </Button>
-                                                            {!client.deleteRequest && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    title="Request deletion"
-                                                                    onClick={(e) => { e.stopPropagation(); setDeleteRequestTarget(client); setActionError(null); }}
-                                                                >
-                                                                    <ShieldOff className="h-4 w-4 text-orange-500" />
-                                                                </Button>
-                                                            )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                title="Force delete"
-                                                                onClick={(e) => { e.stopPropagation(); setForceDeleteTarget(client); setActionError(null); }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                    {!isSuperAdmin && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            title="Edit client"
-                                                            onClick={(e) => { e.stopPropagation(); openEdit(client); }}
-                                                        >
-                                                            <Pencil className="h-4 w-4 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <span className="text-xs text-subtle-foreground">Unassigned</span>
                 )}
             </div>
 
-            {/* ── View Details Sheet ─────────────────────────────────────────── */}
-            <Sheet open={!!viewClient} onOpenChange={(open) => !open && setViewClient(null)}>
-                <SheetContent>
-                    <SheetHeader>
-                        <SheetTitle>Client Details</SheetTitle>
-                        <SheetDescription>Full information for this client.</SheetDescription>
-                    </SheetHeader>
-                    {viewClient && (
-                        <div className="mt-6 space-y-4">
-                            {([
-                                ["Name", viewClient.name],
-                                ["Email", viewClient.email],
-                                ["Phone", viewClient.phone],
-                                ["Delete Request", viewClient.deleteRequest ? "Yes" : "No"],
-                                ["Assigned Admin", viewClient.assignedAdmin?.name ?? "—"],
-                                ["Admin Email", viewClient.assignedAdmin?.email ?? "—"],
-                            ] as [string, string][]).map(([label, value]) => (
-                                <div key={label} className="space-y-1">
-                                    <Label className="text-muted-foreground text-xs">{label}</Label>
-                                    <Input value={value} readOnly disabled />
-                                </div>
-                            ))}
-                            <div className="pt-2">
-                                <Button
-                                    className="w-full"
-                                    onClick={() => { setViewClient(null); openEdit(viewClient); }}
-                                >
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit Client
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </SheetContent>
-            </Sheet>
-
-            {/* ── Create Client Dialog ───────────────────────────────────────── */}
-            <Dialog open={createOpen} onOpenChange={(open) => { if (!open) { setCreateOpen(false); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create Client</DialogTitle>
-                        <DialogDescription>Fill in the details for the new client.</DialogDescription>
-                    </DialogHeader>
-                    <ClientFormFields form={createForm} onChange={setCreateForm} adminUsers={adminUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setCreateOpen(false); setActionError(null); }}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreate}
-                            disabled={creating || !createForm.name || !createForm.email || !createForm.phone}
-                        >
-                            {creating ? "Creating…" : "Create"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ── Edit Client Dialog ─────────────────────────────────────────── */}
-            <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) { setEditTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit Client</DialogTitle>
-                        <DialogDescription>Update the details for <strong>{editTarget?.name}</strong>.</DialogDescription>
-                    </DialogHeader>
-                    <ClientFormFields form={editForm} onChange={setEditForm} adminUsers={adminUsers} />
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setEditTarget(null); setActionError(null); }}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleUpdate}
-                            disabled={updating || !editForm.name || !editForm.email || !editForm.phone}
-                        >
-                            {updating ? "Saving…" : "Save Changes"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ── Assign Admin Dialog ────────────────────────────────────────── */}
-            <Dialog open={!!assignTarget} onOpenChange={(open) => { if (!open) { setAssignTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Assign Admin</DialogTitle>
-                        <DialogDescription>
-                            Select a Client Admin to assign to <strong>{assignTarget?.name}</strong>.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-1.5">
-                        <Label>Admin</Label>
-                        <Select value={assignAdminId} onValueChange={setAssignAdminId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select an admin" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {adminUsersForAssign(assignTarget?.id ?? "").map((u) => (
-                                    <SelectItem key={u.id} value={u.id}>
-                                        {u.name} ({u.email})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+            <div className="grid grid-cols-3 gap-2 border-y py-3.5">
+                {stats.map(([label, value]) => (
+                    <div key={label}>
+                        <div className="num text-[22px] font-medium">{value}</div>
+                        <div className="text-xs text-subtle-foreground">{label}</div>
                     </div>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setAssignTarget(null); setActionError(null); }}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleAssignAdmin}
-                            disabled={assigning || !assignAdminId}
-                        >
-                            {assigning ? "Assigning…" : "Assign"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                ))}
+            </div>
 
-            {/* ── Delete Request Dialog ──────────────────────────────────────── */}
-            <Dialog open={!!deleteRequestTarget} onOpenChange={(open) => { if (!open) { setDeleteRequestTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Request Client Deletion</DialogTitle>
-                        <DialogDescription>
-                            Mark <strong>{deleteRequestTarget?.name}</strong> as pending deletion?
-                            This flags the client for review before permanent removal.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setDeleteRequestTarget(null); setActionError(null); }}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDeleteRequest}
-                            disabled={deletingRequest}
+            <div>
+                <div className="mb-2 text-[13px] font-medium text-muted-foreground">Projects</div>
+                {projects.length === 0 ? (
+                    <div className="text-xs text-subtle-foreground">No projects yet.</div>
+                ) : (
+                    projects.map((p) => (
+                        <button
+                            key={p.id}
+                            onClick={() => navigate(`/projects/${p.id}`)}
+                            className="flex w-full items-center gap-2.5 border-b py-2 text-left text-[13.5px] last:border-b-0 hover:text-accent-foreground"
                         >
-                            {deletingRequest ? "Requesting…" : "Confirm Request"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                            <span className="flex-1 truncate font-medium">{p.name}</span>
+                            <StatusBadge value={p.status} />
+                            <span className="num w-9 text-right text-xs text-subtle-foreground">{projectProgress(tasks, p.id).pct}%</span>
+                        </button>
+                    ))
+                )}
+            </div>
 
-            {/* ── Force Delete Dialog ────────────────────────────────────────── */}
-            <Dialog open={!!forceDeleteTarget} onOpenChange={(open) => { if (!open) { setForceDeleteTarget(null); setActionError(null); } }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Force Delete Client</DialogTitle>
-                        <DialogDescription>
-                            Permanently delete <strong>{forceDeleteTarget?.name}</strong>? This cannot be undone and will remove all associated data.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {actionError && <p className="text-sm text-destructive">{actionError}</p>}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setForceDeleteTarget(null); setActionError(null); }}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleForceDelete}
-                            disabled={forceDeleting}
-                        >
-                            {forceDeleting ? "Deleting…" : "Force Delete"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </AppLayout>
+            {isSuperAdmin ? (
+                <Button variant="outline" className="tone-red tone-fg" onClick={onDelete}><IconTrash />Delete client</Button>
+            ) : (
+                !client.deleteRequest && <Button variant="outline" className="tone-red tone-fg" onClick={onRequestDeletion}><IconTrash />Request deletion</Button>
+            )}
+        </aside>
     );
-};
+}
