@@ -5,6 +5,7 @@ import {
     USERS_LIST_REMOVE,
     USERS_LIST_PROMOTE,
     USERS_LIST_SET_FILTER,
+    USERS_LIST_UPSERT,
 } from '../constants/usersListConstants';
 import type { User } from '@/types/userTypes';
 
@@ -39,6 +40,14 @@ export const usersListReducer = (state = initialState, action: any): UsersListSt
                     u.id === action.payload ? { ...u, role: 'CLIENT_ADMIN' } : u
                 ),
             };
+        // Adds new users and replaces existing ones (create, edit, role change, unlock)
+        case USERS_LIST_UPSERT: {
+            const incoming: User[] = action.payload;
+            const byId = new Map(incoming.map((u) => [u.id, u]));
+            const kept = state.users.map((u) => (byId.has(u.id) ? { ...u, ...byId.get(u.id)! } : u));
+            const added = incoming.filter((u) => !state.users.some((x) => x.id === u.id));
+            return { ...state, users: [...kept, ...added] };
+        }
         case USERS_LIST_SET_FILTER:
             return { ...state, roleFilter: action.payload };
         default:

@@ -1,3 +1,4 @@
+import type { User } from '@/types/userTypes';
 import {
     USERS_LIST_REQUEST,
     USERS_LIST_SUCCESS,
@@ -5,6 +6,7 @@ import {
     USERS_LIST_REMOVE,
     USERS_LIST_PROMOTE,
     USERS_LIST_SET_FILTER,
+    USERS_LIST_UPSERT,
 } from '../constants/usersListConstants';
 import { getUsers } from '@/api/userApi';
 
@@ -33,4 +35,10 @@ export const promoteUserInStore = (id: string) => ({
 export const setUsersRoleFilter = (role: string | null) => ({
     type: USERS_LIST_SET_FILTER,
     payload: role,
+});
+
+/** Adds or replaces users in the list after a create/edit/role change. */
+export const upsertUsersInStore = (users: User[]) => ({
+    type: USERS_LIST_UPSERT,
+    payload: users,
 });

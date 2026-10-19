@@ -6,16 +6,16 @@ import {
     TASKS_UPDATE,
     TASKS_REMOVE,
 } from '../constants/tasksConstants';
-import { getTasks } from '@/api/taskApi';
+import { getAllTasks } from '@/api/taskApi';
 import type { Task } from '@/types/taskTypes';
 
-export const fetchTasks = (projectId: string) => async (dispatch: any, getState: any) => {
-    const { selectedProjectId, tasks } = getState().tasks;
-    // Cache hit: same project and already have data
-    if (selectedProjectId === projectId && tasks.length > 0) return;
+/** Loads every task the user can see. Skips the call once loaded unless `force` is set. */
+export const fetchAllTasks = (force = false) => async (dispatch: any, getState: any) => {
+    const { loaded, loading } = getState().tasks;
+    if (!force && (loaded || loading)) return;
     try {
-        dispatch({ type: TASKS_FETCH_REQUEST, payload: projectId });
-        const data = await getTasks(projectId);
+        dispatch({ type: TASKS_FETCH_REQUEST });
+        const data = await getAllTasks();
         dispatch({ type: TASKS_FETCH_SUCCESS, payload: data });
     } catch (error: any) {
         dispatch({ type: TASKS_FETCH_FAIL, payload: error.message });

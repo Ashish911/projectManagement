@@ -1,5 +1,5 @@
 import React, { SyntheticEvent, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation } from "react-query";
 import { cn } from "@/components/lib/utils.ts";
 import { buttonVariants } from "@/components/ui/button.tsx";
@@ -12,8 +12,12 @@ import { resetPassword } from "@/api/authApi.ts";
 export const ResetPassword: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [token, setToken] = useState<string>(location.state?.token ?? "");
+  // The emailed link carries the token as ?token=...
+  const [token, setToken] = useState<string>(
+    searchParams.get("token") ?? location.state?.token ?? "",
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

@@ -11,7 +11,8 @@ import { forgotPassword } from "@/api/authApi.ts";
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState("");
-  const [resetToken, setResetToken] = useState<string | null>(null);
+  // Set once the request succeeds; the reset link itself is sent by email.
+  const [sentMessage, setSentMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { mutateAsync, isLoading } = useMutation({ mutationFn: forgotPassword });
@@ -21,7 +22,7 @@ export const ForgotPassword: React.FC = () => {
     setError(null);
     try {
       const res = await mutateAsync(email);
-      setResetToken(res.forgotPassword.token);
+      setSentMessage(res.forgotPassword.message);
     } catch (err: any) {
       setError(err.message);
     }
@@ -58,7 +59,7 @@ export const ForgotPassword: React.FC = () => {
         <div className="relative z-20 mt-auto">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              &ldquo;Enter your email and we&apos;ll generate a reset token for you.&rdquo;
+              &ldquo;Enter your email and we&apos;ll send you a link to reset your password.&rdquo;
             </p>
           </blockquote>
         </div>
@@ -68,27 +69,21 @@ export const ForgotPassword: React.FC = () => {
           <div className="flex flex-col space-y-2 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">Forgot Password</h1>
             <p className="text-sm text-muted-foreground">
-              Enter your email to receive a reset token
+              Enter your email to receive a reset link
             </p>
           </div>
 
-          {resetToken ? (
+          {sentMessage ? (
             <div className="grid gap-4">
               <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200">
-                <p className="font-medium mb-2">Reset token generated!</p>
-                <p className="text-xs break-all font-mono bg-white dark:bg-black rounded p-2 select-all">
-                  {resetToken}
-                </p>
+                <p className="font-medium mb-2">Check your email</p>
+                <p>{sentMessage}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Copy this token and use it on the reset password page. It expires in 1 hour.
+                  The link expires in 1 hour.
                 </p>
               </div>
-              <Link
-                to="/reset-password"
-                state={{ token: resetToken }}
-                className={cn(buttonVariants())}
-              >
-                Go to Reset Password
+              <Link to="/" className={cn(buttonVariants({ variant: "outline" }))}>
+                Back to Login
               </Link>
             </div>
           ) : (
@@ -111,7 +106,7 @@ export const ForgotPassword: React.FC = () => {
               )}
               <Button disabled={isLoading || !email}>
                 {isLoading && <Icons.niceSpinner className="mr-2 h-4 w-4 animate-spin" />}
-                Send Reset Token
+                Send Reset Link
               </Button>
             </form>
           )}
