@@ -4,6 +4,12 @@ const TASK_FIELDS = `
     priority
     deadline
     currentStatus
+    createdAt
+    resolvedAt
+    subTaskStats {
+        done
+        total
+    }
     assignedTo {
         id
         name
@@ -21,8 +27,8 @@ const TASK_FIELDS = `
 `;
 
 export const CREATE_TASK = `
-    mutation CreateTask($title: String!, $projectId: ID!, $assignedTo: ID, $deadline: String, $priority: TaskPriority) {
-        createTask(title: $title, projectId: $projectId, assignedTo: $assignedTo, deadline: $deadline, priority: $priority) {
+    mutation CreateTask($title: String!, $projectId: ID!, $assignedTo: ID, $deadline: String, $priority: TaskPriority, $currentStatus: NewTaskStatus) {
+        createTask(title: $title, projectId: $projectId, assignedTo: $assignedTo, deadline: $deadline, priority: $priority, currentStatus: $currentStatus) {
             ${TASK_FIELDS}
         }
     }

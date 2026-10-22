@@ -8,3 +8,14 @@ export const GET_NOTIFICATIONS = `
         }
     }
 `;
+
+export const NOTIFICATION_CREATED = `
+    subscription OnNotificationCreated {
+        notificationCreated {
+            id
+            content
+            status
+            createdAt
+        }
+    }
+`;

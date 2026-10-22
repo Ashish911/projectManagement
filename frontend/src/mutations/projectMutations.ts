@@ -3,6 +3,7 @@ const PROJECT_FIELDS = `
     name
     description
     status
+    dueDate
     client {
         id
         name
@@ -15,16 +16,16 @@ const PROJECT_FIELDS = `
 `;
 
 export const ADD_PROJECT = `
-    mutation CreateProject($name: String!, $description: String, $clientId: ID!, $status: ProjectStatus) {
-        addProject(name: $name, description: $description, clientId: $clientId, status: $status) {
+    mutation CreateProject($name: String!, $description: String, $clientId: ID!, $status: ProjectStatus, $dueDate: String) {
+        addProject(name: $name, description: $description, clientId: $clientId, status: $status, dueDate: $dueDate) {
             ${PROJECT_FIELDS}
         }
     }
 `;
 
 export const UPDATE_PROJECT = `
-    mutation UpdateProject($id: ID!, $name: String, $description: String, $status: UpdateProjectStatus) {
-        updateProject(id: $id, name: $name, description: $description, status: $status) {
+    mutation UpdateProject($id: ID!, $name: String, $description: String, $status: UpdateProjectStatus, $dueDate: String) {
+        updateProject(id: $id, name: $name, description: $description, status: $status, dueDate: $dueDate) {
             ${PROJECT_FIELDS}
         }
     }

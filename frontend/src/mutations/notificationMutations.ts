@@ -31,3 +31,12 @@ export const DELETE_ALL_NOTIFICATIONS = `
         }
     }
 `;
+
+export const MARK_NOTIFICATIONS_READ = `
+    mutation MarkNotificationsRead($ids: [ID!]!) {
+        markNotificationsRead(ids: $ids) {
+            id
+            status
+        }
+    }
+`;

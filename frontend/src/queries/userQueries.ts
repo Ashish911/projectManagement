@@ -1,6 +1,7 @@
 export const PROFILE = `
     query GetProfile {
         profile{
+            id,
             name,
             email,
             number,
@@ -21,6 +22,8 @@ export const GET_USERS = `
             dob
             gender
             role
+            status
+            lastLoginAt
         }
     }
 `;
@@ -35,6 +38,8 @@ export const GET_USER = `
             dob
             gender
             role
+            status
+            lastLoginAt
         }
     }
 `;

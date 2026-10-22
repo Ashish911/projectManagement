@@ -12,7 +12,7 @@ const CLIENT_FIELDS = `
 `;
 
 export const ADD_CLIENT = `
-    mutation AddClient($name: String!, $email: String!, $phone: String!, $assignedAdmin: ID) {
+    mutation AddClient($name: String!, $email: String, $phone: String, $assignedAdmin: ID) {
         addClient(name: $name, email: $email, phone: $phone, assignedAdmin: $assignedAdmin) {
             ${CLIENT_FIELDS}
         }
@@ -20,7 +20,7 @@ export const ADD_CLIENT = `
 `;
 
 export const UPDATE_CLIENT = `
-    mutation UpdateClient($id: ID!, $name: String!, $email: String!, $phone: String!, $assignedAdmin: ID) {
+    mutation UpdateClient($id: ID!, $name: String!, $email: String, $phone: String, $assignedAdmin: ID) {
         updateClient(id: $id, name: $name, email: $email, phone: $phone, assignedAdmin: $assignedAdmin) {
             ${CLIENT_FIELDS}
         }
@@ -54,6 +54,14 @@ export const FORCE_DELETE_CLIENT = `
 export const ASSIGN_ADMIN = `
     mutation AssignAdmin($id: ID!, $assignedAdmin: ID!) {
         assignAdmin(id: $id, assignedAdmin: $assignedAdmin) {
+            ${CLIENT_FIELDS}
+        }
+    }
+`;
+
+export const DECLINE_CLIENT_DELETION = `
+    mutation DeclineClientDeletion($id: ID!, $message: String) {
+        declineClientDeletion(id: $id, message: $message) {
             ${CLIENT_FIELDS}
         }
     }

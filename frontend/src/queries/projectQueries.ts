@@ -3,6 +3,7 @@ const PROJECT_FIELDS = `
     name
     description
     status
+    dueDate
     client {
         id
         name
