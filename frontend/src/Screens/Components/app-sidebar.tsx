@@ -1,16 +1,12 @@
-"use client"
-
 import * as React from "react"
 import { Link } from "react-router-dom"
 import {
+    IconBuilding,
     IconChartBar,
-    IconDashboard,
     IconFolder,
-    IconInnerShadowTop,
+    IconLayoutDashboard,
     IconListDetails,
     IconUsers,
-    IconBuilding,
-    IconLayoutKanban,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/Screens/Components/nav-main"
@@ -20,35 +16,32 @@ import {
     SidebarContent,
     SidebarFooter,
     SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import { fetchProfile } from "@/redux/actions/userActions.ts";
 import { fetchPreference } from "@/redux/actions/preferenceActions.ts";
 
-const NAV_BY_ROLE = {
+// Kanban is reachable at /kanban but no longer listed; the Tasks board replaces it in the redesign
+export const NAV_BY_ROLE = {
     SUPER_ADMIN: [
-        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Dashboard", url: "/dashboard", icon: IconLayoutDashboard },
         { title: "Users",     url: "/users",     icon: IconUsers },
         { title: "Clients",   url: "/clients",   icon: IconBuilding },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
     ],
     CLIENT_ADMIN: [
-        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Dashboard", url: "/dashboard", icon: IconLayoutDashboard },
         { title: "Clients",   url: "/clients",   icon: IconBuilding },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
         { title: "Analytics", url: "/analytics", icon: IconChartBar },
     ],
     USER: [
-        { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+        { title: "Dashboard", url: "/dashboard", icon: IconLayoutDashboard },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
-        { title: "Kanban",    url: "/kanban",    icon: IconLayoutKanban },
     ],
 }
 
@@ -66,26 +59,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const navItems = NAV_BY_ROLE[role as keyof typeof NAV_BY_ROLE] ?? NAV_BY_ROLE.USER
 
     return (
-        <Sidebar collapsible="offcanvas" {...props}>
-            <SidebarHeader>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton
-                            asChild
-                            className="data-[slot=sidebar-menu-button]:!p-1.5"
-                        >
-                            <Link to="/dashboard">
-                                <IconInnerShadowTop className="!size-5" />
-                                <span className="text-base font-semibold">ProjoMan</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
+        <Sidebar {...props}>
+            <SidebarHeader className="px-3 pb-1 pt-3.5">
+                <Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-3.5 pt-1.5 text-base font-semibold tracking-[-0.02em] text-foreground hover:no-underline group-data-[collapsible=icon]:px-1.5">
+                    {/* Ring logo: accent ring around a dark core */}
+                    <span className="size-[22px] flex-none rounded-full border-[5px] border-primary [box-shadow:inset_0_0_0_3px_oklch(var(--background)),inset_0_0_0_10px_oklch(var(--foreground))]" />
+                    <span className="truncate transition-opacity group-data-[collapsible=icon]:opacity-0">ProjoMan</span>
+                </Link>
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={navItems} />
             </SidebarContent>
-            <SidebarFooter>
+            <SidebarFooter className="border-t px-1.5 py-2.5">
                 <NavUser />
             </SidebarFooter>
         </Sidebar>
