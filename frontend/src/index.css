@@ -1,100 +1,119 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
+/* ProjoMan tokens: "Calm & precise". Values are raw OKLCH channels: L C H */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
- 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
- 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
- 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
- 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
- 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
- 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
- 
+    --background: 0.975 0.005 80;
+    --foreground: 0.23 0.012 65;
+    --card: 0.995 0.002 80;
+    --card-foreground: 0.23 0.012 65;
+    --popover: 0.995 0.002 80;
+    --popover-foreground: 0.23 0.012 65;
+    --primary: 0.56 0.17 262;
+    --primary-hover: 0.5 0.17 262;
+    --primary-foreground: 0.99 0.005 262;
+    --secondary: 0.962 0.006 80;
+    --secondary-foreground: 0.23 0.012 65;
+    --muted: 0.962 0.006 80;
+    --muted-foreground: 0.46 0.013 65;
+    --subtle-foreground: 0.6 0.012 65;
+    --accent: 0.95 0.03 262;
+    --accent-foreground: 0.48 0.16 262;
+    --destructive: 0.58 0.17 27;
+    --destructive-foreground: 0.99 0.005 27;
+    --surface-2: 0.962 0.006 80;
+    --surface-3: 0.935 0.008 80;
+    --border: 0.912 0.008 80;
+    --border-strong: 0.85 0.01 80;
+    --input: 0.85 0.01 80;
+    --ring: 0.56 0.17 262;
     --radius: 0.5rem;
- 
-    --sidebar-background: 0 0% 98%;
- 
-    --sidebar-foreground: 240 5.3% 26.1%;
- 
-    --sidebar-primary: 240 5.9% 10%;
- 
-    --sidebar-primary-foreground: 0 0% 98%;
- 
-    --sidebar-accent: 240 4.8% 95.9%;
- 
-    --sidebar-accent-foreground: 240 5.9% 10%;
- 
-    --sidebar-border: 220 13% 91%;
- 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* status tint (bg) / ink (fg) / dot. Same L and C for every hue */
+    --st-bg-l: 0.955; --st-bg-c: 0.032;
+    --st-fg-l: 0.46;  --st-fg-c: 0.1;
+    --st-dot-l: 0.64; --st-dot-c: 0.13;
+
+    --chart-1: 0.56 0.17 262;
+    --chart-2: 0.72 0.1 152;
+    --chart-3: 0.78 0.11 72;
+    --chart-4: 0.64 0.14 27;
+    --chart-grid: 0.92 0.007 80;
+
+    --sidebar-background: 0.975 0.005 80;
+    --sidebar-foreground: 0.46 0.013 65;
+    --sidebar-primary: 0.56 0.17 262;
+    --sidebar-primary-foreground: 0.99 0.005 262;
+    --sidebar-accent: 0.995 0.002 80;
+    --sidebar-accent-foreground: 0.23 0.012 65;
+    --sidebar-border: 0.912 0.008 80;
+    --sidebar-ring: 0.56 0.17 262;
   }
- 
+
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
- 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
- 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
- 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
- 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
- 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
- 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 0.165 0.006 65;
+    --foreground: 0.95 0.006 80;
+    --card: 0.198 0.007 65;
+    --card-foreground: 0.95 0.006 80;
+    --popover: 0.198 0.007 65;
+    --popover-foreground: 0.95 0.006 80;
+    --primary: 0.68 0.15 262;
+    --primary-hover: 0.74 0.14 262;
+    --primary-foreground: 0.17 0.02 262;
+    --secondary: 0.232 0.008 65;
+    --secondary-foreground: 0.95 0.006 80;
+    --muted: 0.232 0.008 65;
+    --muted-foreground: 0.74 0.01 75;
+    --subtle-foreground: 0.58 0.01 70;
+    --accent: 0.3 0.06 262;
+    --accent-foreground: 0.8 0.1 262;
+    --destructive: 0.62 0.15 27;
+    --destructive-foreground: 0.98 0.01 27;
+    --surface-2: 0.232 0.008 65;
+    --surface-3: 0.27 0.009 65;
+    --border: 0.28 0.008 65;
+    --border-strong: 0.36 0.01 65;
+    --input: 0.36 0.01 65;
+    --ring: 0.68 0.15 262;
+
+    --st-bg-l: 0.29; --st-bg-c: 0.045;
+    --st-fg-l: 0.83; --st-fg-c: 0.08;
+    --st-dot-l: 0.72; --st-dot-c: 0.12;
+
+    --chart-1: 0.68 0.15 262;
+    --chart-3: 0.8 0.1 72;
+    --chart-4: 0.68 0.13 27;
+    --chart-grid: 0.28 0.008 65;
+
+    --sidebar-background: 0.165 0.006 65;
+    --sidebar-foreground: 0.74 0.01 75;
+    --sidebar-primary: 0.68 0.15 262;
+    --sidebar-primary-foreground: 0.17 0.02 262;
+    --sidebar-accent: 0.198 0.007 65;
+    --sidebar-accent-foreground: 0.95 0.006 80;
+    --sidebar-border: 0.28 0.008 65;
+    --sidebar-ring: 0.68 0.15 262;
   }
 }
- 
+
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground font-sans antialiased; font-size: 14px; }
+  body { line-height: 1.45; transition: background-color 360ms cubic-bezier(.22,1,.36,1), color 360ms cubic-bezier(.22,1,.36,1); }
+  .num { @apply font-mono tabular-nums; letter-spacing: -0.02em; }
+}
+
+/* Status tones: <span class="tone-blue tone-bg tone-fg">. Hue is the only variable.
+   Deliberately outside @layer: classes are built dynamically (`tone-${tone}`), and
+   Tailwind would purge layered classes it can't find written out in the source. */
+.tone-blue   { --h: 262; } .tone-green { --h: 152; } .tone-amber { --h: 72; }
+.tone-red    { --h: 27;  } .tone-violet{ --h: 300; } .tone-teal  { --h: 195; }
+.tone-bg  { background-color: oklch(var(--st-bg-l) var(--st-bg-c) var(--h)); }
+.tone-fg  { color: oklch(var(--st-fg-l) var(--st-fg-c) var(--h)); }
+.tone-dot { background-color: oklch(var(--st-dot-l) var(--st-dot-c) var(--h)); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }

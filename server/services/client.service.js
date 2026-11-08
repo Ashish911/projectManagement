@@ -16,6 +16,15 @@ import {
 import { validate } from "../validation/validate.js";
 import { createLogger } from "../config/logger.js";
 
+/**
+ * The id of a client's admin as a string, whatever shape `assignedAdmin` has: a raw ObjectId
+ * (from the repo, whose `.id` is a Buffer), a plain string (from the cache) or a populated `{ id }`.
+ * @param {object|string|null|undefined} admin The client's `assignedAdmin`.
+ * @returns {string|null}
+ */
+const adminIdOf = (admin) =>
+  typeof admin?.id === "string" ? admin.id : (admin?.toString() ?? null);
+
 /** Business logic and role checks for clients. */
 export const ClientService = {
   /**
@@ -61,7 +70,7 @@ export const ClientService = {
       // Still enforce access control on cached data
       if (user.role === "SUPER_ADMIN") return cached;
       if (user.role === "CLIENT_ADMIN") {
-        if (cached.assignedAdmin?.id != user.id)
+        if (adminIdOf(cached.assignedAdmin) !== user.id)
           throw new ForbiddenError("You are not assigned to this client");
         return cached;
       }
@@ -81,8 +90,7 @@ export const ClientService = {
     }
 
     if (user.role === "CLIENT_ADMIN") {
-      // Loose equality: assignedAdmin.id may be an ObjectId rather than a string
-      const isAssigned = client.assignedAdmin?.id == user.id;
+      const isAssigned = adminIdOf(client.assignedAdmin) === user.id;
 
       if (!isAssigned) {
         throw new ForbiddenError("You are not assigned to this client");

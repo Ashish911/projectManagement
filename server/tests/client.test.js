@@ -50,6 +50,8 @@ jest.unstable_mockModule("../config/cache.js", () => ({
 
 // ─── Import AFTER mocking ─────────────────────────────────────────
 const { ClientService } = await import("../services/client.service.js");
+const { cache } = await import("../config/cache.js");
+const { default: mongoose } = await import("mongoose");
 
 // ─── Mock Data ────────────────────────────────────────────────────
 const mockSuperAdmin = {
@@ -161,6 +163,40 @@ describe("ClientService", () => {
       });
 
       expect(result).toBeDefined();
+    });
+
+    // ClientRepo.findById doesn't populate, so assignedAdmin is a raw ObjectId (whose `.id` is a Buffer)
+    it("🟢 CLIENT_ADMIN should get their assigned client when assignedAdmin is an ObjectId", async () => {
+      mockClientFindById.mockResolvedValue({
+        ...mockClient,
+        assignedAdmin: new mongoose.Types.ObjectId(mockClientAdmin.id),
+      });
+
+      const result = await ClientService.getClient(mockClient._id, {
+        user: mockClientAdmin,
+      });
+
+      expect(result.name).toBe(mockClient.name);
+    });
+
+    // The cache stores JSON, so a cached assignedAdmin is a plain id string
+    it("🟢 CLIENT_ADMIN should get their assigned client from the cache", async () => {
+      cache.get.mockResolvedValueOnce({ ...mockClient, assignedAdmin: mockClientAdmin.id });
+
+      const result = await ClientService.getClient(mockClient._id, {
+        user: mockClientAdmin,
+      });
+
+      expect(result.name).toBe(mockClient.name);
+      expect(mockClientFindById).not.toHaveBeenCalled();
+    });
+
+    it("🔴 CLIENT_ADMIN should not get a cached client they are not assigned to", async () => {
+      cache.get.mockResolvedValueOnce({ ...mockClient, assignedAdmin: "648a1b2c3d4e5f6a7b8c9d99" });
+
+      await expect(
+        ClientService.getClient(mockClient._id, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not assigned to this client");
     });
 
     it("🔴 CLIENT_ADMIN should not get a client they are not assigned to", async () => {

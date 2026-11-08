@@ -32,6 +32,9 @@ Read these before deploying or pointing an existing client at this version.
 
 ### Server
 
+**Fixes**
+- A `CLIENT_ADMIN` could not load their own client (`client(id)` returned `FORBIDDEN`), so the Clients page always showed "No client to show". The check read `assignedAdmin.id`, which on an unpopulated ObjectId is a Buffer, and on a cached client doesn't exist. Now compared as a string (`adminIdOf` in `services/client.service.js`).
+
 **Comments**
 - Comments on tasks and sub-tasks: `taskComments`, `subTaskComments`, `addTaskComment`, `addSubTaskComment`, `updateComment`, `deleteComment` (`services/comment.service.js`, `repositories/comment.repo.js`, `graphql/types/comment.type.js`).
 - Only project members may comment: assigned users, the client's `CLIENT_ADMIN`, or any `SUPER_ADMIN`. The author edits; the author or an admin deletes.
@@ -110,9 +113,12 @@ Read these before deploying or pointing an existing client at this version.
 - New suites: `comment.test.js`, `userAdmin.test.js` and `server.test.js` (`buildHttpContext`).
 - Notification tests cover the queue, the fallback (failure and hang), the worker job and bulk reads.
 - New suites: `indexes.test.js` and `graphqlTypes.test.js`.
-- 386 tests in 12 suites. New behaviour is written test first.
+- 389 tests in 12 suites. New behaviour is written test first.
 
 ### Frontend
+
+**Fixes**
+- Tasks board: a dragged card dropped one column to the right of the pointer. `PageTransition`'s `filter`/`transform` made the fixed `DragOverlay` sit offset by the sidebar and header, and drop detection follows the overlay. The overlay is now portalled to `document.body`.
 
 **Redesign** (from `ProjoMan Dashboard (standalone) (1).html`)
 - Tailwind with OKLCH design tokens and dark mode, Geist fonts, and `motion` for sliding pills and page transitions.
@@ -166,6 +172,8 @@ Read these before deploying or pointing an existing client at this version.
 - 82 tests in 15 files: hooks, `gql`, the WebSocket client, the notification store, sheet and header, five forms, Users selection, dashboard range and theme.
 
 ### Infrastructure
+- CI runs every server Jest suite (5 were skipped), the frontend Vitest suite, then the Playwright e2e suite with a Redis service container; the report is uploaded when it fails.
+- Playwright e2e suite in `frontend/e2e/` against the real stack (in-memory MongoDB, API, worker, Vite) with `server/scripts/seed-e2e.js`. Run with `npm run e2e` in `frontend/`.
 - Frontend Docker container. After `package.json` changes, rebuild with `--renew-anon-volumes`.
 - The notification worker runs as its own container in dev and prod.
 
