@@ -113,6 +113,8 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 **Comments.** `CommentService` (`services/comment.service.js`) gates every comment operation on project membership: a `USER` in `assignedUsers`, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`. A sub-task comment stores both `subTaskId` and its parent `taskId`, so `taskComments` filters out comments that have a `subTaskId`. Deleting a task or sub-task also deletes its comments.
 
+**Activity.** `ActivityService.record()` (`services/activity.service.js`, `Activity` model) stores admin events with a reason (role changes via `updateUserRoles`, task reopens); it never throws. The `activity(limit)` query is role-scoped (all / their client's projects / their projects) and the dashboards merge it with task events. Mock `../services/activity.service.js` in other services' tests.
+
 **Error handling.** Custom error classes in `errors/` extend `AppError`. Throw these in services; Apollo's `formatError` maps them to structured GraphQL responses with `extensions.code` and `extensions.statusCode`.
 
 **Validation.** All service inputs validated via Zod schemas in `validation/schema.js` using `validate()` from `validation/validate.js`. All MongoDB IDs validated with the `objectId` regex before any DB call.

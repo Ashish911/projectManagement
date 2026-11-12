@@ -36,6 +36,8 @@ export const userResolvers = {
       await UserService.updateUser(args, context),
     changeUserRoles: async (_, args, context) =>
       await UserService.changeUserRoles(args, context),
+    updateUserRoles: async (_, args, context) =>
+      await UserService.updateUserRoles(args, context),
     unlockUsers: async (_, { ids }, context) =>
       await UserService.unlockUsers(ids, context),
     resendInvite: async (_, { id }, context) =>

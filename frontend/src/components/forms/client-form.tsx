@@ -67,7 +67,7 @@ export function ClientForm({ data, onClose, closing }: FormProps<{ clientId?: st
         // Admin changes: promoting a user also assigns them; an existing client admin is just assigned
         if (isSuper && x.adminId && x.adminId !== cur?.assignedAdmin?.id) {
             if (promote) {
-                dispatch(upsertUsersInStore(await changeUserRoles([promote.id], "CLIENT_ADMIN", client.id)))
+                dispatch(upsertUsersInStore(await changeUserRoles([promote.id], "CLIENT_ADMIN", client.id, `Assigned as client admin of ${client.name}`)))
                 client = await getClient(client.id)
             } else {
                 client = await assignAdmin({ id: client.id, assignedAdmin: x.adminId })

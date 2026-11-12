@@ -7,6 +7,8 @@ import {
   GraphQLNonNull,
   GraphQLString,
   GraphQLBoolean,
+  GraphQLInt,
+  GraphQLInputObjectType,
 } from "graphql";
 
 import {
@@ -21,6 +23,7 @@ import {
   ForgotPasswordType,
   MessageType,
   CommentType,
+  ActivityType,
 } from "./types/import.type.js";
 
 import {
@@ -32,9 +35,21 @@ import {
   subTaskResolvers,
   notificationResolvers,
   commentResolvers,
+  activityResolvers,
 } from "./resolvers/import.resolver.js";
 
 // Root Query
+/** One row of the bulk role editor. */
+const RoleChangeInput = new GraphQLInputObjectType({
+  name: "RoleChangeInput",
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    role: { type: new GraphQLNonNull(GraphQLString) },
+    clientId: { type: GraphQLID },
+    reason: { type: GraphQLString }, // Overrides the shared reason for this person
+  },
+});
+
 const RootQuery = new GraphQLObjectType({
   name: "RootQueryType",
   fields: {
@@ -102,6 +117,11 @@ const RootQuery = new GraphQLObjectType({
       type: new GraphQLList(CommentType),
       args: { subTaskId: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: commentResolvers.Query.subTaskComments,
+    },
+    activity: {
+      type: new GraphQLList(ActivityType),
+      args: { limit: { type: GraphQLInt } },
+      resolve: activityResolvers.Query.activity,
     },
     notifications: {
       type: new GraphQLList(NotificationType),
@@ -203,8 +223,17 @@ const Mutation = new GraphQLObjectType({
         ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
         role: { type: new GraphQLNonNull(GraphQLString) },
         clientId: { type: GraphQLID },
+        reason: { type: GraphQLString },
       },
       resolve: userResolvers.Mutation.changeUserRoles,
+    },
+    updateUserRoles: {
+      type: new GraphQLList(UserType),
+      args: {
+        reason: { type: new GraphQLNonNull(GraphQLString) },
+        changes: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(RoleChangeInput))) },
+      },
+      resolve: userResolvers.Mutation.updateUserRoles,
     },
     unlockUsers: {
       type: new GraphQLList(UserType),

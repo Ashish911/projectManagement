@@ -30,11 +30,13 @@ import {
   createUserSchema,
   updateUserSchema,
   changeUserRolesSchema,
+  updateUserRolesSchema,
   changePasswordSchema,
 } from "../validation/schema.js";
 import { NotificationService } from "./notification.service.js";
 import { createLogger } from "../config/logger.js";
 import { EmailService } from "./email.service.js";
+import { ActivityService } from "./activity.service.js";
 
 export const MAX_LOGIN_ATTEMPTS = 5; // Failed logins allowed before the account is locked
 export const LOCKOUT_MS = 60 * 60 * 1000; // Lockout lasts 1 hour from the last failed attempt
@@ -70,6 +72,9 @@ const requireSuperAdmin = (user, action) => {
     throw new ForbiddenError(`Current role does not have the permission to ${action}`);
   }
 };
+
+const ROLE_LABELS = { SUPER_ADMIN: "Super admin", CLIENT_ADMIN: "Client admin", USER: "User" };
+const roleLabel = (role) => ROLE_LABELS[role] ?? role;
 
 /**
  * Accounts user administration may not change: your own (use Edit profile) and,
@@ -680,51 +685,86 @@ export const UserService = {
    * @returns {Promise<object[]>} The updated users.
    */
   async changeUserRoles(data, context) {
-    const { ids, role, clientId } = validate(changeUserRolesSchema, data);
+    const { ids, role, clientId, reason } = validate(changeUserRolesSchema, data);
+    // One role for everyone: the bulk editor with identical rows
+    return await UserService.updateUserRoles(
+      { reason: reason || "No reason given", changes: ids.map((id) => ({ id, role, clientId })) },
+      context,
+    );
+  },
+
+  /**
+   * Changes roles person by person, with a reason. SUPER_ADMIN only. Every row is checked
+   * before anything changes; rows that change nothing are skipped. Each change is
+   * audit-logged, recorded in Activity and notified.
+   * @param {object} data    `{ reason, changes: [{ id, role, [clientId], [reason] }] }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} The users, updated where they changed.
+   * @throws {ForbiddenError} For your own account or another super admin.
+   * @throws {ConflictError}  If a client already has a different admin.
+   */
+  async updateUserRoles(data, context) {
+    const { reason, changes } = validate(updateUserRolesSchema, data);
     const { user } = context;
     const logger = createLogger(context);
     requireSuperAdmin(user, "change roles");
 
+    const ids = changes.map((c) => c.id);
     const targets = await UserRepo.findByIds(ids);
     if (targets.length !== ids.length) throw new NotFoundError("One or more users not found");
     assertManageable(user, targets);
+    const byId = new Map(targets.map((t) => [String(t.id), t]));
 
-    // Never leave the system without a super admin
-    if (role !== "SUPER_ADMIN") {
-      const supers = (await UserRepo.find()).filter((u) => u.role === "SUPER_ADMIN");
-      if (supers.every((u) => ids.includes(u.id))) {
-        throw new ConflictError("At least one super admin must remain");
-      }
+    // What actually changes: a different role, or a client admin moving to another client
+    const plan = [];
+    for (const change of changes) {
+      const target = byId.get(change.id);
+      const current = target.role === "CLIENT_ADMIN" ? await ClientRepo.findByAssignedAdmin(target.id) : null;
+      const unchanged = target.role === change.role && (change.role !== "CLIENT_ADMIN" || current?.id === change.clientId);
+      if (!unchanged) plan.push({ change, target, current });
     }
 
-    let client = null;
-    if (role === "CLIENT_ADMIN") {
-      client = await ClientRepo.findById(clientId);
+    // Check every new client before changing anything
+    const newClient = new Map();
+    for (const { change } of plan.filter((p) => p.change.role === "CLIENT_ADMIN")) {
+      const client = await ClientRepo.findById(change.clientId);
       if (!client) throw new NotFoundError("Client not found");
-      if (client.assignedAdmin && client.assignedAdmin.toString() !== ids[0]) {
-        throw new ConflictError("That client already has a client admin");
-      }
+      const admin = client.assignedAdmin ? String(client.assignedAdmin.id ?? client.assignedAdmin) : null;
+      // The current admin may be leaving this client in the same batch
+      const leaving = plan.some((p) => String(p.target.id) === admin && p.change.clientId !== client.id);
+      if (admin && admin !== change.id && !leaving) throw new ConflictError(`${client.name} already has a client admin`);
+      newClient.set(change.id, client);
     }
 
-    const updated = [];
-    for (const target of targets) {
+    const updated = new Map(targets.map((t) => [String(t.id), t]));
+    for (const { change, target, current } of plan) {
+      const client = newClient.get(change.id) ?? null;
       // A client admin moving to another role (or client) gives up their current client
-      if (target.role === "CLIENT_ADMIN") {
-        const managed = await ClientRepo.findByAssignedAdmin(target.id);
-        if (managed && managed.id !== client?.id) await ClientRepo.update(managed.id, { assignedAdmin: null });
-      }
-      updated.push(await UserRepo.update(target.id, { role }));
-      if (target.role !== role) {
-        await NotificationService.notify(target.id, `Your role was changed to ${role.replace("_", " ").toLowerCase()}.`).catch(() => {});
+      if (current && current.id !== client?.id) await ClientRepo.update(current.id, { assignedAdmin: null });
+      updated.set(change.id, await UserRepo.update(target.id, { role: change.role }));
+      if (client) await ClientRepo.update(client.id, { assignedAdmin: target.id });
+
+      const why = change.reason?.trim() || reason;
+      const oldRole = target.role;
+      const newRole = change.role;
+      logger.info({ audit: true, userId: user.id, targetUserId: target.id, oldRole, newRole, reason: why, action: "USER_ROLE_CHANGED" }, "AUDIT");
+      await ActivityService.record({
+        actor: user.id,
+        action: "ROLE_CHANGED",
+        targetUser: target.id,
+        client: client?.id ?? current?.id ?? null,
+        summary: `changed ${target.name ?? "a user"}'s role from ${roleLabel(oldRole)} to ${roleLabel(newRole)}${client ? ` for ${client.name}` : ""}`,
+        reason: why,
+        meta: { oldRole, newRole },
+      });
+      if (oldRole !== newRole) {
+        await NotificationService.notify(target.id, `Your role was changed to ${roleLabel(newRole).toLowerCase()}.`).catch(() => {});
       }
     }
-    if (client) await ClientRepo.update(client.id, { assignedAdmin: ids[0] });
 
-    logger.info({ audit: true, userId: user.id, targetUserIds: ids, role, action: "USER_ROLE_CHANGED" }, "AUDIT");
     await invalidateUsers(ids);
     await cache.invalidate("clients:all");
-
-    return updated;
+    return ids.map((id) => updated.get(id));
   },
 
   /**

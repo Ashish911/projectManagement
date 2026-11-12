@@ -6,6 +6,7 @@ import {
   CREATE_USER,
   UPDATE_USER,
   CHANGE_USER_ROLES,
+  UPDATE_USER_ROLES,
   UNLOCK_USERS,
   RESEND_INVITE,
   DELETE_USERS,
@@ -53,8 +54,14 @@ export const createUser = async (vars: NewUser): Promise<User> =>
 export const updateUser = async (vars: { id: string; name?: string; email?: string; number?: string; gender?: string; dob?: string | null }): Promise<User> =>
   (await gql<{ updateUser: User }>(UPDATE_USER, vars)).updateUser;
 
-export const changeUserRoles = async (ids: string[], role: Role, clientId?: string | null): Promise<User[]> =>
-  (await gql<{ changeUserRoles: User[] }>(CHANGE_USER_ROLES, { ids, role, clientId: clientId || null })).changeUserRoles;
+export const changeUserRoles = async (ids: string[], role: Role, clientId?: string | null, reason?: string): Promise<User[]> =>
+  (await gql<{ changeUserRoles: User[] }>(CHANGE_USER_ROLES, { ids, role, clientId: clientId || null, reason: reason ?? null })).changeUserRoles;
+
+/** One row of the bulk role editor; `reason` overrides the shared reason. */
+export type RoleChange = { id: string; role: Role; clientId: string | null; reason: string | null };
+
+export const updateUserRoles = async (changes: RoleChange[], reason: string): Promise<User[]> =>
+  (await gql<{ updateUserRoles: User[] }>(UPDATE_USER_ROLES, { changes, reason })).updateUserRoles;
 
 export const unlockUsers = async (ids: string[]): Promise<User[]> =>
   (await gql<{ unlockUsers: User[] }>(UNLOCK_USERS, { ids })).unlockUsers;

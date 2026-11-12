@@ -8,3 +8,4 @@ export { taskResolvers } from "./task.resolver.js";
 export { subTaskResolvers } from "./subTask.resolver.js";
 export { notificationResolvers } from "./notification.resolver.js";
 export { commentResolvers } from "./comment.resolver.js";
+export { activityResolvers } from "./activity.resolver.js";

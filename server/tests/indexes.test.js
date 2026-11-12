@@ -7,7 +7,7 @@ const mockConnect = jest.fn();
 mongoose.connect = mockConnect;
 
 const models = await import("../models/import.js");
-const { User, Client, Project, Task, SubTask, Notification } = models;
+const { User, Client, Project, Task, SubTask, Notification, Activity } = models;
 
 /** The schema's declared indexes as [fields, options] pairs. */
 const indexesOf = (Model) => Model.schema.indexes();
@@ -32,6 +32,8 @@ describe("Schema indexes", () => {
       ["Project.assignedUsers (findByAssignedUser)", Project, { assignedUsers: 1 }],
       ["Client.assignedAdmin (findByAssignedAdmin, clearAdmin)", Client, { assignedAdmin: 1 }],
       ["User.role (users by role)", User, { role: 1 }],
+      ["Activity.createdAt desc (findRecent, super admin feed)", Activity, { createdAt: -1 }],
+      ["Activity.project + createdAt desc (findByProjects, scoped feeds)", Activity, { project: 1, createdAt: -1 }],
     ])("🟢 %s", (_, Model, fields) => {
       expect(findIndex(Model, fields)).toBeDefined();
     });

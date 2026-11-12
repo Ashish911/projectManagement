@@ -55,6 +55,11 @@ jest.unstable_mockModule("../services/notification.service.js", () => ({
   NotificationService: { notify: mockNotify },
 }));
 
+const mockRecordActivity = jest.fn().mockResolvedValue({});
+jest.unstable_mockModule("../services/activity.service.js", () => ({
+  ActivityService: { record: mockRecordActivity },
+}));
+
 jest.unstable_mockModule("../repositories/task.repo.js", () => ({
   TaskRepo: { unassignUser: jest.fn().mockResolvedValue({}) },
 }));
@@ -256,6 +261,104 @@ describe("UserService — administration", () => {
       await expect(
         UserService.changeUserRoles({ ids: [member.id, otherMember.id], role: "CLIENT_ADMIN", clientId: client.id }, { user: superAdmin }),
       ).rejects.toThrow("A client admin needs exactly one person and a client");
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // BULK ROLE EDITOR (USR-06)
+  // ════════════════════════════════════════════════════════════════
+  describe("updateUserRoles", () => {
+    const client2 = { id: "748a1b2c3d4e5f6a7b8c9d1f", name: "Atlas", assignedAdmin: null };
+    const named = (u, name) => ({ ...u, name });
+
+    beforeEach(() => {
+      mockUserFind.mockResolvedValue([superAdmin, clientAdmin, member, otherMember]);
+      mockClientFindById.mockImplementation(async (id) => (id === client.id ? client : id === client2.id ? client2 : null));
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+    });
+
+    it("🟢 applies a different role to each person and logs each change with its reason", async () => {
+      mockUserFindByIds.mockResolvedValue([named(clientAdmin, "Cara"), named(member, "Mo"), named(otherMember, "Oli")]);
+      mockClientFindByAssignedAdmin.mockImplementation(async (id) => (id === clientAdmin.id ? { id: client2.id } : null));
+
+      await UserService.updateUserRoles(
+        {
+          reason: "Team restructure",
+          changes: [
+            { id: clientAdmin.id, role: "USER" },
+            { id: member.id, role: "CLIENT_ADMIN", clientId: client.id, reason: "Leads Northwind now" },
+            { id: otherMember.id, role: "SUPER_ADMIN" },
+          ],
+        },
+        { user: superAdmin },
+      );
+
+      expect(mockUserUpdate).toHaveBeenCalledWith(clientAdmin.id, { role: "USER" });
+      expect(mockUserUpdate).toHaveBeenCalledWith(member.id, { role: "CLIENT_ADMIN" });
+      expect(mockUserUpdate).toHaveBeenCalledWith(otherMember.id, { role: "SUPER_ADMIN" });
+      expect(mockClientUpdate).toHaveBeenCalledWith(client2.id, { assignedAdmin: null }); // demoted admin gives up their client
+      expect(mockClientUpdate).toHaveBeenCalledWith(client.id, { assignedAdmin: member.id });
+      expect(mockRecordActivity).toHaveBeenCalledTimes(3);
+      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({
+        action: "ROLE_CHANGED", actor: superAdmin.id, targetUser: member.id, reason: "Leads Northwind now",
+        meta: { oldRole: "USER", newRole: "CLIENT_ADMIN" },
+      }));
+      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({ targetUser: otherMember.id, reason: "Team restructure" }));
+    });
+
+    it("🟢 rows that don't change anything are skipped", async () => {
+      mockUserFindByIds.mockResolvedValue([member]);
+      await UserService.updateUserRoles({ reason: "Tidy up", changes: [{ id: member.id, role: "USER" }] }, { user: superAdmin });
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockRecordActivity).not.toHaveBeenCalled();
+    });
+
+    it("🔴 needs a reason", async () => {
+      await expect(
+        UserService.updateUserRoles({ reason: "  ", changes: [{ id: member.id, role: "SUPER_ADMIN" }] }, { user: superAdmin }),
+      ).rejects.toThrow("Give a reason for the role change");
+    });
+
+    it("🔴 a client admin row needs a client", async () => {
+      await expect(
+        UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "CLIENT_ADMIN" }] }, { user: superAdmin }),
+      ).rejects.toThrow("Pick a client for each new client admin");
+    });
+
+    it("🔴 two people can't become admin of the same client", async () => {
+      mockUserFindByIds.mockResolvedValue([member, otherMember]);
+      await expect(
+        UserService.updateUserRoles(
+          { reason: "x", changes: [{ id: member.id, role: "CLIENT_ADMIN", clientId: client.id }, { id: otherMember.id, role: "CLIENT_ADMIN", clientId: client.id }] },
+          { user: superAdmin },
+        ),
+      ).rejects.toThrow("Each client can have only one client admin");
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 a client that already has another admin is refused, and nothing changes", async () => {
+      mockUserFindByIds.mockResolvedValue([member, otherMember]);
+      mockClientFindById.mockResolvedValue({ ...client, assignedAdmin: clientAdmin.id });
+      await expect(
+        UserService.updateUserRoles(
+          { reason: "x", changes: [{ id: otherMember.id, role: "SUPER_ADMIN" }, { id: member.id, role: "CLIENT_ADMIN", clientId: client.id }] },
+          { user: superAdmin },
+        ),
+      ).rejects.toThrow("Northwind already has a client admin");
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 protected accounts are refused", async () => {
+      mockUserFindByIds.mockResolvedValue([member, otherSuper]);
+      await expect(
+        UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "SUPER_ADMIN" }, { id: otherSuper.id, role: "USER" }] }, { user: superAdmin }),
+      ).rejects.toThrow("Super admin accounts can be viewed but not changed");
+    });
+
+    it("🔴 CLIENT_ADMIN can't change roles", async () => {
+      await expect(
+        UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "SUPER_ADMIN" }] }, { user: clientAdmin }),
+      ).rejects.toThrow("Current role does not have the permission to change roles");
     });
   });
 

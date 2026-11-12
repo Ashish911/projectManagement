@@ -6,6 +6,7 @@ vi.mock("@/components/forms/use-app-data", () => ({
     useAppData: () => ({ profile: { id: "u1", name: "Ada Admin", role: "SUPER_ADMIN" }, users: [], clients: [], projects: [], tasks: [], tasksLoaded: true }),
     openTaskCount: () => 0,
 }))
+vi.mock("@/api/activityApi", () => ({ getActivity: async () => [] }))
 vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ toggleResolved: vi.fn() }) }))
 
 const { AdminDashboard } = await import("./AdminDashboard")

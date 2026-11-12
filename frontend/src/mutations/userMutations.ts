@@ -74,8 +74,16 @@ export const UPDATE_USER = `
 `;
 
 export const CHANGE_USER_ROLES = `
-    mutation ChangeUserRoles($ids: [ID!]!, $role: String!, $clientId: ID) {
-        changeUserRoles(ids: $ids, role: $role, clientId: $clientId) {
+    mutation ChangeUserRoles($ids: [ID!]!, $role: String!, $clientId: ID, $reason: String) {
+        changeUserRoles(ids: $ids, role: $role, clientId: $clientId, reason: $reason) {
+            ${USER_FIELDS}
+        }
+    }
+`;
+
+export const UPDATE_USER_ROLES = `
+    mutation UpdateUserRoles($changes: [RoleChangeInput!]!, $reason: String!) {
+        updateUserRoles(changes: $changes, reason: $reason) {
             ${USER_FIELDS}
         }
     }

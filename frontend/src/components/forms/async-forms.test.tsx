@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { User } from "@/types/userTypes"
 
@@ -15,10 +15,10 @@ const dispatch = vi.hoisted(() => vi.fn())
 vi.mock("react-redux", () => ({ useDispatch: () => dispatch, useSelector: (sel: (s: any) => unknown) => sel(state) }))
 
 const api = vi.hoisted(() => ({
-    unlockUsers: vi.fn(), changeUserRoles: vi.fn(), declineClientDeletion: vi.fn(),
+    unlockUsers: vi.fn(), updateUserRoles: vi.fn(), declineClientDeletion: vi.fn(),
     confirmDeleteClient: vi.fn(), addUserToProject: vi.fn(), removeUserFromProject: vi.fn(),
 }))
-vi.mock("@/api/userApi", async (orig) => ({ ...(await orig<object>()), unlockUsers: api.unlockUsers, changeUserRoles: api.changeUserRoles }))
+vi.mock("@/api/userApi", async (orig) => ({ ...(await orig<object>()), unlockUsers: api.unlockUsers, updateUserRoles: api.updateUserRoles }))
 vi.mock("@/api/clientApi", async (orig) => ({ ...(await orig<object>()), declineClientDeletion: api.declineClientDeletion, confirmDeleteClient: api.confirmDeleteClient }))
 vi.mock("@/api/projectApi", async (orig) => ({ ...(await orig<object>()), addUserToProject: api.addUserToProject, removeUserFromProject: api.removeUserFromProject }))
 const toasts = vi.hoisted(() => ({ toast: vi.fn(), toastError: vi.fn() }))
@@ -50,10 +50,13 @@ const cases = [
     {
         name: "BulkRoleForm",
         render: (onClose: () => void) => <BulkRoleForm data={{ userIds: ["u1"] }} onClose={onClose} closing={false} />,
-        prepare: async () => { await userEvent.click(screen.getByRole("radio", { name: /super admin/i })) },
-        button: /change role/i,
-        call: api.changeUserRoles,
-        args: [["u1"], "SUPER_ADMIN", null],
+        prepare: async () => {
+            await userEvent.click(within(screen.getByRole("group", { name: "Apply same role to all" })).getByRole("button", { name: "Super admin" }))
+            await userEvent.type(screen.getByPlaceholderText(/Why are these roles changing/), "Covers ops")
+        },
+        button: /apply/i,
+        call: api.updateUserRoles,
+        args: [[{ id: "u1", role: "SUPER_ADMIN", clientId: null, reason: null }], "Covers ops"],
         ok: [users[0]],
         errorIn: "dialog" as const,
     },

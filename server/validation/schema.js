@@ -221,11 +221,40 @@ export const changeUserRolesSchema = z
     ids: z.array(objectId).min(1, "Select at least one user"),
     role: role,
     clientId: nullableObjectId,
+    reason: z.string().trim().max(500).optional().nullable(),
   })
   .refine((d) => d.role !== "CLIENT_ADMIN" || (!!d.clientId && d.ids.length === 1), {
     message: "A client admin needs exactly one person and a client",
     path: ["clientId"],
   });
+
+const roleChangeReason = z.string().trim().max(500, "Keep the reason under 500 characters");
+
+export const updateUserRolesSchema = z
+  .object({
+    reason: roleChangeReason.min(1, "Give a reason for the role change"),
+    changes: z
+      .array(
+        z.object({
+          id: objectId,
+          role: role,
+          clientId: nullableObjectId,
+          reason: roleChangeReason.optional().nullable(), // Overrides the shared reason for this person
+        }),
+      )
+      .min(1, "Select at least one user"),
+  })
+  .refine((d) => d.changes.every((c) => c.role !== "CLIENT_ADMIN" || !!c.clientId), {
+    message: "Pick a client for each new client admin",
+    path: ["changes"],
+  })
+  .refine(
+    (d) => {
+      const ids = d.changes.filter((c) => c.role === "CLIENT_ADMIN").map((c) => c.clientId);
+      return new Set(ids).size === ids.length;
+    },
+    { message: "Each client can have only one client admin", path: ["changes"] },
+  );
 
 export const changePasswordSchema = z
   .object({

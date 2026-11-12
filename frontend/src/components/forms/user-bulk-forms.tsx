@@ -1,86 +1,129 @@
 import { useState } from "react"
 import { useDispatch } from "react-redux"
-import { IconAlertTriangle, IconDownload, IconFileExport, IconInfoCircle, IconLockOpen, IconUserShield } from "@tabler/icons-react"
-import { changeUserRoles, unlockUsers } from "@/api/userApi"
+import { IconArrowRight, IconDownload, IconFileExport, IconInfoCircle, IconLockOpen, IconUserShield } from "@tabler/icons-react"
+import { unlockUsers, updateUserRoles } from "@/api/userApi"
 import { upsertUsersInStore } from "@/redux/actions/usersListActions"
 import { Avatar } from "@/components/pm/avatar"
 import { Check } from "@/components/pm/check"
 import { Segmented } from "@/components/pm/segmented"
-import { STATUS, Tag } from "@/components/pm/status-badge"
+import { STATUS, StatusBadge, Tag } from "@/components/pm/status-badge"
 import { cn } from "@/lib/utils"
 import type { Role, User } from "@/types/userTypes"
-import { Field, FormError, FormFoot, FormModal, Grid2, Note, SubmitButton } from "./form-kit"
+import { Field, FormError, FormFoot, FormModal, Grid2, Note, SubmitButton, inputCls, textareaCls } from "./form-kit"
 import { Combo } from "./combo"
 import { LogoChip } from "./options"
 import { openTaskCount, useAppData } from "./use-app-data"
 import type { FormProps } from "./forms-context"
 import { toast } from "./toaster"
-import { RoleCards, STATUS_LABEL, STATUS_TONE } from "./user-form"
+import { STATUS_LABEL, STATUS_TONE } from "./user-form"
 import { useAsyncAction } from "@/hooks/use-async-action"
 
 const roleLabel = (r: Role) => STATUS[r][0]
 
-/** Name chips for the people a bulk action applies to. */
-const PeopleChips = ({ list }: { list: User[] }) => (
-    <div className="flex flex-wrap gap-1.5">
-        {list.map((u) => (
-            <span key={u.id} className="inline-flex h-[26px] items-center gap-1.5 rounded-full border bg-surface-2 pl-0.5 pr-2.5 text-[12.5px] font-medium">
-                <Avatar name={u.name} seed={u.id} size={20} />{u.name}
-            </span>
-        ))}
-    </div>
-)
+const ROLES: Role[] = ["USER", "CLIENT_ADMIN", "SUPER_ADMIN"]
+const RANK: Record<Role, number> = { USER: 0, CLIENT_ADMIN: 1, SUPER_ADMIN: 2 }
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-/** Sets one role for every selected user. A client admin needs exactly one person and a client. */
+/**
+ * Review dialog for role changes: each selected person gets their own new role (a client
+ * admin also needs a client), with one shared reason and an optional per-person reason.
+ */
 export function BulkRoleForm({ data, onClose, closing }: FormProps<{ userIds: string[] }>) {
     const dispatch = useDispatch()
     const { users, clients } = useAppData()
     const list = users.filter((u) => data.userIds.includes(u.id))
-    const [role, setRole] = useState<Role>("USER")
-    const [clientId, setClientId] = useState("")
+    const managedBy = (id: string) => clients.find((c) => c.assignedAdmin?.id === id)?.id ?? ""
+    const [rows, setRows] = useState(() => Object.fromEntries(list.map((u) => [u.id, { role: u.role, clientId: managedBy(u.id), reason: null as string | null }])))
+    const [reason, setReason] = useState("")
     const { run, busy, error } = useAsyncAction()
 
-    const changing = list.filter((u) => u.role !== role)
-    const removesSuper = role !== "SUPER_ADMIN" && list.some((u) => u.role === "SUPER_ADMIN")
-    const needsClient = role === "CLIENT_ADMIN"
-    const tooMany = needsClient && list.length !== 1
-    const canSave = changing.length > 0 && !tooMany && (!needsClient || !!clientId)
+    const set = (id: string, patch: Partial<(typeof rows)[string]>) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }))
+    const changes = list.filter((u) => rows[u.id].role !== u.role || (u.role === "CLIENT_ADMIN" && rows[u.id].clientId !== managedBy(u.id)))
+    const promotions = changes.filter((u) => RANK[rows[u.id].role] > RANK[u.role]).length
+    const demotions = changes.filter((u) => RANK[rows[u.id].role] < RANK[u.role]).length
+    const moves = changes.length - promotions - demotions
+    const summary = [promotions && plural(promotions, "promotion"), demotions && plural(demotions, "demotion"), moves && plural(moves, "client change")].filter(Boolean).join(", ")
+    const missingClient = changes.some((u) => rows[u.id].role === "CLIENT_ADMIN" && !rows[u.id].clientId)
+    const canSave = changes.length > 0 && !!reason.trim() && !missingClient
+
+    // A client can be picked if it has no admin, its admin is this person, or its admin is moving elsewhere
+    const clientOptions = (id: string) => clients
+        .filter((c) => {
+            const admin = c.assignedAdmin?.id
+            const freed = admin && rows[admin] && (rows[admin].role !== "CLIENT_ADMIN" || rows[admin].clientId !== c.id)
+            const takenHere = Object.entries(rows).some(([other, r]) => other !== id && r.role === "CLIENT_ADMIN" && r.clientId === c.id)
+            return (!admin || admin === id || freed) && !takenHere
+        })
+        .map((c) => ({ value: c.id, label: c.name, lead: <LogoChip name={c.name} /> }))
 
     const save = () => canSave && run(async () => {
-        dispatch(upsertUsersInStore(await changeUserRoles(changing.map((u) => u.id), role, needsClient ? clientId : null)))
-        toast({ text: <span>{changing.length} {changing.length === 1 ? "person is" : "people are"} now <b>{roleLabel(role)}</b></span> })
+        const payload = changes.map((u) => {
+            const r = rows[u.id]
+            return { id: u.id, role: r.role, clientId: r.role === "CLIENT_ADMIN" ? r.clientId : null, reason: r.reason?.trim() || null }
+        })
+        dispatch(upsertUsersInStore(await updateUserRoles(payload, reason.trim())))
+        toast({ text: <span>Roles updated: {summary}</span> })
         onClose()
     })
 
     return (
         <FormModal
-            title={`Change role for ${list.length} ${list.length === 1 ? "person" : "people"}`}
+            title={`Change roles for ${plural(list.length, "person").replace("persons", "people")}`}
+            desc="Pick a new role for each person. Every change is logged with its reason."
             icon={IconUserShield}
-            width={600}
+            width={680}
             onClose={onClose}
             onSubmit={save}
             closing={closing}
             footer={
-                <FormFoot onClose={onClose} left={<span className="text-xs text-subtle-foreground">{changing.length} will change · {list.length - changing.length} already {roleLabel(role)}</span>}>
-                    <SubmitButton busy={busy} onClick={save} disabled={!canSave}>Change role</SubmitButton>
+                <FormFoot onClose={onClose} left={<span className="text-xs text-subtle-foreground">{summary || "No changes yet"}</span>}>
+                    <SubmitButton busy={busy} onClick={save} disabled={!canSave}>Apply {changes.length ? plural(changes.length, "change") : "changes"}</SubmitButton>
                 </FormFoot>
             }
         >
-            <PeopleChips list={list} />
-            <RoleCards value={role} onChange={setRole} />
-            {needsClient && (tooMany ? (
-                <Note tone="amber" icon={IconInfoCircle}>A client has one client admin. Select a single person to make them a client admin.</Note>
-            ) : (
-                <Field label="Client they manage" req>
-                    <Combo
-                        value={clientId}
-                        onChange={setClientId}
-                        placeholder="Choose client"
-                        options={clients.filter((c) => !c.assignedAdmin).map((c) => ({ value: c.id, label: c.name, lead: <LogoChip name={c.name} /> }))}
-                    />
-                </Field>
-            ))}
-            {removesSuper && <Note tone="amber" icon={IconAlertTriangle}>This removes super admin access from someone in the selection. At least one super admin must remain.</Note>}
+            <div className="flex flex-wrap items-center gap-3 text-[13px]">
+                <span className="text-muted-foreground">Apply same role to all</span>
+                <div role="group" aria-label="Apply same role to all" className="inline-flex gap-1">
+                    {ROLES.map((r) => (
+                        <button key={r} type="button" onClick={() => list.forEach((u) => set(u.id, { role: r }))}
+                            className="h-[26px] rounded-md border px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">
+                            {roleLabel(r)}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <ul className="m-0 grid list-none rounded-[10px] border p-0 [&>*+*]:border-t">
+                {list.map((u) => {
+                    const r = rows[u.id]
+                    const changed = changes.includes(u)
+                    return (
+                        <li key={u.id} aria-label={u.name} className={cn("grid gap-2.5 px-3.5 py-3", changed && "bg-surface-2")}>
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <Avatar name={u.name} seed={u.id} size={26} />
+                                <span className="min-w-[110px] flex-1 truncate text-[13.5px] font-medium">{u.name}</span>
+                                <StatusBadge value={u.role} />
+                                <IconArrowRight size={15} className="text-subtle-foreground" />
+                                <Segmented size="sm" value={r.role} onChange={(role: Role) => set(u.id, { role })} options={ROLES.map((x) => ({ value: x, label: roleLabel(x) }))} />
+                            </div>
+                            {r.role === "CLIENT_ADMIN" && (
+                                <Field label="Client they manage" req>
+                                    <Combo value={r.clientId} onChange={(clientId) => set(u.id, { clientId })} options={clientOptions(u.id)} placeholder="Choose client" searchPlaceholder="Search clients" />
+                                </Field>
+                            )}
+                            {changed && (r.reason === null ? (
+                                <button type="button" className="w-fit text-xs font-medium text-accent-foreground hover:underline" onClick={() => set(u.id, { reason: "" })}>Different reason</button>
+                            ) : (
+                                <input className={inputCls} value={r.reason} onChange={(e) => set(u.id, { reason: e.target.value })} placeholder={`Reason for ${u.name.split(" ")[0]}`} />
+                            ))}
+                        </li>
+                    )
+                })}
+            </ul>
+
+            <Field label="Reason" req hint="Saved in Activity with each change. Use “Different reason” to override it for one person.">
+                <textarea className={textareaCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why are these roles changing? e.g. Team restructure for Q4" />
+            </Field>
             <FormError message={error} />
         </FormModal>
     )

@@ -8,3 +8,4 @@ export { default as Preference } from "./Preference.js";
 export { default as Project } from "./Project.js";
 export { default as SubTask } from "./SubTask.js";
 export { default as Task } from "./Task.js";
+export { default as Activity } from "./Activity.js";

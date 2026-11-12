@@ -51,7 +51,7 @@ export function Workload({ tasks, limit = 5 }: { tasks: Task[]; limit?: number }
 
 /** Recent events: who did what to which task, and when. */
 export function ActivityList({ items }: { items: ActivityItem[] }) {
-    if (!items.length) return <EmptyState icon={IconHistory} title="No activity yet" hint="Task changes show up here." />
+    if (!items.length) return <EmptyState icon={IconHistory} title="No activity yet" hint="Task and role changes show up here." />
     return (
         <div className="grid gap-3.5">
             {items.map((e) => (
@@ -64,6 +64,7 @@ export function ActivityList({ items }: { items: ActivityItem[] }) {
                     <div className="min-w-0 flex-1 text-[13px] leading-[1.4]">
                         <span className="text-muted-foreground">{e.actor ? `${e.actor.name.split(" ")[0]} ${e.verb}` : e.verb}</span>{" "}
                         <span className="font-medium">{e.object}</span>
+                        {e.note && <div className="mt-0.5 text-xs text-subtle-foreground">“{e.note}”</div>}
                     </div>
                     <span className="whitespace-nowrap text-xs text-subtle-foreground">{ago(e.at)}</span>
                 </div>

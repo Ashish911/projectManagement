@@ -35,7 +35,7 @@ import { useTaskActions } from "@/components/forms/task-actions"
 import type { Client } from "@/types/clientTypes"
 import type { Project } from "@/types/projectTypes"
 import type { Task } from "@/types/taskTypes"
-import { createdVsResolved, resolvedWithin, taskActivity, teamOf, todayLabel, useDashboardData, type Range } from "./use-dashboard-data"
+import { createdVsResolved, resolvedWithin, mergeActivity, taskActivity, useServerActivity, teamOf, todayLabel, useDashboardData, type Range } from "./use-dashboard-data"
 import { ActivityList, Workload } from "./widgets"
 
 const RANGE_SUB: Record<Range, string> = { "7d": "Daily, last 7 days", "30d": "Every 3 days, last 30 days", "90d": "Weekly, last 90 days" }
@@ -54,6 +54,7 @@ export function AdminDashboard() {
     const openForm = useForms()
     const { toggleResolved } = useTaskActions()
     const { profile, users, clients, projects, tasks, tasksLoaded } = useDashboardData()
+    const serverActivity = useServerActivity()
     const isSuper = profile?.role === "SUPER_ADMIN"
 
     const count = (status: Project["status"]) => projects.filter((p) => p.status === status).length
@@ -138,7 +139,7 @@ export function AdminDashboard() {
                     <Workload tasks={tasks} />
                 </Panel>
                 <Panel index={8} title="Activity">
-                    <ActivityList items={taskActivity(tasks)} />
+                    <ActivityList items={mergeActivity(serverActivity, taskActivity(tasks, 6), 6)} />
                 </Panel>
             </div>
         </>

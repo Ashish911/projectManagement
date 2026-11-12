@@ -15,7 +15,7 @@ import { daysFrom, parseDate } from "@/components/pm/dates"
 import { useForms } from "@/components/forms/forms-context"
 import { useTaskActions } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
-import { resolvedWithin, taskActivity, todayLabel, useDashboardData } from "./use-dashboard-data"
+import { resolvedWithin, mergeActivity, taskActivity, useServerActivity, todayLabel, useDashboardData } from "./use-dashboard-data"
 import { ActivityList } from "./widgets"
 
 const greeting = () => {
@@ -32,6 +32,7 @@ export function MemberDashboard() {
     const openForm = useForms()
     const { toggleResolved } = useTaskActions()
     const { profile, projects, tasks, tasksLoaded } = useDashboardData()
+    const serverActivity = useServerActivity()
     const firstName = profile?.name?.split(" ")[0] ?? ""
 
     const mine = tasks.filter((t) => t.assignedTo?.id === profile?.id)
@@ -155,7 +156,7 @@ export function MemberDashboard() {
                         </div>
                     </Panel>
                     <Panel index={5} title="Activity">
-                        <ActivityList items={taskActivity(tasks, 4)} />
+                        <ActivityList items={mergeActivity(serverActivity, taskActivity(tasks, 4), 4)} />
                     </Panel>
                 </div>
             </div>

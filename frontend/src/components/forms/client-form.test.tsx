@@ -43,7 +43,7 @@ describe("ClientForm — assigning a client admin", () => {
     it("🟢 promotes and assigns once confirmed", async () => {
         await pickAdmin("Ravi Shah")
         await userEvent.click(screen.getByRole("button", { name: "Promote and assign" }))
-        expect(api.changeUserRoles).toHaveBeenCalledWith(["u1"], "CLIENT_ADMIN", "c1")
+        expect(api.changeUserRoles).toHaveBeenCalledWith(["u1"], "CLIENT_ADMIN", "c1", "Assigned as client admin of Atlas")
     })
 
     it("🟢 going back from the confirmation changes nothing", async () => {

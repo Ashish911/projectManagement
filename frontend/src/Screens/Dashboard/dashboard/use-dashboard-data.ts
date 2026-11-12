@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react"
 import type { Project } from "@/types/projectTypes"
 import type { Task } from "@/types/taskTypes"
 import { parseDate } from "@/components/pm/dates"
+import { getActivity, type ActivityEntry } from "@/api/activityApi"
 
 export { useAppData as useDashboardData } from "@/components/forms/use-app-data"
 
@@ -46,7 +48,26 @@ export function createdVsResolved(tasks: Task[], range: Range) {
 export const resolvedWithin = (tasks: Task[], days: number) =>
     tasks.filter((t) => t.currentStatus === "RESOLVED" && (parseDate(t.resolvedAt)?.getTime() ?? 0) > Date.now() - days * DAY).length
 
-export type ActivityItem = { id: string; actor?: { id: string; name: string } | null; verb: string; object: string; at: number }
+export type ActivityItem = { id: string; actor?: { id: string; name: string } | null; verb: string; object: string; at: number; note?: string | null }
+
+/** Server entries (role changes, reopens…) merged with derived task events, newest first. */
+export function mergeActivity(server: ActivityEntry[], tasks: ActivityItem[], n = 5): ActivityItem[] {
+    const fromServer: ActivityItem[] = server.map((e) => ({
+        id: e.id, actor: e.actor ?? null, verb: e.summary, object: "", at: parseDate(e.createdAt)?.getTime() ?? 0, note: e.reason,
+    }))
+    return [...fromServer, ...tasks].sort((a, b) => b.at - a.at).slice(0, n)
+}
+
+/** The server's activity feed, loaded once per mount; empty if it can't be loaded. */
+export function useServerActivity(limit = 20) {
+    const [entries, setEntries] = useState<ActivityEntry[]>([])
+    useEffect(() => {
+        let live = true
+        getActivity(limit).then((x) => live && setEntries(x)).catch(() => {})
+        return () => { live = false }
+    }, [limit])
+    return entries
+}
 
 /** Recent task events derived from creation and resolution times, newest first. */
 export function taskActivity(tasks: Task[], n = 5): ActivityItem[] {

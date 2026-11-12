@@ -85,8 +85,7 @@ type Values = {
     role: Role
     clientId: string
     mode: "INVITE" | "PASSWORD"
-    password: string
-}
+    password: string; reason: string }
 
 /** Invite a user (SUPER_ADMIN), or edit one when `data.userId` is given. */
 export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string }>) {
@@ -102,6 +101,9 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
     const [copied, setCopied] = useState(false)
     const [statusBusy, setStatusBusy] = useState(false)
 
+    // Editing someone's role (or their client) is logged with a reason
+    const roleChangedIn = (x: { role: Role; clientId: string }) =>
+        !!cur && (x.role !== cur.role || (x.role === "CLIENT_ADMIN" && x.clientId !== (managed?.id ?? "")))
     const f = useForm<Values>(
         {
             name: cur?.name ?? "",
@@ -113,6 +115,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
             clientId: managed?.id ?? "",
             mode: "INVITE",
             password: generatePassword(),
+            reason: "",
         },
         {
             name: (x) => (x.trim() ? null : "Name is required"),
@@ -124,6 +127,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
             gender: (x) => (cur || x ? null : "Select one"),
             clientId: (x, a) => (a.role === "CLIENT_ADMIN" && !x ? "Pick the client they’ll manage" : null),
             password: (x, a) => (!cur && a.mode === "PASSWORD" && x.length < 8 ? "At least 8 characters" : null),
+            reason: (x, a) => (roleChangedIn(a) && !x.trim() ? "Say why their role is changing" : null),
         },
     )
     const v = f.v
@@ -138,8 +142,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
         const profile = { name: x.name.trim(), email: x.email.trim().toLowerCase(), number: x.phone.trim(), gender: x.gender || "OTHERS", dob: x.dob || null }
         if (cur) {
             let updated: User = await updateUser({ id: cur.id, ...profile })
-            const roleChanged = x.role !== cur.role || (x.role === "CLIENT_ADMIN" && x.clientId !== (managed?.id ?? ""))
-            if (roleChanged) [updated] = await changeUserRoles([cur.id], x.role, x.role === "CLIENT_ADMIN" ? x.clientId : null)
+            if (roleChangedIn(x)) [updated] = await changeUserRoles([cur.id], x.role, x.role === "CLIENT_ADMIN" ? x.clientId : null, x.reason.trim())
             dispatch(upsertUsersInStore([updated]))
             toast({ text: <span>Saved <b>{updated.name}</b></span> })
         } else {
@@ -215,6 +218,12 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
             )}
 
             </fieldset>
+
+            {roleChangedIn(v) && (
+                <Field label="Reason for the role change" req error={f.err.reason} hint="Saved in Activity with the change.">
+                    <input className={inputCls} value={v.reason} onChange={(e) => f.set("reason", e.target.value)} onBlur={() => f.blur("reason")} placeholder="Why is their role changing?" />
+                </Field>
+            )}
 
             {!cur && (
                 <>
