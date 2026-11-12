@@ -17,6 +17,10 @@ import { useForms } from "@/components/forms/forms-context"
 import { useAppData } from "@/components/forms/use-app-data"
 import { useTaskActions } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
+import { useSearchParams } from "react-router-dom"
+import { Combo } from "@/components/forms/combo"
+import { inputCls } from "@/components/forms/form-kit"
+import { SORTS, applyTaskView, readTaskView, writeTaskView, type TaskGroup, type TaskSort, type TaskView } from "./tasks-view"
 import type { Task, TaskStatus } from "@/types/taskTypes"
 import type { SubTask } from "@/types/subTaskTypes"
 
@@ -136,7 +140,7 @@ function ExpandableRow({ task, onOpen, onToggle }: { task: Task; onOpen: () => v
 
 export const Tasks: React.FC = () => {
     const openForm = useForms()
-    const { profile, role, tasks, tasksLoaded } = useAppData()
+    const { profile, role, tasks, projects, tasksLoaded } = useAppData()
     const { setStatus, toggleResolved } = useTaskActions()
     const isMember = role === "USER"
     const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
@@ -147,8 +151,13 @@ export const Tasks: React.FC = () => {
     // A small movement threshold, so a plain click still opens the card
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
+    // Project filter, sort and grouping live in the URL (?projects=…&sort=…&group=…)
+    const [params, setParams] = useSearchParams()
+    const taskView = readTaskView(params)
+    const setTaskView = (patch: Partial<TaskView>) => setParams(writeTaskView({ ...taskView, ...patch }), { replace: true })
+
     const mine = (t: Task) => t.assignedTo?.id === profile?.id
-    const visible = tasks.filter((t) => (isMember || who === "mine" ? mine(t) : true))
+    const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? mine(t) : true)), taskView, projects.map((p) => p.id))
     const open = visible.filter((t) => t.currentStatus !== "RESOLVED").length
     const overdue = visible.filter(isOverdue).length
     // Members may only move their own tasks; admins can move any
@@ -170,6 +179,31 @@ export const Tasks: React.FC = () => {
                 {isAdmin && <Button onClick={() => openForm("task")}><IconPlus />New task</Button>}
                 {isMember && <Button onClick={() => openForm("log-update")}><IconMessagePlus />Log update</Button>}
             </PageHead>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+                <div className="w-[260px] max-w-full">
+                    <Combo
+                        multi
+                        value={taskView.projects}
+                        onChange={(ids: string[]) => setTaskView({ projects: ids })}
+                        options={projects.map((p) => ({ value: p.id, label: p.name, sub: p.client?.name }))}
+                        placeholder="All projects"
+                        searchPlaceholder="Search projects"
+                    />
+                </div>
+                <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                    Sort
+                    <select aria-label="Sort tasks" value={taskView.sort} onChange={(e) => setTaskView({ sort: e.target.value as TaskSort })} className={cn(inputCls, "h-[34px] w-auto py-0 pr-8")}>
+                        {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                </label>
+                {view === "list" && (
+                    <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                        Group
+                        <Segmented size="sm" value={taskView.group} onChange={(group: TaskGroup) => setTaskView({ group })} options={[{ value: "due", label: "Due date" }, { value: "project", label: "Project" }]} />
+                    </label>
+                )}
+            </div>
 
             {!tasksLoaded ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading tasks…</div>
@@ -195,13 +229,16 @@ export const Tasks: React.FC = () => {
                 </DndContext>
             ) : (
                 <div key={`l-${who}`} className="grid animate-pm-tab gap-4">
-                    {GROUPS.map(([bucket, label], gi) => {
-                        const list = visible.filter((t) => dueBucket(t) === bucket)
+                    {(taskView.group === "project"
+                        ? [...new Map(visible.map((t) => [t.project?.id ?? "", t.project?.name ?? "No project"])).entries()]
+                        : GROUPS
+                    ).map(([bucket, label], gi) => {
+                        const list = visible.filter((t) => (taskView.group === "project" ? (t.project?.id ?? "") === bucket : dueBucket(t) === bucket))
                         if (!list.length) return null
                         return (
                             <section key={bucket} className="animate-pm-in rounded-xl border bg-card px-2.5 py-2 shadow-sm" style={{ animationDelay: `${gi * 50}ms` }}>
                                 <div className="flex items-center gap-2 px-2 pb-1.5 pt-2">
-                                    <span className={cn("text-[15px] font-semibold tracking-[-0.01em]", bucket === "overdue" && "tone-red tone-fg")}>{label}</span>
+                                    <h2 className={cn("text-[15px] font-semibold tracking-[-0.01em]", bucket === "overdue" && "tone-red tone-fg")}>{label}</h2>
                                     <span className="num rounded-full bg-surface-3 px-1.5 py-px text-[11px] text-muted-foreground">{list.length}</span>
                                 </div>
                                 {list.map((t) => (

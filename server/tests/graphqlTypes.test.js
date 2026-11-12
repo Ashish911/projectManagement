@@ -16,3 +16,13 @@ describe("ClientType", () => {
     expect(ClientType.getFields().name.type instanceof GraphQLNonNull).toBe(true);
   });
 });
+
+const { TaskType } = await import("../graphql/types/task.type.js");
+
+describe("TaskType", () => {
+  it("🟢 exposes updatedAt as an ISO string (for 'recently updated' sorting)", () => {
+    const field = TaskType.getFields().updatedAt;
+    expect(field).toBeDefined();
+    expect(field.resolve({ updatedAt: new Date("2026-11-01T10:00:00Z") })).toBe("2026-11-01T10:00:00.000Z");
+  });
+});

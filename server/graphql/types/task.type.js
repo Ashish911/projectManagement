@@ -29,6 +29,7 @@ export const TaskType = new GraphQLObjectType({
     deadline: { type: GraphQLString, resolve: (t) => toIso(t.deadline) },
     currentStatus: { type: new GraphQLNonNull(GraphQLString) },
     createdAt: { type: GraphQLString, resolve: (t) => toIso(t.createdAt) },
+    updatedAt: { type: GraphQLString, resolve: (t) => toIso(t.updatedAt) },
     resolvedAt: { type: GraphQLString, resolve: (t) => toIso(t.resolvedAt) },
     subTaskStats: {
       type: new GraphQLNonNull(SubTaskStatsType),

@@ -104,7 +104,7 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
                             className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] text-foreground outline-none focus:ring-0"
                         />
                     </div>
-                    <div className="grid max-h-[260px] gap-px overflow-y-auto">
+                    <div role="listbox" aria-multiselectable={multi || undefined} className="grid max-h-[260px] gap-px overflow-y-auto">
                         {list.map((o, i) => (
                             <React.Fragment key={o.value || "_none"}>
                                 {o.group && (i === 0 || list[i - 1].group !== o.group) && (

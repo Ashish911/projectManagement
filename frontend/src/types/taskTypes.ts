@@ -13,6 +13,7 @@ export interface Task {
     createdBy: Pick<User, 'id' | 'name' | 'email'> | null;
     project: { id: string; name: string } | null;
     createdAt?: string | null;
+    updatedAt?: string | null;
     resolvedAt?: string | null;
     subTaskStats?: { done: number; total: number };
 }

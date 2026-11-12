@@ -5,6 +5,7 @@ const TASK_FIELDS = `
     deadline
     currentStatus
     createdAt
+    updatedAt
     resolvedAt
     subTaskStats {
         done
