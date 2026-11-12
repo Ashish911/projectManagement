@@ -4,9 +4,9 @@ import type { Role } from "./env"
 
 /** Sidebar entries each role should see, in order (NAV_BY_ROLE in app-sidebar.tsx). */
 const NAV: Record<Role, string[]> = {
-    superAdmin: ["Dashboard", "Users", "Clients", "Projects", "Tasks"],
-    clientAdmin: ["Dashboard", "Clients", "Projects", "Tasks", "Analytics"],
-    user: ["Dashboard", "Projects", "Tasks"],
+    superAdmin: ["Dashboard", "Users", "Clients", "Projects", "Tasks", "Guide"],
+    clientAdmin: ["Dashboard", "Clients", "Projects", "Tasks", "Analytics", "Guide"],
+    user: ["Dashboard", "Projects", "Tasks", "Guide"],
 }
 
 const sidebarItems = (page: Page) => page.locator('[data-sidebar="content"]').getByRole("button")

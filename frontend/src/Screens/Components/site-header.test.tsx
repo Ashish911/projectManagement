@@ -16,12 +16,12 @@ vi.mock("@/components/hooks/use-theme", () => ({ useTheme: () => ({ theme: "LIGH
 
 const n = (id: string, status: Notification["status"] = "UNREAD"): Notification => ({ id, content: `Message ${id}`, status, createdAt: new Date().toISOString() })
 
-async function renderHeader() {
+async function renderHeader(path = "/dashboard") {
     const openForm = vi.fn()
     const { SiteHeader } = await import("./site-header")
     const { FormsContext } = await import("@/components/forms/forms-context") // Same module instance as the header's
     render(
-        <MemoryRouter initialEntries={["/dashboard"]}>
+        <MemoryRouter initialEntries={[path]}>
             <FormsContext.Provider value={openForm}><SiteHeader /></FormsContext.Provider>
         </MemoryRouter>,
     )
@@ -57,5 +57,12 @@ describe("SiteHeader notifications", () => {
     it("🔴 the initial load does not toast", async () => {
         await renderHeader()
         expect(toast).not.toHaveBeenCalled()
+    })
+})
+
+describe("SiteHeader title", () => {
+    it("🟢 the Guide page is named in the header", async () => {
+        await renderHeader("/guide")
+        expect(screen.getByRole("heading", { level: 1, name: "Guide" })).toBeInTheDocument()
     })
 })

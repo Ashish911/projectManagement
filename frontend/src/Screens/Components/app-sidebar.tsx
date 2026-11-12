@@ -4,6 +4,7 @@ import {
     IconBuilding,
     IconChartBar,
     IconFolder,
+    IconHelpCircle,
     IconLayoutDashboard,
     IconListDetails,
     IconUsers,
@@ -30,6 +31,7 @@ export const NAV_BY_ROLE = {
         { title: "Clients",   url: "/clients",   icon: IconBuilding },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
+        { title: "Guide",     url: "/guide",     icon: IconHelpCircle },
     ],
     CLIENT_ADMIN: [
         { title: "Dashboard", url: "/dashboard", icon: IconLayoutDashboard },
@@ -37,11 +39,13 @@ export const NAV_BY_ROLE = {
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
         { title: "Analytics", url: "/analytics", icon: IconChartBar },
+        { title: "Guide",     url: "/guide",     icon: IconHelpCircle },
     ],
     USER: [
         { title: "Dashboard", url: "/dashboard", icon: IconLayoutDashboard },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
+        { title: "Guide",     url: "/guide",     icon: IconHelpCircle },
     ],
 }
 

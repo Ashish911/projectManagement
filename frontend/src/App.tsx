@@ -12,6 +12,7 @@ import { Projects } from "@/Screens/Dashboard/Projects.tsx";
 import { ProjectDetail } from "@/Screens/Dashboard/ProjectDetail.tsx";
 import { Tasks } from "@/Screens/Dashboard/Tasks.tsx";
 import { Analytics } from "@/Screens/Dashboard/Analytics.tsx";
+import { Guide } from "@/Screens/Dashboard/Guide.tsx";
 import { ForgotPassword } from "@/Screens/Auth/ForgotPassword.tsx";
 import { ResetPassword } from "@/Screens/Auth/ResetPassword.tsx";
 import { ProtectedRoute, PublicRoute } from "@/Screens/RouteHandler/RouteNavigator.tsx";
@@ -42,6 +43,8 @@ function App() {
                 {/* The Tasks board replaced the Kanban page */}
                 <Route path="/kanban"    element={<Navigate to="/tasks" replace />} />
                 <Route path="/analytics" element={<ProtectedRoute roles={["SUPER_ADMIN", "CLIENT_ADMIN"]} element={<Analytics />} />} />
+                {/* Help for the signed-in user's role */}
+                <Route path="/guide"     element={<Guide />} />
               </Route>
             </Routes>
           </div>

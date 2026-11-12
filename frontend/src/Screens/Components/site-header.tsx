@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
     "/tasks":     "Tasks",
     "/analytics": "Analytics",
     "/account":   "Account",
+    "/guide":     "Guide",
 }
 
 /** Sticky top bar: sidebar toggle, breadcrumb, search (⌘K), theme and notifications. */
