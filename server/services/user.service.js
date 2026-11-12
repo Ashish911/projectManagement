@@ -17,6 +17,7 @@ import {
   ValidationError,
 } from "../errors/errors.js";
 import crypto from "crypto";
+import { AppError } from "../errors/AppError.js";
 import { validate } from "../validation/validate.js";
 import {
   registerSchema,
@@ -78,9 +79,11 @@ const invalidateUsers = async (ids = []) => {
 
 /**
  * Creates a one-time invite token for the user and emails the link.
- * Not awaited by callers' responses, so a slow mail provider never blocks the API.
+ * By default the send isn't awaited, so a slow mail provider never blocks the API;
+ * with `mustSend` (resending) a failed or unconfigured send is reported to the caller.
+ * @throws {AppError} With `mustSend`, if the email wasn't sent.
  */
-const sendInviteEmail = async (user, logger) => {
+const sendInviteEmail = async (user, logger, { mustSend = false } = {}) => {
   const token = crypto.randomBytes(32).toString("hex");
   await UserRepo.update(user.id, {
     resetToken: hashResetToken(token),
@@ -88,9 +91,19 @@ const sendInviteEmail = async (user, logger) => {
     invitedAt: new Date(),
   });
   const appUrl = process.env.APP_URL || "http://localhost:4000";
-  EmailService.sendInvite(user.email, user.name, `${appUrl}/reset-password?token=${token}&invite=1`).catch((err) =>
-    logger.error({ err, userId: user.id }, "Invite email failed"),
-  );
+  const sending = EmailService.sendInvite(user.email, user.name, `${appUrl}/reset-password?token=${token}&invite=1`);
+  if (!mustSend) {
+    sending.catch((err) => logger.error({ err, userId: user.id }, "Invite email failed"));
+    return;
+  }
+  let sent;
+  try {
+    sent = await sending;
+  } catch (err) {
+    logger.error({ err, userId: user.id }, "Invite email failed");
+    throw new AppError(`The invite email couldn't be sent: ${err.message}`, "EMAIL_FAILED", 502);
+  }
+  if (!sent) throw new AppError("Email isn't configured on the server, so the invite wasn't sent", "EMAIL_FAILED", 503);
 };
 
 /** Authentication, password reset, and user management. */
@@ -737,7 +750,7 @@ export const UserService = {
     if (!target) throw new NotFoundError("User not found");
     if (target.lastLoginAt) throw new ConflictError("This user has already signed in");
 
-    await sendInviteEmail(target, logger);
+    await sendInviteEmail(target, logger, { mustSend: true });
     logger.info({ audit: true, userId: user.id, targetUserId: id, action: "USER_INVITE_RESENT" }, "AUDIT");
 
     return { message: `Invite sent to ${target.email}` };

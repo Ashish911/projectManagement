@@ -278,9 +278,24 @@ describe("UserService — administration", () => {
   describe("resendInvite", () => {
     it("🟢 should send a new invite to someone who never signed in", async () => {
       mockUserFindById.mockResolvedValue({ ...member, email: "sita@x.io", name: "Sita", lastLoginAt: null });
+      mockSendInvite.mockResolvedValueOnce(true);
       const result = await UserService.resendInvite(member.id, { user: superAdmin });
       expect(mockSendInvite).toHaveBeenCalled();
       expect(result.message).toContain("sita@x.io");
+    });
+
+    it("🔴 should report it when the invite email can't be sent", async () => {
+      mockUserFindById.mockResolvedValue({ ...member, email: "sita@x.io", name: "Sita", lastLoginAt: null });
+      mockSendInvite.mockRejectedValueOnce(new Error("Not allowed: sita@x.io"));
+      await expect(UserService.resendInvite(member.id, { user: superAdmin })).rejects.toThrow(
+        "The invite email couldn't be sent: Not allowed: sita@x.io",
+      );
+    });
+
+    it("🔴 should report it when email isn't configured", async () => {
+      mockUserFindById.mockResolvedValue({ ...member, email: "sita@x.io", name: "Sita", lastLoginAt: null });
+      mockSendInvite.mockResolvedValueOnce(false);
+      await expect(UserService.resendInvite(member.id, { user: superAdmin })).rejects.toThrow("Email isn't configured on the server");
     });
 
     it("🔴 should refuse once the user has signed in", async () => {

@@ -29,6 +29,8 @@ services:
     environment:
       - REDIS_HOST=redis # Override so the app talks to the Redis service, not localhost
       - REDIS_PORT=6379
+      - SMTP_HOST=mailpit # Dev: every email goes to Mailpit (http://localhost:8025) instead of Bird
+      - SMTP_PORT=1025
     ports:
       - "8000:8000" # GraphQL API
       - "9090:9090" # Prometheus metrics endpoint
@@ -118,6 +120,16 @@ services:
   # CACHE — Redis
   # Used by both profiles for app caching (config/cache.js) and BullMQ queues.
   # ════════════════════════════════════════════════════════════════════════════
+  # Dev mail catcher: captures invite and reset emails; read them at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    profiles: ["dev"]
+    container_name: mailpit
+    ports:
+      - "8025:8025" # Web UI
+    networks:
+      - app-network
+
   redis:
     image: redis:7-alpine # Pinned to major version 7
     profiles: ["dev", "prod"]

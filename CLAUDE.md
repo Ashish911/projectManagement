@@ -24,6 +24,7 @@ npm test
 npm run test:auth
 npm run test:client
 npm run test:comment
+npm run test:email
 npm run test:task
 npm run test:project
 npm run test:subTask
@@ -58,7 +59,7 @@ Validated at startup via Zod in `config/env.js`. The server will exit on missing
 | `MONGO_URI` | required |
 | `SECRET_KEY` | min 32 characters |
 
-Optional, not validated by Zod: `REDIS_HOST` (default `localhost`), `REDIS_PORT` (`6379`), `REDIS_PASSWORD`, `CORS_ORIGIN` (`*`), `METRICS_PORT` (`9090`), `BIRD_API_KEY` (password-reset and invite emails; without it no email is sent), `EMAIL_FROM` (`onboarding@messagebird.dev`), `APP_URL` (frontend base for reset and invite links, `http://localhost:4000`).
+Optional, not validated by Zod: `REDIS_HOST` (default `localhost`), `REDIS_PORT` (`6379`), `REDIS_PASSWORD`, `CORS_ORIGIN` (`*`), `METRICS_PORT` (`9090`), `SMTP_HOST` / `SMTP_PORT` (send email over SMTP instead of Bird; the dev compose profile points them at the Mailpit catcher, UI on `localhost:8025`), `BIRD_API_KEY` (password-reset and invite emails when `SMTP_HOST` is unset; without either, no email is sent), `EMAIL_FROM` (`onboarding@messagebird.dev`), `APP_URL` (frontend base for reset and invite links, `http://localhost:4000`).
 
 Dev env is `.env.local`, prod env is `.env.prod`. Both are git-ignored (`.env*`); `server/.env.example` is the committed template. Never commit real env files.
 
@@ -132,7 +133,7 @@ Test names use `🟢` for happy paths and `🔴` for failure/rejection cases.
 
 `docker-compose.yml` has two profiles: `dev` and `prod`.
 
-- **dev**: app (nodemon, ports 8000 + 9090) + worker + redis + prometheus (port 9091) + grafana (port 3001)
+- **dev**: app (nodemon, ports 8000 + 9090) + worker + redis + mailpit (email catcher, UI port 8025) + prometheus (port 9091) + grafana (port 3001)
 - **prod**: app-prod (multi-stage build) + worker-prod + redis
 
 The notification worker runs as its own container: `worker` (dev, nodemon) and `worker-prod` (prod). If it is down, jobs wait in Redis and are delivered when it is back. Redis persists RDB snapshots to the `redis-data` volume.

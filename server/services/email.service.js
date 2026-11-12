@@ -1,14 +1,40 @@
-// Sends transactional email through Bird (https://bird.com).
+// Sends transactional email: over SMTP when SMTP_HOST is set (e.g. the Mailpit dev catcher), otherwise through Bird (https://bird.com).
 import { BirdClient } from "@messagebird/sdk";
+import nodemailer from "nodemailer";
 import logger from "../config/logger.js";
 
-let client = null; // Created lazily on first send
+let bird = null; // Created lazily on first send
+let smtp = null;
 
-/** Returns a shared Bird client, or null if BIRD_API_KEY is not configured. */
-const getClient = () => {
-  if (!process.env.BIRD_API_KEY) return null;
-  client ??= new BirdClient({ apiKey: process.env.BIRD_API_KEY });
-  return client;
+/** Forgets the cached clients so the next send re-reads the env (tests). */
+export const resetEmailTransport = () => {
+  bird = null;
+  smtp = null;
+};
+
+const FROM_NAME = "ProjoMan";
+const fromEmail = () => process.env.EMAIL_FROM || "onboarding@messagebird.dev";
+
+/**
+ * Sends one HTML email through whichever transport is configured.
+ * @returns {Promise<boolean>} True if the provider accepted it, false if no transport is configured.
+ * @throws {Error} If the provider rejects the message.
+ */
+const send = async ({ to, subject, html, kind }) => {
+  if (process.env.SMTP_HOST) {
+    smtp ??= nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 1025), secure: false });
+    const info = await smtp.sendMail({ from: `"${FROM_NAME}" <${fromEmail()}>`, to, subject, html });
+    logger.info({ emailId: info.messageId, transport: "smtp" }, `${kind} email sent`);
+    return true;
+  }
+  if (process.env.BIRD_API_KEY) {
+    bird ??= new BirdClient({ apiKey: process.env.BIRD_API_KEY });
+    const msg = await bird.email.send({ from: { email: fromEmail(), name: FROM_NAME }, to: [to], subject, html });
+    logger.info({ emailId: msg.id, status: msg.status, transport: "bird" }, `${kind} email sent`);
+    return true;
+  }
+  logger.error(`No email transport configured (set SMTP_HOST or BIRD_API_KEY); ${kind.toLowerCase()} email not sent`);
+  return false;
 };
 
 /** Outbound email used by other services. */
@@ -17,22 +43,13 @@ export const EmailService = {
    * Emails a password-reset link.
    * @param {string} to       Recipient email address.
    * @param {string} resetUrl Link containing the one-time reset token.
-   * @returns {Promise<boolean>} True if Bird accepted the message, false if email is not configured.
-   * @throws {Error} If Bird rejects the request.
+   * @returns {Promise<boolean>} True if the provider accepted it, false if no transport is configured.
+   * @throws {Error} If the provider rejects the message.
    */
   async sendPasswordReset(to, resetUrl) {
-    const bird = getClient();
-    if (!bird) {
-      logger.error("BIRD_API_KEY is not set; password reset email not sent");
-      return false;
-    }
-
-    const msg = await bird.email.send({
-      from: {
-        email: process.env.EMAIL_FROM || "onboarding@messagebird.dev",
-        name: "ProjoMan",
-      },
-      to: [to],
+    return send({
+      to,
+      kind: "Password reset",
       subject: "Reset your ProjoMan password",
       html: `
         <p>We received a request to reset your ProjoMan password.</p>
@@ -40,9 +57,6 @@ export const EmailService = {
         <p>This link expires in 1 hour. If you did not request a reset, you can ignore this email.</p>
       `,
     });
-
-    logger.info({ emailId: msg.id, status: msg.status }, "Password reset email sent");
-    return true;
   },
 
   /**
@@ -50,22 +64,13 @@ export const EmailService = {
    * @param {string} to        Recipient email address.
    * @param {string} name      Recipient's name, used in the greeting.
    * @param {string} inviteUrl Link containing the one-time token.
-   * @returns {Promise<boolean>} True if Bird accepted the message, false if email is not configured.
-   * @throws {Error} If Bird rejects the request.
+   * @returns {Promise<boolean>} True if the provider accepted it, false if no transport is configured.
+   * @throws {Error} If the provider rejects the message.
    */
   async sendInvite(to, name, inviteUrl) {
-    const bird = getClient();
-    if (!bird) {
-      logger.error("BIRD_API_KEY is not set; invite email not sent");
-      return false;
-    }
-
-    const msg = await bird.email.send({
-      from: {
-        email: process.env.EMAIL_FROM || "onboarding@messagebird.dev",
-        name: "ProjoMan",
-      },
-      to: [to],
+    return send({
+      to,
+      kind: "Invite",
       subject: "You've been invited to ProjoMan",
       html: `
         <p>Hi ${name.replace(/[<>&"]/g, "")},</p>
@@ -74,8 +79,5 @@ export const EmailService = {
         <p>This link expires in 48 hours.</p>
       `,
     });
-
-    logger.info({ emailId: msg.id, status: msg.status }, "Invite email sent");
-    return true;
   },
 };
