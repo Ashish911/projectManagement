@@ -154,7 +154,7 @@ const TOPICS: Topic[] = [
             only(["CLIENT_ADMIN"], "Projects lists your client's projects. Use the status tabs or search to narrow it down."),
             only(ADMINS, "Click New project, give it a name, status and due date, and watch the card preview update as you type."),
             "Open a project to see its progress, the burn-down chart, what's Up next and who's on the team.",
-            only(ADMINS, "Use Manage team, then Add member, to put people on the project. They're notified and can see it straight away."),
+            only(ADMINS, "Use Manage team to add or remove people. Anyone added is notified and can see the project straight away."),
             only(ADMINS, "Delete a project from More project actions. You type its name to confirm, and you still get a few seconds to undo."),
         ],
         waiting: {

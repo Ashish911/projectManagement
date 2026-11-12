@@ -13,7 +13,6 @@ import {
     IconPencil,
     IconPlus,
     IconTrash,
-    IconUserPlus,
     IconUsersGroup,
 } from "@tabler/icons-react";
 import type { Task } from "@/types/taskTypes";
@@ -141,7 +140,7 @@ export const ProjectDetail: React.FC = () => {
                 </div>
                 <div className="grid justify-items-end gap-3">
                     <div className="flex gap-2">
-                        {canManage && <Button variant="outline" onClick={() => openForm("team", { projectId: project.id })}><IconUserPlus />Add member</Button>}
+                        {canManage && <Button variant="outline" onClick={() => openForm("team", { projectId: project.id })}><IconUsersGroup />Manage team</Button>}
                         {canManage && <Button onClick={() => openForm("task", { projectId: project.id })}><IconPlus />New task</Button>}
                         {canManage && (
                             <DropdownMenu>
@@ -150,7 +149,6 @@ export const ProjectDetail: React.FC = () => {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => openForm("project", { projectId: project.id })}><IconPencil className="mr-2 size-4" />Edit project</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => openForm("team", { projectId: project.id })}><IconUsersGroup className="mr-2 size-4" />Manage team</DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="tone-red tone-fg" onClick={() => openForm("delete-project", { projectId: project.id })}><IconTrash className="mr-2 size-4" />Delete project</DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -294,7 +292,8 @@ export const ProjectDetail: React.FC = () => {
                                 onClick={() => openForm("team", { projectId: project.id })}
                                 className="flex min-h-[140px] animate-pm-in flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-border-strong text-[13.5px] font-medium text-muted-foreground transition-colors duration-fast hover:border-primary hover:bg-accent hover:text-accent-foreground"
                             >
-                                <IconUserPlus size={20} />Add member
+                                <IconUsersGroup size={20} />Manage team
+                                <span className="text-xs font-normal text-subtle-foreground">Add or remove members</span>
                             </button>
                         )}
                         {!canManage && team.length === 0 && <div className="col-span-full rounded-xl border bg-card"><EmptyState icon={IconUsersGroup} title="No team members yet" /></div>}
