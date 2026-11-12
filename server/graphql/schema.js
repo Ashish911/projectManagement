@@ -323,6 +323,10 @@ const Mutation = new GraphQLObjectType({
       type: ClientType,
       args: {
         id: { type: new GraphQLNonNull(GraphQLID) },
+        // Required when the client has an admin: REASSIGN (with reassignTo) or DEMOTE, plus a reason
+        adminAction: { type: GraphQLString },
+        reassignTo: { type: GraphQLID },
+        reason: { type: GraphQLString },
       },
       resolve: clientResolvers.Mutation.deleteClientBySuperAdmin,
     },
@@ -330,6 +334,10 @@ const Mutation = new GraphQLObjectType({
       type: ClientType,
       args: {
         id: { type: new GraphQLNonNull(GraphQLID) },
+        // Required when the client has an admin: REASSIGN (with reassignTo) or DEMOTE, plus a reason
+        adminAction: { type: GraphQLString },
+        reassignTo: { type: GraphQLID },
+        reason: { type: GraphQLString },
       },
       resolve: clientResolvers.Mutation.forceDeleteClient,
     },

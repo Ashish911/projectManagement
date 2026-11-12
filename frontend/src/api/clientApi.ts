@@ -28,12 +28,15 @@ export const confirmDeleteClient = async (id: string): Promise<void> => {
     await gql(CONFIRM_DELETE_CLIENT, { id });
 };
 
-export const deleteClientBySuperAdmin = async (id: string): Promise<void> => {
-    await gql(DELETE_CLIENT_BY_SUPER_ADMIN, { id });
+/** What happens to the client admin of a client being deleted (required when it has one). */
+export type AdminPlan = { adminAction: "REASSIGN" | "DEMOTE"; reassignTo: string | null; reason: string }
+
+export const deleteClientBySuperAdmin = async (id: string, plan?: AdminPlan): Promise<void> => {
+    await gql(DELETE_CLIENT_BY_SUPER_ADMIN, { id, ...plan });
 };
 
-export const forceDeleteClient = async (id: string): Promise<void> => {
-    await gql(FORCE_DELETE_CLIENT, { id });
+export const forceDeleteClient = async (id: string, plan?: AdminPlan): Promise<void> => {
+    await gql(FORCE_DELETE_CLIENT, { id, ...plan });
 };
 
 export const assignAdmin = async (vars: { id: string; assignedAdmin: string }): Promise<Client> =>

@@ -277,3 +277,13 @@ export const updatePreferenceSchema = z.object({
   theme: z.enum(["LIGHT", "DARK"]).optional(),
   language: z.enum(["ENGLISH", "JAPANESE", "KOREAN"]).optional(),
 });
+
+// ─── Deleting a client that has a client admin ───────────────────
+export const deleteClientAdminPlanSchema = z.object({
+  adminAction: z.enum(["REASSIGN", "DEMOTE"]).optional().nullable(),
+  reassignTo: nullableObjectId,
+  reason: z.string().trim().max(500).optional().nullable(),
+}).refine((d) => d.adminAction !== "REASSIGN" || !!d.reassignTo, {
+  message: "Pick the client to move them to",
+  path: ["reassignTo"],
+});

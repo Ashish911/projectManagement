@@ -36,16 +36,16 @@ export const CONFIRM_DELETE_CLIENT = `
 `;
 
 export const DELETE_CLIENT_BY_SUPER_ADMIN = `
-    mutation DeleteClientBySuperAdmin($id: ID!) {
-        deleteClientBySuperAdmin(id: $id) {
+    mutation DeleteClientBySuperAdmin($id: ID!, $adminAction: String, $reassignTo: ID, $reason: String) {
+        deleteClientBySuperAdmin(id: $id, adminAction: $adminAction, reassignTo: $reassignTo, reason: $reason) {
             id
         }
     }
 `;
 
 export const FORCE_DELETE_CLIENT = `
-    mutation ForceDeleteClient($id: ID!) {
-        forceDeleteClient(id: $id) {
+    mutation ForceDeleteClient($id: ID!, $adminAction: String, $reassignTo: ID, $reason: String) {
+        forceDeleteClient(id: $id, adminAction: $adminAction, reassignTo: $reassignTo, reason: $reason) {
             id
         }
     }

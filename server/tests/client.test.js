@@ -42,6 +42,11 @@ jest.unstable_mockModule("../services/notification.service.js", () => ({
   },
 }));
 
+const mockRecordActivity = jest.fn().mockResolvedValue({});
+jest.unstable_mockModule("../services/activity.service.js", () => ({
+  ActivityService: { record: mockRecordActivity },
+}));
+
 jest.unstable_mockModule("../config/cache.js", () => ({
   cache: {
     get: jest.fn().mockResolvedValue(null),
@@ -468,7 +473,7 @@ describe("ClientService", () => {
   // ════════════════════════════════════════════════════════════════
   describe("deleteClientBySuperAdmin", () => {
     it("🟢 SUPER_ADMIN should delete a client", async () => {
-      mockClientFindById.mockResolvedValue(mockDeleteClient);
+      mockClientFindById.mockResolvedValue({ ...mockDeleteClient, assignedAdmin: null });
       mockClientDelete.mockResolvedValue(mockDeleteClient);
       const result = await ClientService.deleteClientBySuperAdmin(
         mockDeleteClient._id,
@@ -477,16 +482,14 @@ describe("ClientService", () => {
       expect(result).toEqual(mockDeleteClient);
       expect(mockClientDelete).toHaveBeenCalledWith(mockDeleteClient._id);
     });
-    if (
-      ("🔴 should not delete if delete request not found",
-      async () => {
-        await expect(
-          ClientService.deleteClientBySuperAdmin(mockClient._id, {
-            user: mockSuperAdmin,
-          }),
-        ).rejects.toThrow("Delete request not found for this client.");
-      })
-    );
+    it("🔴 should not delete if delete request not found", async () => {
+      mockClientFindById.mockResolvedValue(mockClient);
+      await expect(
+        ClientService.deleteClientBySuperAdmin(mockClient._id, {
+          user: mockSuperAdmin,
+        }),
+      ).rejects.toThrow("Delete request not found for this client.");
+    });
     it("🔴 CLIENT_ADMIN should not delete a client", async () => {
       await expect(
         ClientService.deleteClientBySuperAdmin(mockClient._id, {
@@ -529,7 +532,7 @@ describe("ClientService", () => {
   // ════════════════════════════════════════════════════════════════
   describe("forceDeleteClientBySuperAdmin", () => {
     it("🟢 SUPER_ADMIN should delete a client", async () => {
-      mockClientFindById.mockResolvedValue(mockClient);
+      mockClientFindById.mockResolvedValue({ ...mockClient, assignedAdmin: null });
       mockClientDelete.mockResolvedValue(mockClient);
       const result = await ClientService.forceDeleteClientBySuperAdmin(
         mockClient._id,
@@ -571,6 +574,57 @@ describe("ClientService", () => {
           user: mockSuperAdmin,
         });
       } catch (e) {}
+      expect(mockClientDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // DELETING A CLIENT THAT HAS AN ADMIN (USR-07)
+  // ════════════════════════════════════════════════════════════════
+  describe("deleting a client with a client admin", () => {
+    const admin = "648a1b2c3d4e5f6a7b8c9d1a";
+    const other = { _id: "748a1b2c3d4e5f6a7b8c9d9e", id: "748a1b2c3d4e5f6a7b8c9d9e", name: "Bolt", assignedAdmin: null };
+    const withAdmin = { ...mockClient, id: mockClient._id, assignedAdmin: admin, deleteRequest: true };
+
+    beforeEach(() => {
+      mockClientFindById.mockImplementation(async (id) => (id === other._id ? other : withAdmin));
+      mockClientDelete.mockResolvedValue(withAdmin);
+    });
+
+    it("🔴 refuses until you say what happens to the admin", async () => {
+      await expect(ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin })).rejects.toThrow(
+        "Choose what happens to the client admin",
+      );
+      expect(mockClientDelete).not.toHaveBeenCalled();
+    });
+
+    it("🔴 needs a reason", async () => {
+      await expect(
+        ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "DEMOTE", reason: " " }),
+      ).rejects.toThrow("Give a reason");
+      expect(mockClientDelete).not.toHaveBeenCalled();
+    });
+
+    it("🟢 demotes the admin to USER, logs the reason, then deletes", async () => {
+      await ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "DEMOTE", reason: "Contract ended" });
+      expect(mockUserUpdate).toHaveBeenCalledWith(admin, { role: "USER" });
+      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({ action: "ROLE_CHANGED", targetUser: admin, reason: "Contract ended" }));
+      expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
+    });
+
+    it("🟢 reassigns the admin to another client, then deletes", async () => {
+      await ClientService.deleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "REASSIGN", reassignTo: other._id, reason: "Moving to Bolt" });
+      expect(mockClientUpdate).toHaveBeenCalledWith(other._id, { assignedAdmin: admin });
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({ action: "ADMIN_REASSIGNED", reason: "Moving to Bolt" }));
+      expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
+    });
+
+    it("🔴 won't reassign to a client that already has an admin", async () => {
+      mockClientFindById.mockImplementation(async (id) => (id === other._id ? { ...other, assignedAdmin: "648a1b2c3d4e5f6a7b8c9d7f" } : withAdmin));
+      await expect(
+        ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "REASSIGN", reassignTo: other._id, reason: "x" }),
+      ).rejects.toThrow("Bolt already has a client admin");
       expect(mockClientDelete).not.toHaveBeenCalled();
     });
   });
