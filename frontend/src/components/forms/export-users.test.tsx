@@ -34,3 +34,23 @@ describe("ExportUsersForm — rows", () => {
         expect(screen.getByRole("button", { name: "All (3)" })).toHaveAttribute("aria-pressed", "true")
     })
 })
+
+describe("ExportUsersForm — columns", () => {
+    const all = () => screen.getByRole("checkbox", { name: "All columns" })
+
+    it("🟢 starts mixed, select all picks every column", async () => {
+        open({ role: "all" })
+        expect(all()).toHaveAttribute("aria-checked", "mixed")
+        await userEvent.click(all())
+        expect(all()).toHaveAttribute("aria-checked", "true")
+        expect(screen.getByText(/9 of 9/)).toBeInTheDocument()
+    })
+
+    it("🔴 clicking again clears them all, and download is disabled", async () => {
+        open({ role: "all" })
+        await userEvent.click(all())
+        await userEvent.click(all())
+        expect(all()).toHaveAttribute("aria-checked", "false")
+        expect(screen.getByRole("button", { name: /Download/ })).toBeDisabled()
+    })
+})

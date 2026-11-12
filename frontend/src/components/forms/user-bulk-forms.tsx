@@ -252,7 +252,20 @@ export function ExportUsersForm({ data, onClose, closing }: FormProps<{ role?: R
                     </div>
                 </Field>
             </Grid2>
-            <Field label="Columns" right={<span className="text-xs text-subtle-foreground">{chosen.length} of {COLUMNS.length}</span>}>
+            <Field label="Columns" right={
+                <span className="flex items-center gap-2 text-xs text-subtle-foreground">
+                    {chosen.length} of {COLUMNS.length}
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Check
+                            label="All columns"
+                            checked={chosen.length === COLUMNS.length}
+                            mixed={chosen.length > 0 && chosen.length < COLUMNS.length}
+                            onChange={(on) => setCols(on ? COLUMNS.map(([k]) => k) : [])}
+                        />
+                        {chosen.length === COLUMNS.length ? "Clear all" : "Select all"}
+                    </span>
+                </span>
+            }>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-1.5">
                     {COLUMNS.map(([k, label]) => {
                         const on = cols.includes(k)
