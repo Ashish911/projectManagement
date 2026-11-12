@@ -21,6 +21,7 @@ import { UnauthorizedError } from "./errors/errors.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import depthLimit from "graphql-depth-limit";
 import { checkReadiness } from "./config/health.js";
+import { UserRepo } from "./repositories/user.repo.js";
 
 import logger from "./config/logger.js";
 import {
@@ -62,6 +63,25 @@ const metricsPlugin = {
   },
 };
 
+// ── Current user ──────────────────────────────────────────────────────────────
+/**
+ * Verifies a JWT, then reads the user's role from the database, so a role change or
+ * deletion takes effect on the next request rather than when the token expires.
+ * @param {string} token Raw JWT.
+ * @returns {Promise<{ user: object|null, reason?: string }>} `{ id, email, role }`, or null with a reason.
+ */
+const resolveUser = async (token) => {
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.SECRET_KEY);
+  } catch {
+    return { user: null, reason: "invalid_token" };
+  }
+  const current = await UserRepo.findById(payload.id);
+  if (!current) return { user: null, reason: "user_deleted" };
+  return { user: { ...payload, email: current.email, role: current.role } };
+};
+
 // ── WebSocket auth ────────────────────────────────────────────────────────────
 /**
  * Builds the context for WebSocket subscriptions from the `connection_init` params.
@@ -70,19 +90,15 @@ const metricsPlugin = {
  * @returns {Promise<{ user: object }>} Decoded JWT payload.
  * @throws {Error} If the Bearer token is missing, invalid or expired.
  */
-const buildWsContext = async ({ connectionParams }) => {
+export const buildWsContext = async ({ connectionParams }) => {
   const auth =
     connectionParams?.authorization || connectionParams?.Authorization || "";
   if (!auth.startsWith("Bearer ")) {
     throw new Error("Authorization required for subscriptions.");
   }
-  const token = auth.replace("Bearer ", "");
-  try {
-    const user = jwt.verify(token, process.env.SECRET_KEY);
-    return { user };
-  } catch {
-    throw new Error("Invalid or expired token.");
-  }
+  const { user } = await resolveUser(auth.replace("Bearer ", ""));
+  if (!user) throw new Error("Invalid or expired token.");
+  return { user };
 };
 
 // ── HTTP auth ───────────────────────────────────────────────────────────────
@@ -160,15 +176,17 @@ export const buildHttpContext = async ({ req }) => {
       );
     }
 
-    const token = auth.replace("Bearer ", "");
-    try {
-      user = jwt.verify(token, process.env.SECRET_KEY);
-    } catch {
+    const resolved = await resolveUser(auth.replace("Bearer ", ""));
+    if (resolved.reason === "user_deleted") {
+      rejectAuth("user_deleted", "Your account no longer exists. Please contact an administrator.");
+    }
+    if (!resolved.user) {
       rejectAuth(
         "invalid_token",
         "Invalid or expired token. Please log in again.",
       );
     }
+    user = resolved.user;
 
     // Tag every later log line for this request with the caller.
     reqLogger = reqLogger.child({ userId: user.id });
@@ -176,7 +194,7 @@ export const buildHttpContext = async ({ req }) => {
 
   // Public operations get the same context, with `user` left as null.
   return {
-    user, // Decoded JWT payload: { id, email, role }, or null
+    user, // { id, email, role } with the role as stored now, or null
     reqId, // UUID for correlating this request's logs
     logger: reqLogger, // Request-scoped logger
     operation, // Used by metricsPlugin as a label

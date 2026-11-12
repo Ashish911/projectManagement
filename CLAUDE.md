@@ -79,7 +79,7 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 **GraphQL-only API.** No REST endpoints, except the unauthenticated `/health/live` and `/health/ready` probes on the API port. Apollo Server is mounted on Express with `expressMiddleware`, sharing its port with the `graphql-ws` WebSocket server. Introspection is disabled in production.
 
-**Public operations whitelist.** JWT auth is skipped only for operations named exactly: `LoginMutation`, `RegisterMutation`, `ForgotPasswordMutation`, `ResetPasswordMutation`. All other operations require a `Bearer` token; failures return `UNAUTHORIZED` with HTTP 401.
+**Public operations whitelist.** JWT auth is skipped only for operations named exactly: `LoginMutation`, `RegisterMutation`, `ForgotPasswordMutation`, `ResetPasswordMutation`. All other operations require a `Bearer` token; failures return `UNAUTHORIZED` with HTTP 401. After the JWT is verified, the caller's role is read from the database (`resolveUser` in `server.js`, also used for WebSocket connects), so a role change applies on the next request and a deleted user's token gets 401.
 
 **Public auth rules.** `register` has no `role` argument and always creates a `USER`. `login` returns the same "Invalid email or password" for an unknown email and a wrong password. `forgotPassword` always returns the same message and `token: null`; the raw token is only sent by email (`services/email.service.js`, Bird) and stored as a SHA-256 hash in `resetToken`.
 

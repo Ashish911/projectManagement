@@ -33,8 +33,14 @@ jest.unstable_mockModule("../config/health.js", () => ({
   checkReadiness: jest.fn(),
 }));
 
+// The current role is read from the database on every request, not trusted from the JWT
+const mockUserFindById = jest.fn();
+jest.unstable_mockModule("../repositories/user.repo.js", () => ({
+  UserRepo: { findById: mockUserFindById },
+}));
+
 // ─── Import AFTER mocking ─────────────────────────────────────────
-const { buildHttpContext } = await import("../server.js");
+const { buildHttpContext, buildWsContext } = await import("../server.js");
 
 // ─── Helpers ──────────────────────────────────────────────────────
 const makeReq = ({ operationName, query, authorization } = {}) => ({
@@ -49,7 +55,10 @@ beforeAll(() => {
   process.env.SECRET_KEY = "test_secret_key";
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockUserFindById.mockImplementation(async (id) => ({ id, email: "test@example.com", role: "USER" }));
+});
 
 // ─── Tests ────────────────────────────────────────────────────────
 describe("buildHttpContext", () => {
@@ -140,5 +149,36 @@ describe("buildHttpContext", () => {
     await expect(
       buildHttpContext({ req: makeReq({ operationName: "LoginMutation!" }) }),
     ).rejects.toThrow("Authorization required");
+  });
+});
+
+describe("current role", () => {
+  it("🟢 uses the role stored now, not the one in an older token", async () => {
+    mockUserFindById.mockResolvedValue({ id: "user-1", email: "test@example.com", role: "CLIENT_ADMIN" });
+    const token = jwt.sign(payload, process.env.SECRET_KEY); // issued while still a USER
+
+    const context = await buildHttpContext({
+      req: makeReq({ operationName: "GetProjects", authorization: `Bearer ${token}` }),
+    });
+
+    expect(context.user).toMatchObject({ id: "user-1", role: "CLIENT_ADMIN" });
+  });
+
+  it("🔴 rejects a valid token whose user has been deleted", async () => {
+    mockUserFindById.mockResolvedValue(null);
+    const token = jwt.sign(payload, process.env.SECRET_KEY);
+
+    await expect(
+      buildHttpContext({ req: makeReq({ operationName: "GetProjects", authorization: `Bearer ${token}` }) }),
+    ).rejects.toThrow("Your account no longer exists");
+  });
+
+  it("🟢 subscriptions also get the current role", async () => {
+    mockUserFindById.mockResolvedValue({ id: "user-1", email: "test@example.com", role: "SUPER_ADMIN" });
+    const token = jwt.sign(payload, process.env.SECRET_KEY);
+
+    const context = await buildWsContext({ connectionParams: { authorization: `Bearer ${token}` } });
+
+    expect(context.user).toMatchObject({ id: "user-1", role: "SUPER_ADMIN" });
   });
 });
