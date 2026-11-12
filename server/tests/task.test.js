@@ -704,4 +704,35 @@ describe("TaskService", () => {
       expect(mockTaskDelete).not.toHaveBeenCalled();
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // RESOLVED TASKS ARE READ-ONLY (PRJ-03)
+  // ════════════════════════════════════════════════════════════════
+  describe("resolved tasks", () => {
+    const resolved = { ...mockTask, currentStatus: "RESOLVED" };
+
+    it("🔴 can't be edited", async () => {
+      mockTaskFindById.mockResolvedValue(resolved);
+      await expect(
+        TaskService.updateTask({ id: mockTask._id, title: "Changed" }, { user: mockSuperAdmin }),
+      ).rejects.toThrow("This task is resolved. Reopen it to make changes.");
+      expect(mockTaskUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 can only move to Reopened", async () => {
+      mockTaskFindById.mockResolvedValue(resolved);
+      await expect(TaskService.updateTaskStatus(mockTask._id, "IN_PROGRESS", { user: mockSuperAdmin })).rejects.toThrow(
+        "Reopen this task before changing its status",
+      );
+      expect(mockTaskUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🟢 can be reopened", async () => {
+      mockTaskFindById.mockResolvedValue(resolved);
+      mockTaskUpdate.mockResolvedValue({ ...resolved, currentStatus: "REOPENED" });
+      mockNotify.mockResolvedValue({});
+      await TaskService.updateTaskStatus(mockTask._id, "REOPENED", { user: mockSuperAdmin });
+      expect(mockTaskUpdate).toHaveBeenCalledWith(mockTask._id, expect.objectContaining({ currentStatus: "REOPENED" }));
+    });
+  });
 });

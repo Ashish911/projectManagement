@@ -602,4 +602,30 @@ describe("SubTaskService", () => {
       expect(mockSubTaskDelete).not.toHaveBeenCalled();
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // SUB-TASKS OF A RESOLVED TASK ARE READ-ONLY (PRJ-03)
+  // ════════════════════════════════════════════════════════════════
+  describe("under a resolved task", () => {
+    const MESSAGE = "The task is resolved. Reopen it to change its sub-tasks.";
+    beforeEach(() => {
+      mockTaskFindById.mockResolvedValue({ ...mockTask, currentStatus: "RESOLVED" });
+      mockSubTaskFindById.mockResolvedValue(mockSubTask);
+    });
+
+    it("🔴 no new sub-tasks", async () => {
+      await expect(
+        SubTaskService.createSubTask({ title: "More", taskId: mockTask._id }, { user: mockSuperAdmin }),
+      ).rejects.toThrow(MESSAGE);
+      expect(mockSubTaskCreate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 no edits, status changes or deletes", async () => {
+      await expect(SubTaskService.updateSubTask({ id: mockSubTask._id, title: "x" }, { user: mockSuperAdmin })).rejects.toThrow(MESSAGE);
+      await expect(SubTaskService.updateSubTaskStatus(mockSubTask._id, "RESOLVED", { user: mockSuperAdmin })).rejects.toThrow(MESSAGE);
+      await expect(SubTaskService.deleteSubTask(mockSubTask._id, { user: mockSuperAdmin })).rejects.toThrow(MESSAGE);
+      expect(mockSubTaskUpdate).not.toHaveBeenCalled();
+      expect(mockSubTaskDelete).not.toHaveBeenCalled();
+    });
+  });
 });

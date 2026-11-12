@@ -11,7 +11,9 @@ import { toastError } from "./toaster"
 export function useTaskActions() {
     const dispatch = useDispatch()
 
-    const setStatus = async (task: Task, status: TaskStatus) => {
+    const setStatus = async (task: Task, requested: TaskStatus) => {
+        // A resolved task can only be reopened (the server enforces this)
+        const status = task.currentStatus === "RESOLVED" && requested !== "RESOLVED" ? "REOPENED" : requested
         if (task.currentStatus === status) return
         dispatch(updateTaskInStore({ ...task, currentStatus: status }))
         try {
@@ -22,8 +24,8 @@ export function useTaskActions() {
         }
     }
 
-    /** Check-off: resolves an open task, or moves a resolved one back to in progress. */
-    const toggleResolved = (task: Task) => setStatus(task, task.currentStatus === "RESOLVED" ? "IN_PROGRESS" : "RESOLVED")
+    /** Check-off: resolves an open task, or reopens a resolved one. */
+    const toggleResolved = (task: Task) => setStatus(task, task.currentStatus === "RESOLVED" ? "REOPENED" : "RESOLVED")
 
     return { setStatus, toggleResolved }
 }

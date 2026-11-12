@@ -1,5 +1,5 @@
 import { createLogger } from "../config/logger.js";
-import { NotFoundError, ForbiddenError } from "../errors/errors.js";
+import { ConflictError, NotFoundError, ForbiddenError } from "../errors/errors.js";
 import {
   CommentRepo,
   SubTaskRepo,
@@ -15,6 +15,17 @@ import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
 
 /** Business logic and role checks for subtasks. Admins have full access; USERs are limited to their own. */
+/**
+ * Sub-tasks of a resolved task are read-only until the task is reopened.
+ * @param {object|null} task The parent task (or null if it no longer exists).
+ * @throws {ConflictError} If the parent task is resolved.
+ */
+const assertParentOpen = (task) => {
+  if (task?.currentStatus === "RESOLVED") {
+    throw new ConflictError("The task is resolved. Reopen it to change its sub-tasks.");
+  }
+};
+
 export const SubTaskService = {
   /**
    * Lists the subtasks of a task.
@@ -88,6 +99,7 @@ export const SubTaskService = {
 
     const task = await TaskRepo.findById(data.taskId);
     if (!task) throw new NotFoundError("Task not found");
+    assertParentOpen(task);
 
     // Only assigned user or admin can create subtasks
     if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
@@ -141,6 +153,7 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(data.id);
     if (!subTask) throw new NotFoundError("SubTask not found");
+    assertParentOpen(await TaskRepo.findById(subTask.task));
 
     // USER can only update subtasks assigned to them
     if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
@@ -195,6 +208,7 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
+    assertParentOpen(await TaskRepo.findById(subTask.task));
 
     if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
       throw new ForbiddenError(
@@ -258,6 +272,7 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
+    assertParentOpen(await TaskRepo.findById(subTask.task));
 
     // USER can only delete subtasks they created
     if (user.role === "USER" && subTask.createdBy?.toString() !== user.id) {

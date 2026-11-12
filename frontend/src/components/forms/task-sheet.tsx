@@ -90,13 +90,15 @@ function parseTokens(raw: string, people: { id: string; name: string }[]) {
 }
 
 /** One subtask: check to resolve, click to expand an inline editor. */
-function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees }: {
+function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, readOnly }: {
     sub: SubTask
     open: boolean
     onToggleOpen: () => void
     onChange: (patch: Partial<SubTask> & { assigneeId?: string | null }) => void
     onDelete: () => void
     assignees: ReturnType<typeof assigneeOptions>
+    /** The parent task is resolved: show the sub-task, but don't allow changes */
+    readOnly?: boolean
 }) {
     const done = sub.currentStatus === "RESOLVED"
     const due = parseDate(sub.deadline)
@@ -106,17 +108,17 @@ function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees }: 
 
     return (
         <div className={cn("rounded-[9px] transition-colors duration-fast hover:bg-surface-2", open && "bg-surface-2")}>
-            <div className="flex min-h-10 cursor-pointer items-center gap-2.5 p-2" onClick={onToggleOpen}>
-                <Check checked={done} label={`Mark ${sub.title} ${done ? "not done" : "done"}`} onChange={() => onChange({ currentStatus: done ? "NEW" : "RESOLVED" })} />
+            <div className={cn("flex min-h-10 items-center gap-2.5 p-2", !readOnly && "cursor-pointer")} onClick={readOnly ? undefined : onToggleOpen}>
+                <Check checked={done} disabled={readOnly} label={`Mark ${sub.title} ${done ? "not done" : "done"}`} onChange={() => onChange({ currentStatus: done ? "NEW" : "RESOLVED" })} />
                 <span className={cn("min-w-0 flex-1 truncate text-[13.5px] font-medium transition-colors", done && "text-subtle-foreground line-through")}>{sub.title}</span>
                 {sub.currentStatus === "IN_PROGRESS" && <span title="In progress" className="size-[7px] flex-none rounded-full bg-primary shadow-[0_0_0_3px_oklch(var(--accent))]" />}
                 {sub.currentStatus === "REOPENED" && <StatusBadge value="REOPENED" />}
                 {sub.priority !== "NORMAL" && !done && <StatusBadge value={sub.priority} />}
                 {due && <span className={cn("num text-xs", overdue ? "tone-red tone-fg font-semibold" : "text-muted-foreground")}>{dueLabel(due)}</span>}
                 {sub.assignedTo ? <Avatar name={sub.assignedTo.name} seed={sub.assignedTo.id} size={22} /> : <GhostAvatar size={22} />}
-                <IconChevronDown size={15} className={cn("text-subtle-foreground transition-transform duration-base ease-out", open && "rotate-180")} />
+                {!readOnly && <IconChevronDown size={15} className={cn("text-subtle-foreground transition-transform duration-base ease-out", open && "rotate-180")} />}
             </div>
-            {open && (
+            {open && !readOnly && (
                 <div className="grid animate-pm-in gap-3.5 pb-3.5 pl-[34px] pr-2.5 pt-1">
                     <input
                         className={inputCls}
@@ -163,7 +165,10 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
     const task = tasks.find((t) => t.id === data.id)
     const project = projects.find((p) => p.id === task?.project?.id)
     const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
-    const canEdit = isAdmin || task?.assignedTo?.id === profile?.id
+    // Resolved tasks are read-only until reopened (the server enforces this too)
+    const resolved = task?.currentStatus === "RESOLVED"
+    const mayEdit = isAdmin || task?.assignedTo?.id === profile?.id
+    const canEdit = mayEdit && !resolved
 
     const [title, setTitle] = useState(task?.title ?? "")
     const [saving, setSaving] = useState(0)
@@ -274,6 +279,14 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
             </header>
 
             <div className="grid flex-1 content-start gap-6 overflow-y-auto px-[22px] pb-7 pt-5">
+                {resolved && (
+                    <Note tone="green" icon={IconCircleCheck}>
+                        <span className="flex flex-wrap items-center gap-2">
+                            <span className="flex-1">This task is resolved, so it’s read-only. Reopen it to make changes; comments stay open.</span>
+                            {mayEdit && <Button size="sm" variant="outline" onClick={() => setStatus("REOPENED")}>Reopen task</Button>}
+                        </span>
+                    </Note>
+                )}
                 <textarea
                     rows={1}
                     value={title}
@@ -292,7 +305,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                     {canEdit ? <Pills value={task.priority} onChange={(p) => patchTask({ id: task.id, priority: p })} options={PRIORITIES} /> : <div><StatusBadge value={task.priority} /></div>}
                     <span className="text-[13px] text-muted-foreground">Assignee</span>
                     <div className="max-w-[300px]">
-                        <Combo value={task.assignedTo?.id ?? ""} onChange={(id: string) => patchTask({ id: task.id, assignedTo: id || null })} options={assignees} disabled={!isAdmin} searchPlaceholder="Search people" />
+                        <Combo value={task.assignedTo?.id ?? ""} onChange={(id: string) => patchTask({ id: task.id, assignedTo: id || null })} options={assignees} disabled={!isAdmin || resolved} searchPlaceholder="Search people" />
                     </div>
                     <span className="text-[13px] text-muted-foreground">Deadline</span>
                     <div className="max-w-[300px]">
@@ -342,12 +355,14 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                                     onToggleOpen={() => setOpenSub(openSub === s.id ? null : s.id)}
                                     onChange={(p) => changeSub(s, p)}
                                     onDelete={() => removeSub(s)}
+                                    readOnly={resolved}
                                 />
                             ))}
                         </div>
                     ) : !list.length && (
                         <div className="text-xs text-subtle-foreground">Split this task into smaller steps. Each subtask gets its own assignee, priority and deadline.</div>
                     )}
+                    {!resolved && (<>
                     <label className="flex h-10 cursor-text items-center gap-2.5 rounded-[9px] border border-dashed border-border-strong px-2.5 transition-[border-color,box-shadow] duration-fast focus-within:border-solid focus-within:border-primary focus-within:ring-[3px] focus-within:ring-ring/35">
                         <IconPlus size={16} className="text-subtle-foreground" />
                         <input
@@ -363,6 +378,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                         {["!high", "@ravi", "^fri"].map((t) => <code key={t} className="rounded-[5px] border bg-surface-2 px-1.5 py-px font-mono text-[11.5px] font-medium text-muted-foreground">{t}</code>)}
                         work here too
                     </div>
+                    </>)}
                 </section>
 
                 <section className="grid gap-2.5">

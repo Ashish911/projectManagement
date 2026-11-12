@@ -1,5 +1,5 @@
 import { createLogger } from "../config/logger.js";
-import { ForbiddenError, NotFoundError } from "../errors/errors.js";
+import { ConflictError, ForbiddenError, NotFoundError } from "../errors/errors.js";
 import {
   TaskRepo,
   ProjectRepo,
@@ -174,6 +174,11 @@ export const TaskService = {
       );
     }
 
+    // Resolved tasks are read-only until reopened
+    if (task.currentStatus === "RESOLVED") {
+      throw new ConflictError("This task is resolved. Reopen it to make changes.");
+    }
+
     // If reassigning to someone new notify them
     if (data.assignedTo && data.assignedTo !== task.assignedTo?.toString()) {
       await NotificationService.notify(
@@ -227,6 +232,11 @@ export const TaskService = {
       throw new ForbiddenError(
         "You do not have permission to update this task status",
       );
+    }
+
+    // A resolved task's only way forward is Reopen
+    if (task.currentStatus === "RESOLVED" && status !== "REOPENED" && status !== "RESOLVED") {
+      throw new ConflictError("Reopen this task before changing its status");
     }
 
     // resolvedAt feeds the dashboard's created-vs-resolved chart
