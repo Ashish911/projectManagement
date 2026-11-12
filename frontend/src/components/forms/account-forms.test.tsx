@@ -99,3 +99,12 @@ describe("AccountMenu — edit profile", () => {
         expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
     })
 })
+
+describe("AccountMenu — identity (PROF-01)", () => {
+    it("🟢 shows name, email and role once", async () => {
+        await open()
+        expect(screen.getAllByText("admin@gmail.com")).toHaveLength(1)
+        expect(screen.getAllByText("Ada Admin")).toHaveLength(1)
+        expect(screen.getByText("Super admin")).toBeInTheDocument()
+    })
+})

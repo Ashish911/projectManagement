@@ -102,8 +102,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
 
     return (
         <FormModal
-            title={profile.name}
-            desc={profile.email}
+            title="Your account"
             icon={IconUserCircle}
             width={460}
             onClose={onClose}
