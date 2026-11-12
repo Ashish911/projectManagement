@@ -26,3 +26,11 @@ describe("TaskType", () => {
     expect(field.resolve({ updatedAt: new Date("2026-11-01T10:00:00Z") })).toBe("2026-11-01T10:00:00.000Z");
   });
 });
+
+describe("ClientType timestamps", () => {
+  it("🟢 exposes createdAt as an ISO string (oldest-first attention queue)", () => {
+    const field = ClientType.getFields().createdAt;
+    expect(field).toBeDefined();
+    expect(field.resolve({ createdAt: new Date("2026-10-01T08:00:00Z") })).toBe("2026-10-01T08:00:00.000Z");
+  });
+});

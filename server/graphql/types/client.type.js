@@ -16,6 +16,10 @@ export const ClientType = new GraphQLObjectType({
     email: { type: GraphQLString }, // Optional: clients may be created without contact details
     phone: { type: GraphQLString },
     deleteRequest: { type: new GraphQLNonNull(GraphQLBoolean) },
+    createdAt: {
+      type: GraphQLString,
+      resolve: (c) => (c.createdAt ? new Date(c.createdAt).toISOString() : null),
+    },
     assignedAdmin: {
       type: UserType,
       resolve: async (parent) => {

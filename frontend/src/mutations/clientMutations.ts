@@ -4,6 +4,7 @@ const CLIENT_FIELDS = `
     email
     phone
     deleteRequest
+    createdAt
     assignedAdmin {
         id
         name

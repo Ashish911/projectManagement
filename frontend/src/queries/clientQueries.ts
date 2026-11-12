@@ -6,6 +6,7 @@ export const GET_CLIENTS = `
             email
             phone
             deleteRequest
+            createdAt
             assignedAdmin {
                 id
                 name
@@ -23,6 +24,7 @@ export const GET_CLIENT = `
             email
             phone
             deleteRequest
+            createdAt
             assignedAdmin {
                 id
                 name

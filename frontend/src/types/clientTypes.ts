@@ -6,5 +6,6 @@ export interface Client {
     email: string | null;
     phone: string | null;
     deleteRequest: boolean;
+    createdAt?: string | null;
     assignedAdmin: Pick<User, 'id' | 'name' | 'email'> | null;
 }

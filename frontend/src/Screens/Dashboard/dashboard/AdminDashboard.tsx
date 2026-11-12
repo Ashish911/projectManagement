@@ -1,5 +1,8 @@
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import { useNavigate } from "react-router-dom"
+import { useDispatch } from "react-redux"
+import { AnimatePresence, motion } from "motion/react"
+import { setClientsFilter } from "@/redux/actions/clientsActions"
 import {
     IconAlertTriangle,
     IconBellRinging,
@@ -149,41 +152,74 @@ export function AdminDashboard() {
     )
 }
 
-/** "Needs a decision": client deletion requests and clients with no admin. Hidden when empty. */
+const SHOWN = 2 // Items visible at once; the rest wait their turn
+const age = (c: Client) => parseDate(c.createdAt)?.getTime() ?? 0
+
+/**
+ * "Needs a decision": a queue of clients waiting on a super admin. Shows the count and the
+ * two most urgent (deletion requests first, then clients with no admin, oldest first);
+ * when one is handled it animates out and the next slides up. Hidden when empty.
+ */
 function AttentionStrip({ clients }: { clients: Client[] }) {
     const openForm = useForms()
-    const deletions = clients.filter((c) => c.deleteRequest)
-    const unassigned = clients.filter((c) => !c.assignedAdmin)
-    const total = deletions.length + unassigned.length
-    if (!total) return null
+    const navigate = useNavigate()
+    const dispatch = useDispatch()
+    const byAge = (a: Client, b: Client) => age(a) - age(b)
+    const queue = [
+        ...clients.filter((c) => c.deleteRequest).sort(byAge).map((c) => ({ kind: "del" as const, c })),
+        ...clients.filter((c) => !c.assignedAdmin && !c.deleteRequest).sort(byAge).map((c) => ({ kind: "adm" as const, c })),
+    ]
+    if (!queue.length) return null
+
+    const viewAll = () => {
+        dispatch(setClientsFilter("unassigned")) // Opens Clients on the "Needs attention" tab
+        navigate("/clients")
+    }
 
     return (
         <div className="tone-amber flex animate-pm-in flex-wrap items-center gap-x-5 gap-y-2.5 rounded-xl border bg-card px-4 py-3 shadow-sm [border-color:oklch(var(--st-bg-l)_calc(var(--st-bg-c)*3)_var(--h))]">
             <div className="flex items-center gap-2.5 pr-2">
                 <span className="tone-fg grid size-8 place-items-center rounded-lg text-lg [background-color:oklch(var(--st-bg-l)_calc(var(--st-bg-c)*1.2)_var(--h))]"><IconBellRinging size={18} /></span>
                 <div>
-                    <div className="text-[15px] font-semibold">Needs a decision</div>
-                    <div className="text-xs text-subtle-foreground">{total} open</div>
+                    <div className="text-[15px] font-semibold">Needs decision: {queue.length}</div>
+                    {queue.length > SHOWN && (
+                        <button className="text-xs text-accent-foreground hover:underline" onClick={viewAll}>View all {queue.length}</button>
+                    )}
                 </div>
             </div>
-            {deletions.map((c) => (
-                <AttentionItem key={`del-${c.id}`} icon={<IconTrash size={18} />} title={`${c.name} requested deletion`} sub={c.assignedAdmin ? c.assignedAdmin.name : "Requested by the client admin"}>
-                    <Button size="sm" variant="outline" onClick={() => openForm("decline-request", { clientId: c.id })}>Decline</Button>
-                    <Button size="sm" onClick={() => openForm("delete-client", { clientId: c.id })}>Approve</Button>
-                </AttentionItem>
-            ))}
-            {unassigned.map((c) => (
-                <AttentionItem key={`adm-${c.id}`} icon={<IconUserQuestion size={18} />} title={`${c.name} has no client admin`} sub="Projects can't be managed by the client">
-                    <Button size="sm" onClick={() => openForm("client", { clientId: c.id })}>Assign admin</Button>
-                </AttentionItem>
-            ))}
+            <ul className="m-0 flex min-w-0 flex-1 list-none flex-wrap gap-2.5 p-0">
+                <AnimatePresence mode="popLayout" initial={false}>
+                    {queue.slice(0, SHOWN).map(({ kind, c }) => (
+                        <motion.li
+                            key={`${kind}-${c.id}`}
+                            layout
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: 24, transition: { duration: 0.18 } }}
+                            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                            className="flex min-w-[300px] flex-1"
+                        >
+                            {kind === "del" ? (
+                                <AttentionItem icon={<IconTrash size={18} />} title={`${c.name} requested deletion`} sub={c.assignedAdmin ? c.assignedAdmin.name : "Requested by the client admin"}>
+                                    <Button size="sm" variant="outline" onClick={() => openForm("decline-request", { clientId: c.id })}>Decline</Button>
+                                    <Button size="sm" onClick={() => openForm("delete-client", { clientId: c.id })}>Approve</Button>
+                                </AttentionItem>
+                            ) : (
+                                <AttentionItem icon={<IconUserQuestion size={18} />} title={`${c.name} has no client admin`} sub="Projects can't be managed by the client">
+                                    <Button size="sm" onClick={() => openForm("client", { clientId: c.id })}>Assign admin</Button>
+                                </AttentionItem>
+                            )}
+                        </motion.li>
+                    ))}
+                </AnimatePresence>
+            </ul>
         </div>
     )
 }
 
 function AttentionItem({ icon, title, sub, children }: { icon: React.ReactNode; title: string; sub: string; children: React.ReactNode }) {
     return (
-        <div className="flex min-w-[300px] flex-1 animate-pm-in items-center gap-3 rounded-lg bg-surface-2 px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-surface-2 px-3 py-2">
             <span className="text-subtle-foreground">{icon}</span>
             <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-medium">{title}</div>
