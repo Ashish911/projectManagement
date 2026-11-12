@@ -6,6 +6,7 @@ import { changeUserRoles } from "@/api/userApi"
 import { addClientToStore, updateClientInStore } from "@/redux/actions/clientsActions"
 import { upsertUsersInStore } from "@/redux/actions/usersListActions"
 import { Avatar } from "@/components/pm/avatar"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Client } from "@/types/clientTypes"
 import { Chip, Field, FormError, FormFoot, FormModal, Grid2, Note, SubmitButton, inputCls, textareaCls, useForm } from "./form-kit"
@@ -52,8 +53,14 @@ export function ClientForm({ data, onClose, closing }: FormProps<{ clientId?: st
         ...users.filter((u) => u.role === "USER").map((u) => ({ ...personOption(u, tasks, "Promote a team member"), meta: <span className="text-xs text-subtle-foreground">Promote</span> })),
     ]
     const promote = users.find((u) => u.id === v.adminId && u.role === "USER")
+    // Promoting changes someone's role, so it gets an explicit second step
+    const [confirming, setConfirming] = useState(false)
 
     const save = () => f.submit(async (x) => {
+        if (promote && !confirming) {
+            setConfirming(true)
+            return
+        }
         const fields = { name: x.name.trim(), email: x.email.trim().toLowerCase() || null, phone: x.phone.trim() || null }
         let client = cur ? await updateClient({ id: cur.id, ...fields }) : await addClient(fields)
 
@@ -84,8 +91,23 @@ export function ClientForm({ data, onClose, closing }: FormProps<{ clientId?: st
             closing={closing}
             shake={f.shake}
             boxRef={box}
-            footer={<FormFoot onClose={onClose}><SubmitButton busy={f.busy} onClick={save}>{cur ? "Save changes" : "Add client"}</SubmitButton></FormFoot>}
+            footer={confirming && promote ? (
+                <FormFoot onClose={onClose}>
+                    <Button type="button" variant="outline" onClick={() => setConfirming(false)}>Back</Button>
+                    <SubmitButton busy={f.busy} onClick={save}>Promote and assign</SubmitButton>
+                </FormFoot>
+            ) : (
+                <FormFoot onClose={onClose}><SubmitButton busy={f.busy} onClick={save}>{cur ? "Save changes" : "Add client"}</SubmitButton></FormFoot>
+            )}
         >
+            {confirming && promote ? (
+                <>
+                    <Note tone="amber" icon={IconArrowBigUpLines}>
+                        {promote.name} is currently a User. Assigning them to {v.name.trim() || cur?.name} will promote them to Client Admin. Continue?
+                    </Note>
+                    <FormError message={f.formError} />
+                </>
+            ) : (<>
             <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3.5">
                 <span className="grid size-11 place-items-center rounded-lg bg-surface-3 text-lg font-semibold text-muted-foreground">{(v.name.trim()[0] || "?").toUpperCase()}</span>
                 <Field label="Client name" req error={f.err.name}>
@@ -109,6 +131,7 @@ export function ClientForm({ data, onClose, closing }: FormProps<{ clientId?: st
                 <Note icon={IconArrowBigUpLines}><b>{promote.name}</b> will be promoted from User to Client admin for this client.</Note>
             )}
             <FormError message={f.formError} />
+            </>)}
         </FormModal>
     )
 }
