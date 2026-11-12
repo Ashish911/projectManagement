@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { FormsContext, type FormKind, type FormProps } from "./forms-context"
 import { TaskForm } from "./task-form"
 import { TaskSheet } from "./task-sheet"
-import { ReopenTaskForm } from "./task-dialogs"
+import { DeleteTaskForm, ReopenTaskForm } from "./task-dialogs"
 import { ProjectForm, TeamForm } from "./project-form"
 import { UserForm } from "./user-form"
 import { BulkRoleForm, BulkUnlockForm, ExportUsersForm } from "./user-bulk-forms"
@@ -17,6 +17,7 @@ const FORMS: Record<FormKind, React.ComponentType<FormProps<any>>> = {
     task: TaskForm,
     "task-view": TaskSheet,
     "reopen-task": ReopenTaskForm,
+    "delete-task": DeleteTaskForm,
     "log-update": LogUpdateForm,
     project: ProjectForm,
     team: TeamForm,

@@ -16,10 +16,10 @@ import {
     IconTrash,
     IconX,
 } from "@tabler/icons-react"
-import { deleteTask, updateTask, updateTaskStatus } from "@/api/taskApi"
+import { updateTask, updateTaskStatus } from "@/api/taskApi"
 import { createSubTask, deleteSubTask, getSubTasks, updateSubTask, updateSubTaskStatus } from "@/api/subTaskApi"
 import { addTaskComment, deleteComment, getTaskComments } from "@/api/commentApi"
-import { addTaskToStore, removeTaskFromStore, updateTaskInStore } from "@/redux/actions/tasksActions"
+import { updateTaskInStore } from "@/redux/actions/tasksActions"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/pm/avatar"
 import { Check } from "@/components/pm/check"
@@ -35,7 +35,7 @@ import { DatePicker, daysFromToday } from "./date-picker"
 import { GhostAvatar, PRIORITY_TOKENS, assigneeOptions, parseDayToken } from "./options"
 import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
-import { scheduleDelete, toastError } from "./toaster"
+import { toastError } from "./toaster"
 
 const STATUSES = ["NEW", "IN_PROGRESS", "REOPENED", "RESOLVED"] as const
 const PRIORITIES = ["URGENT", "HIGH", "NORMAL", "BACKLOG"] as const
@@ -105,6 +105,7 @@ function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, re
     const overdue = !!due && !done && daysFrom(due) < 0
     const [title, setTitle] = useState(sub.title)
     useEffect(() => setTitle(sub.title), [sub.title])
+    const [confirmDelete, setConfirmDelete] = useState(false)
 
     return (
         <div className={cn("rounded-[9px] transition-colors duration-fast hover:bg-surface-2", open && "bg-surface-2")}>
@@ -138,11 +139,19 @@ function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, re
                     </Grid2>
                     <Field label="Priority"><Pills value={sub.priority} onChange={(p) => onChange({ priority: p })} options={PRIORITIES} /></Field>
                     <Field label="Status"><Pills value={sub.currentStatus} onChange={(s) => onChange({ currentStatus: s })} options={STATUSES} /></Field>
-                    <div className="flex items-center">
-                        <Button type="button" size="sm" variant="ghost" className="tone-red tone-fg" onClick={onDelete}><IconTrash />Delete</Button>
-                        <span className="flex-1" />
-                        <Button type="button" size="sm" variant="outline" onClick={onToggleOpen}>Done</Button>
-                    </div>
+                    {confirmDelete ? (
+                        <div className="tone-red tone-bg flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-[13px]">
+                            <span className="flex-1">Delete this sub-task and its comments?</span>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmDelete(false)}>Keep it</Button>
+                            <Button type="button" size="sm" variant="destructive" onClick={onDelete}>Yes, delete</Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center">
+                            <Button type="button" size="sm" variant="ghost" className="tone-red tone-fg" onClick={() => setConfirmDelete(true)}><IconTrash />Delete</Button>
+                            <span className="flex-1" />
+                            <Button type="button" size="sm" variant="outline" onClick={onToggleOpen}>Done</Button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -250,15 +259,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
         save(async () => setComments([...(comments ?? []), await addTaskComment(task.id, text)]))
     }
 
-    const removeTask = () => {
-        onClose()
-        scheduleDelete({
-            text: "Task deleted",
-            hide: () => dispatch(removeTaskFromStore(task.id)),
-            restore: () => dispatch(addTaskToStore(task)),
-            commit: () => deleteTask(task.id),
-        })
-    }
+    const removeTask = () => openForm("delete-task", { taskId: task.id, returnToSheet: true })
 
     const list = subs ?? []
     const done = list.filter((s) => s.currentStatus === "RESOLVED").length

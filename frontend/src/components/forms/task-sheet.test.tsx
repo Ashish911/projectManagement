@@ -9,9 +9,9 @@ vi.mock("./use-app-data", async (orig) => ({
     ...(await orig<object>()),
     useAppData: () => ({ profile: me, role: "SUPER_ADMIN", users: [], projects: [], tasks: [{ ...base, currentStatus: state.status }] }),
 }))
-const api = vi.hoisted(() => ({ updateTaskStatus: vi.fn(), getSubTasks: vi.fn(), getTaskComments: vi.fn() }))
+const api = vi.hoisted(() => ({ updateTaskStatus: vi.fn(), getSubTasks: vi.fn(), getTaskComments: vi.fn(), deleteSubTask: vi.fn() }))
 vi.mock("@/api/taskApi", async (orig) => ({ ...(await orig<object>()), updateTaskStatus: api.updateTaskStatus }))
-vi.mock("@/api/subTaskApi", async (orig) => ({ ...(await orig<object>()), getSubTasks: api.getSubTasks }))
+vi.mock("@/api/subTaskApi", async (orig) => ({ ...(await orig<object>()), getSubTasks: api.getSubTasks, deleteSubTask: api.deleteSubTask }))
 vi.mock("@/api/commentApi", async (orig) => ({ ...(await orig<object>()), getTaskComments: api.getTaskComments }))
 
 const openForm = vi.hoisted(() => vi.fn())
@@ -52,5 +52,24 @@ describe("TaskSheet — resolved tasks are read-only", () => {
         expect(screen.getByLabelText("Task title")).toBeEnabled()
         expect(screen.getByPlaceholderText("Add a subtask, then press Enter")).toBeInTheDocument()
         expect(screen.queryByRole("button", { name: "Reopen task" })).not.toBeInTheDocument()
+    })
+})
+
+describe("TaskSheet — deleting", () => {
+    it("🔴 Delete task asks first", async () => {
+        await open("IN_PROGRESS")
+        await userEvent.click(screen.getByRole("button", { name: /Delete task/ }))
+        expect(openForm).toHaveBeenCalledWith("delete-task", { taskId: "t1", returnToSheet: true })
+    })
+
+    it("🔴 deleting a sub-task asks first", async () => {
+        api.deleteSubTask.mockReset().mockResolvedValue(undefined)
+        await open("IN_PROGRESS")
+        await userEvent.click(screen.getByText("Write test"))
+        await userEvent.click(screen.getByRole("button", { name: "Delete" }))
+        expect(api.deleteSubTask).not.toHaveBeenCalled()
+        expect(screen.getByText("Delete this sub-task and its comments?")).toBeInTheDocument()
+        await userEvent.click(screen.getByRole("button", { name: "Yes, delete" }))
+        expect(api.deleteSubTask).toHaveBeenCalledWith("s1")
     })
 })

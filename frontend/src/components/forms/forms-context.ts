@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 /** Every form, sheet and overlay the app can open. */
 export type FormKind =
-    | "task" | "task-view" | "log-update" | "reopen-task"
+    | "task" | "task-view" | "log-update" | "reopen-task" | "delete-task"
     | "project" | "team" | "delete-project"
     | "user" | "delete-user" | "bulk-role" | "bulk-unlock" | "bulk-remove" | "export-users"
     | "client" | "delete-client" | "decline-request"
