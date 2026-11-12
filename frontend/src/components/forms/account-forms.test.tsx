@@ -15,7 +15,7 @@ const { AccountMenu } = await import("./account-forms")
 
 // FormModal focuses its first text field 80 ms after opening; let that happen before typing
 const open = async () => {
-    render(<MemoryRouter><AccountMenu onClose={vi.fn()} closing={false} /></MemoryRouter>)
+    render(<MemoryRouter><AccountMenu data={{}} onClose={vi.fn()} closing={false} /></MemoryRouter>)
     await new Promise((r) => setTimeout(r, 100))
 }
 const field = (label: string) => screen.getByLabelText(label)
