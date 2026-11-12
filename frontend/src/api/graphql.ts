@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import type { GraphqlResponse } from "@/types/genericTypes";
+import { announceChange } from "./sync";
 
 /** The one HTTP client for the GraphQL API; attaches the stored JWT to every request. */
 const api = axios.create({
@@ -18,6 +19,8 @@ export async function gql<T>(query: string, variables?: Record<string, unknown>)
     try {
         const response = await api.post<GraphqlResponse<T>>("", { query, variables });
         if (response.data.errors?.length) throw new Error(response.data.errors[0].message);
+        // Let other open tabs know so they can refetch (GLB-04)
+        if (/^\s*mutation\b/.test(query)) announceChange();
         return response.data.data;
     } catch (e) {
         // Non-2xx replies (401, 429…) still carry GraphQL errors; prefer their message over Axios's

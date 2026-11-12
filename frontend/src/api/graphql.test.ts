@@ -6,6 +6,9 @@ vi.mock("axios", async (orig) => {
     return { ...real, default: { ...real.default, create: () => ({ post, interceptors: { request: { use: vi.fn() } } }) } }
 })
 
+const announce = vi.hoisted(() => vi.fn())
+vi.mock("./sync", () => ({ announceChange: announce }))
+
 const { gql } = await import("./graphql")
 
 const httpError = (status: number, data: unknown) => {
@@ -38,5 +41,23 @@ describe("gql", () => {
         const err = new Error("Network Error")
         post.mockRejectedValue(err)
         await expect(gql("q")).rejects.toBe(err)
+    })
+})
+
+describe("gql — telling other tabs (GLB-04)", () => {
+    beforeEach(() => { post.mockReset(); announce.mockReset() })
+
+    it("🟢 a successful mutation is announced to other tabs", async () => {
+        post.mockResolvedValue({ data: { data: { ok: 1 } } })
+        await gql("  mutation UpdateTask { ok }")
+        expect(announce).toHaveBeenCalledTimes(1)
+    })
+
+    it("🔴 queries and failed mutations aren't", async () => {
+        post.mockResolvedValue({ data: { data: { ok: 1 } } })
+        await gql("query Q { ok }")
+        post.mockResolvedValue({ data: { data: null, errors: [{ message: "no" }] } })
+        await expect(gql("mutation M { ok }")).rejects.toThrow("no")
+        expect(announce).not.toHaveBeenCalled()
     })
 })

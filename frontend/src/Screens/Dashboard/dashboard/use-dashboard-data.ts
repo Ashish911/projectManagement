@@ -3,6 +3,7 @@ import type { Project } from "@/types/projectTypes"
 import type { Task } from "@/types/taskTypes"
 import { parseDate } from "@/components/pm/dates"
 import { getActivity, type ActivityEntry } from "@/api/activityApi"
+import { onActivityRefresh } from "@/hooks/use-live-refresh"
 
 export { useAppData as useDashboardData } from "@/components/forms/use-app-data"
 
@@ -58,13 +59,15 @@ export function mergeActivity(server: ActivityEntry[], tasks: ActivityItem[], n 
     return [...fromServer, ...tasks].sort((a, b) => b.at - a.at).slice(0, n)
 }
 
-/** The server's activity feed, loaded once per mount; empty if it can't be loaded. */
+/** The server's activity feed: loaded on mount and again on every live refresh; empty if it can't be loaded. */
 export function useServerActivity(limit = 20) {
     const [entries, setEntries] = useState<ActivityEntry[]>([])
     useEffect(() => {
         let live = true
-        getActivity(limit).then((x) => live && setEntries(x)).catch(() => {})
-        return () => { live = false }
+        const load = () => getActivity(limit).then((x) => live && setEntries(x)).catch(() => {})
+        load()
+        const off = onActivityRefresh(load)
+        return () => { live = false; off() }
     }, [limit])
     return entries
 }

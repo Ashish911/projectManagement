@@ -1,5 +1,10 @@
-import { render, screen } from "@testing-library/react"
-import { mergeActivity, type ActivityItem } from "./use-dashboard-data"
+import { act, render, renderHook, screen } from "@testing-library/react"
+const api = vi.hoisted(() => ({ getActivity: vi.fn() }))
+vi.mock("@/api/activityApi", () => ({ getActivity: api.getActivity }))
+const live = vi.hoisted(() => ({ listener: null as null | (() => void) }))
+vi.mock("@/hooks/use-live-refresh", () => ({ onActivityRefresh: (l: () => void) => { live.listener = l; return () => {} } }))
+
+import { mergeActivity, useServerActivity, type ActivityItem } from "./use-dashboard-data"
 import { ActivityList } from "./widgets"
 import type { ActivityEntry } from "@/api/activityApi"
 
@@ -27,5 +32,16 @@ describe("ActivityList", () => {
         render(<ActivityList items={mergeActivity([roleChange], [], 5)} />)
         expect(screen.getByText(/changed Ravi Shah's role/)).toBeInTheDocument()
         expect(screen.getByText("“Leads Atlas now”")).toBeInTheDocument()
+    })
+})
+
+describe("useServerActivity", () => {
+    it("🟢 reloads when the app refreshes live (GLB-04)", async () => {
+        api.getActivity.mockResolvedValue([])
+        renderHook(() => useServerActivity())
+        await act(async () => { await Promise.resolve() })
+        expect(api.getActivity).toHaveBeenCalledTimes(1)
+        await act(async () => { live.listener!(); await Promise.resolve() })
+        expect(api.getActivity).toHaveBeenCalledTimes(2)
     })
 })

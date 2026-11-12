@@ -11,9 +11,10 @@ import {
 import { getClients } from '@/api/clientApi';
 import type { Client } from '@/types/clientTypes';
 
-export const fetchClients = () => async (dispatch: any, getState: any) => {
+/** `force` refetches even when the list is cached (live refresh). */
+export const fetchClients = (force = false) => async (dispatch: any, getState: any) => {
     const { clients } = getState().clients;
-    if (clients.length > 0) return; // already cached — skip the call
+    if (!force && clients.length > 0) return; // already cached — skip the call
     try {
         dispatch({ type: CLIENTS_LIST_REQUEST });
         const data = await getClients();

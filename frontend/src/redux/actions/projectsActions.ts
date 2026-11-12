@@ -10,9 +10,10 @@ import {
 import { getProjects } from '@/api/projectApi';
 import type { Project } from '@/types/projectTypes';
 
-export const fetchProjects = () => async (dispatch: any, getState: any) => {
+/** `force` refetches even when the list is cached (live refresh). */
+export const fetchProjects = (force = false) => async (dispatch: any, getState: any) => {
     const { projects } = getState().projects;
-    if (projects.length > 0) return; // already cached
+    if (!force && projects.length > 0) return; // already cached
     try {
         dispatch({ type: PROJECTS_LIST_REQUEST });
         const data = await getProjects();

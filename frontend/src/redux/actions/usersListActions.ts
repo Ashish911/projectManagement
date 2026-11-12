@@ -10,9 +10,10 @@ import {
 } from '../constants/usersListConstants';
 import { getUsers } from '@/api/userApi';
 
-export const fetchUsers = () => async (dispatch: any, getState: any) => {
+/** `force` refetches even when the list is cached (live refresh). */
+export const fetchUsers = (force = false) => async (dispatch: any, getState: any) => {
     const { users } = getState().usersList;
-    if (users.length > 0) return; // already cached — skip the call
+    if (!force && users.length > 0) return; // already cached — skip the call
     try {
         dispatch({ type: USERS_LIST_REQUEST });
         const data = await getUsers();
