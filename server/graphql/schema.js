@@ -118,6 +118,11 @@ const RootQuery = new GraphQLObjectType({
       args: { subTaskId: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: commentResolvers.Query.subTaskComments,
     },
+    // The caller's own client when they're a CLIENT_ADMIN, otherwise null
+    myClient: {
+      type: ClientType,
+      resolve: clientResolvers.Query.myClient,
+    },
     activity: {
       type: new GraphQLList(ActivityType),
       args: { limit: { type: GraphQLInt } },

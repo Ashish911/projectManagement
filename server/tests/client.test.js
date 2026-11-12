@@ -778,4 +778,26 @@ describe("ClientService", () => {
       expect(mockClientUpdate).not.toHaveBeenCalled();
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // MY CLIENT (DASH-03): a client admin's client, even before it has projects
+  // ════════════════════════════════════════════════════════════════
+  describe("getMyClient", () => {
+    it("🟢 a CLIENT_ADMIN gets the client they're assigned to", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      await expect(ClientService.getMyClient({ user: mockClientAdmin })).resolves.toEqual(mockClient);
+      expect(mockClientFindByAssignedAdmin).toHaveBeenCalledWith(mockClientAdmin.id);
+    });
+
+    it("🔴 a CLIENT_ADMIN without a client gets null", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      await expect(ClientService.getMyClient({ user: mockClientAdmin })).resolves.toBeNull();
+    });
+
+    it("🔴 other roles get null without a lookup", async () => {
+      await expect(ClientService.getMyClient({ user: mockUser })).resolves.toBeNull();
+      await expect(ClientService.getMyClient({ user: mockSuperAdmin })).resolves.toBeNull();
+      expect(mockClientFindByAssignedAdmin).not.toHaveBeenCalled();
+    });
+  });
 });

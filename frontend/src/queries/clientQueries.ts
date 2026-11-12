@@ -33,3 +33,21 @@ export const GET_CLIENT = `
         }
     }
 `;
+
+export const GET_MY_CLIENT = `
+    query GetMyClient {
+        myClient {
+            id
+            name
+            email
+            phone
+            deleteRequest
+            createdAt
+            assignedAdmin {
+                id
+                name
+                email
+            }
+        }
+    }
+`;

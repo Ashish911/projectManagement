@@ -1,4 +1,4 @@
-import { GET_CLIENT, GET_CLIENTS } from "@/queries/clientQueries.ts";
+import { GET_CLIENT, GET_MY_CLIENT, GET_CLIENTS } from "@/queries/clientQueries.ts";
 import {
     ADD_CLIENT,
     UPDATE_CLIENT,
@@ -17,6 +17,10 @@ export const getClients = async (): Promise<Client[]> =>
 /** One client by id. CLIENT_ADMINs may only read the client they're assigned to. */
 export const getClient = async (id: string): Promise<Client> =>
     (await gql<{ client: Client }>(GET_CLIENT, { id })).client;
+
+/** A client admin's own client (null for other roles, or before one is assigned). */
+export const getMyClient = async (): Promise<Client | null> =>
+    (await gql<{ myClient: Client | null }>(GET_MY_CLIENT)).myClient;
 
 export const addClient = async (vars: { name: string; email?: string | null; phone?: string | null; assignedAdmin?: string }): Promise<Client> =>
     (await gql<{ addClient: Client }>(ADD_CLIENT, vars)).addClient;

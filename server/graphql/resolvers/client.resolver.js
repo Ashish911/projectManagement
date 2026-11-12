@@ -6,6 +6,8 @@ export const clientResolvers = {
       await ClientService.getClients(context),
     client: async (_, { id }, context) =>
       await ClientService.getClient(id, context),
+    myClient: async (_, args, context) =>
+      await ClientService.getMyClient(context),
   },
   Mutation: {
     addClient: async (_, args, context) =>

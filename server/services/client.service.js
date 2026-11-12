@@ -73,6 +73,18 @@ const settleAdminBeforeDelete = async (client, plan = {}, user, logger) => {
 
 export const ClientService = {
   /**
+   * The client the caller administers. Lets a CLIENT_ADMIN see their client even
+   * before it has any projects; access comes from client ownership.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object|null>} Their client, or null (no client, or not a client admin).
+   */
+  async getMyClient(context) {
+    const { user } = context;
+    if (user.role !== "CLIENT_ADMIN") return null;
+    return (await ClientRepo.findByAssignedAdmin(user.id)) ?? null;
+  },
+
+  /**
    * Lists all clients. SUPER_ADMIN only.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} All clients.

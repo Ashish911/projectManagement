@@ -11,7 +11,7 @@ import {
     IconTrash,
     IconUserPlus,
 } from "@tabler/icons-react";
-import { confirmDeleteClient, getClient } from "@/api/clientApi";
+import { confirmDeleteClient, getMyClient } from "@/api/clientApi";
 import { flagClientDeleteRequest, setClientsFilter } from "@/redux/actions/clientsActions";
 import type { Client } from "@/types/clientTypes";
 import type { Project } from "@/types/projectTypes";
@@ -75,17 +75,16 @@ export const Clients: React.FC = () => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [requesting, setRequesting] = useState<Client | null>(null);
 
-    // CLIENT_ADMINs can't list clients; they load their own one, found via their projects
+    // CLIENT_ADMINs can't list clients; they load the one they administer (even with no projects yet)
     const [ownClient, setOwnClient] = useState<Client | null>(null);
-    const ownClientId = !isSuperAdmin ? projects.find((p) => p.client)?.client?.id : undefined;
 
     useEffect(() => {
         if (activeFilter) dispatch(setClientsFilter(null));
     }, [dispatch]);
 
     useEffect(() => {
-        if (ownClientId) getClient(ownClientId).then(setOwnClient).catch(() => setOwnClient(null));
-    }, [ownClientId]);
+        if (profile && !isSuperAdmin) getMyClient().then(setOwnClient).catch(() => setOwnClient(null));
+    }, [profile?.id, isSuperAdmin]);
 
     const allClients: Client[] = isSuperAdmin ? clients : ownClient ? [ownClient] : [];
     const projectsOf = (clientId: string) => projects.filter((p) => p.client?.id === clientId);
