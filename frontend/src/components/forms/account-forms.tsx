@@ -55,7 +55,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
     const dispatch = useDispatch()
     const navigate = useNavigate()
     const { profile } = useAppData()
-    const { theme, toggle } = useTheme()
+    const { theme, set: setTheme } = useTheme()
     const box = useRef<HTMLDivElement>(null)
     const [section, setSection] = useState<"profile" | "password" | null>(null)
 
@@ -164,7 +164,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                 <div className="flex items-center gap-3 px-3.5 py-3 text-[13.5px]">
                     {theme === "DARK" ? <IconMoon size={17} className="text-subtle-foreground" /> : <IconSun size={17} className="text-subtle-foreground" />}
                     <span className="flex-1">Theme</span>
-                    <Segmented size="sm" value={theme === "DARK" ? "dark" : "light"} onChange={(v) => (v === "dark") !== (theme === "DARK") && toggle()} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+                    <Segmented size="sm" value={theme === "DARK" ? "dark" : "light"} onChange={(v) => setTheme(v === "dark" ? "DARK" : "LIGHT")} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
                 </div>
             </div>
         </FormModal>

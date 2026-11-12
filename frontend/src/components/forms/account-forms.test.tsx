@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom"
 const profile = { id: "me", name: "Ada Admin", email: "admin@gmail.com", role: "SUPER_ADMIN", number: "+61412345678", dob: null, gender: "FEMALE" }
 vi.mock("react-redux", () => ({ useDispatch: () => vi.fn() }))
 vi.mock("./use-app-data", () => ({ useAppData: () => ({ profile, users: [], projects: [], tasks: [] }) }))
-vi.mock("@/components/hooks/use-theme", () => ({ useTheme: () => ({ theme: "LIGHT", toggle: vi.fn() }) }))
+vi.mock("@/components/hooks/use-theme", () => ({ useTheme: () => ({ theme: "LIGHT", toggle: vi.fn(), set: vi.fn() }) }))
 const api = vi.hoisted(() => ({ changePassword: vi.fn(), updateProfile: vi.fn() }))
 vi.mock("@/api/userApi", async (orig) => ({ ...(await orig<object>()), changePassword: api.changePassword, updateProfile: api.updateProfile }))
 const toast = vi.hoisted(() => vi.fn())
