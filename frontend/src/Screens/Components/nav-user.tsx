@@ -1,4 +1,4 @@
-import { IconDotsVertical } from "@tabler/icons-react"
+import { IconSelector } from "@tabler/icons-react"
 import { useSelector } from "react-redux"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { Avatar } from "@/components/pm/avatar"
@@ -47,7 +47,7 @@ export function NavUser() {
                         <span className="truncate text-[13px] font-semibold">{profile?.name}</span>
                         <span className="truncate text-xs text-subtle-foreground">{profile?.email}</span>
                     </div>
-                    <IconDotsVertical className="ml-auto size-4 text-subtle-foreground" />
+                    <IconSelector className="ml-auto size-4 text-subtle-foreground" />
                 </SidebarMenuButton>
             </SidebarMenuItem>
         </SidebarMenu>
