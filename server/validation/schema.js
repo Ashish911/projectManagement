@@ -227,10 +227,15 @@ export const changeUserRolesSchema = z
     path: ["clientId"],
   });
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Enter your current password"),
-  newPassword: password,
-});
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    newPassword: password,
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    message: "New password must be different from your current password",
+    path: ["newPassword"],
+  });
 
 // ─── Client deletion decision ─────────────────────────────────────
 export const declineClientDeletionSchema = z.object({

@@ -355,6 +355,14 @@ describe("UserService — administration", () => {
       expect(mockUserUpdate).not.toHaveBeenCalled();
     });
 
+    it("🔴 should reject a new password that is the same as the current one", async () => {
+      mockUserFindById.mockResolvedValue({ ...member, password: await bcrypt.hash("oldPassword1", 4) });
+      await expect(
+        UserService.changePassword({ currentPassword: "oldPassword1", newPassword: "oldPassword1" }, { user: member }),
+      ).rejects.toThrow("New password must be different from your current password");
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
     it("🔴 should reject a short new password", async () => {
       await expect(
         UserService.changePassword({ currentPassword: "oldPassword1", newPassword: "short" }, { user: member }),

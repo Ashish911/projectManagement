@@ -32,6 +32,24 @@ const MenuRow = ({ icon: I, label, open, onClick }: { icon: typeof IconId; label
     </div>
 )
 
+/** 0–4: one point each for 8+ characters, mixed case, a digit and a symbol. */
+export function passwordStrength(pw: string) {
+    const score = [pw.length >= 8, /[a-z]/.test(pw) && /[A-Z]/.test(pw), /\d/.test(pw), /[^A-Za-z0-9]/.test(pw)].filter(Boolean).length
+    return { score, label: (["Weak", "Weak", "Fair", "Good", "Strong"] as const)[score] }
+}
+
+/** Four-segment meter under the new-password field. Advice only: the rule is 8+ characters. */
+function StrengthHint({ password }: { password: string }) {
+    const { score, label } = passwordStrength(password)
+    const tone = score <= 1 ? "tone-red" : score === 2 ? "tone-amber" : "tone-green"
+    return (
+        <span className="flex items-center gap-2">
+            <span className="flex flex-1 gap-1">{[1, 2, 3, 4].map((i) => <i key={i} className={cn("h-1 flex-1 rounded-full", i <= score ? `${tone} tone-dot` : "bg-surface-3")} />)}</span>
+            <span className={cn(tone, "tone-fg")}>{label}</span>{score < 4 && <span>· mix case, numbers and symbols</span>}
+        </span>
+    )
+}
+
 /** Your account: edit profile, change password, theme, sign out. */
 export function AccountMenu({ onClose, closing }: FormProps) {
     const dispatch = useDispatch()
@@ -50,7 +68,8 @@ export function AccountMenu({ onClose, closing }: FormProps) {
         { current: "", next: "", confirm: "" },
         {
             current: (x: string) => (x ? null : "Enter your current password"),
-            next: (x: string) => (x.length < 8 ? "At least 8 characters" : null),
+            next: (x: string, a: { current: string }) =>
+                x.length < 8 ? "At least 8 characters" : x === a.current ? "Must be different from your current password" : null,
             confirm: (x: string, a: { next: string }) => (x !== a.next ? "Passwords don’t match" : null),
         },
     )
@@ -130,13 +149,13 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                 {section === "password" && (
                     <div className="grid animate-pm-in gap-3 px-3.5 py-3">
                         <Field label="Current password" error={pw.err.current}>
-                            <input className={inputCls} type="password" autoComplete="current-password" value={pw.v.current} onChange={(e) => pw.set("current", e.target.value)} onBlur={() => pw.blur("current")} />
+                            <input aria-label="Current password" className={inputCls} type="password" autoComplete="current-password" value={pw.v.current} onChange={(e) => pw.set("current", e.target.value)} onBlur={() => pw.blur("current")} />
                         </Field>
-                        <Field label="New password" error={pw.err.next}>
-                            <input className={inputCls} type="password" autoComplete="new-password" value={pw.v.next} onChange={(e) => pw.set("next", e.target.value)} onBlur={() => pw.blur("next")} />
+                        <Field label="New password" error={pw.err.next} hint={pw.v.next && <StrengthHint password={pw.v.next} />}>
+                            <input aria-label="New password" className={inputCls} type="password" autoComplete="new-password" value={pw.v.next} onChange={(e) => pw.set("next", e.target.value)} onBlur={() => pw.blur("next")} />
                         </Field>
                         <Field label="Confirm new password" error={pw.err.confirm}>
-                            <input className={inputCls} type="password" autoComplete="new-password" value={pw.v.confirm} onChange={(e) => pw.set("confirm", e.target.value)} onBlur={() => pw.blur("confirm")} />
+                            <input aria-label="Confirm new password" className={inputCls} type="password" autoComplete="new-password" value={pw.v.confirm} onChange={(e) => pw.set("confirm", e.target.value)} onBlur={() => pw.blur("confirm")} />
                         </Field>
                         <FormError message={pw.formError} />
                     </div>
