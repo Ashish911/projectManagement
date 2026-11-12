@@ -79,6 +79,7 @@ const superAdmin = { id: "648a1b2c3d4e5f6a7b8c9d0f", role: "SUPER_ADMIN" };
 const clientAdmin = { id: "648a1b2c3d4e5f6a7b8c9d1a", role: "CLIENT_ADMIN" };
 const member = { id: "648a1b2c3d4e5f6a7b8c9d0e", role: "USER" };
 const otherMember = { id: "648a1b2c3d4e5f6a7b8c9d2a", role: "USER" };
+const otherSuper = { id: "648a1b2c3d4e5f6a7b8c9d3c", role: "SUPER_ADMIN" };
 const client = { id: "748a1b2c3d4e5f6a7b8c9d0e", name: "Northwind", assignedAdmin: null };
 
 const newUser = {
@@ -241,13 +242,13 @@ describe("UserService — administration", () => {
       expect(mockClientUpdate).toHaveBeenCalledWith(client.id, { assignedAdmin: member.id });
     });
 
-    it("🔴 should keep at least one super admin", async () => {
+    it("🔴 should not let a super admin change their own role", async () => {
       mockUserFindByIds.mockResolvedValue([{ ...superAdmin }]);
       mockUserFind.mockResolvedValue([superAdmin, member]);
 
       await expect(
         UserService.changeUserRoles({ ids: [superAdmin.id], role: "USER" }, { user: superAdmin }),
-      ).rejects.toThrow("At least one super admin must remain");
+      ).rejects.toThrow("You can't change your own account here");
       expect(mockUserUpdate).not.toHaveBeenCalled();
     });
 
@@ -255,6 +256,55 @@ describe("UserService — administration", () => {
       await expect(
         UserService.changeUserRoles({ ids: [member.id, otherMember.id], role: "CLIENT_ADMIN", clientId: client.id }, { user: superAdmin }),
       ).rejects.toThrow("A client admin needs exactly one person and a client");
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // PROTECTED ACCOUNTS (USR-01, USR-02)
+  // ════════════════════════════════════════════════════════════════
+  describe("protected accounts", () => {
+    it("🔴 a super admin can't edit their own account through user admin", async () => {
+      mockUserFindById.mockResolvedValue(superAdmin);
+      await expect(UserService.updateUser({ id: superAdmin.id, name: "Me" }, { user: superAdmin })).rejects.toThrow(
+        "You can't change your own account here",
+      );
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 another super admin can't be edited", async () => {
+      mockUserFindById.mockResolvedValue(otherSuper);
+      await expect(UserService.updateUser({ id: otherSuper.id, name: "X" }, { user: superAdmin })).rejects.toThrow(
+        "Super admin accounts can be viewed but not changed",
+      );
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 another super admin's role can't be changed, even in a mixed selection", async () => {
+      mockUserFindByIds.mockResolvedValue([{ ...member }, { ...otherSuper }]);
+      mockUserFind.mockResolvedValue([superAdmin, otherSuper, member]);
+      await expect(
+        UserService.changeUserRoles({ ids: [member.id, otherSuper.id], role: "USER" }, { user: superAdmin }),
+      ).rejects.toThrow("Super admin accounts can be viewed but not changed");
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 another super admin can't be deleted", async () => {
+      mockUserFindById.mockResolvedValue(otherSuper);
+      await expect(UserService.deleteUser(otherSuper.id, { user: superAdmin })).rejects.toThrow(
+        "Super admin accounts can be viewed but not changed",
+      );
+      mockUserFindByIds.mockResolvedValue([{ ...member }, { ...otherSuper }]);
+      await expect(UserService.deleteUsers([member.id, otherSuper.id], { user: superAdmin })).rejects.toThrow(
+        "Super admin accounts can be viewed but not changed",
+      );
+      expect(mockUserDelete).not.toHaveBeenCalled();
+    });
+
+    it("🟢 a user can still be promoted to super admin", async () => {
+      mockUserFindByIds.mockResolvedValue([{ ...member }]);
+      mockUserFind.mockResolvedValue([superAdmin, member]);
+      await UserService.changeUserRoles({ ids: [member.id], role: "SUPER_ADMIN" }, { user: superAdmin });
+      expect(mockUserUpdate).toHaveBeenCalledWith(member.id, { role: "SUPER_ADMIN" });
     });
   });
 

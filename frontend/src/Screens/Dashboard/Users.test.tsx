@@ -8,6 +8,7 @@ const users: User[] = [
     { id: "u1", name: "Ravi Shah", email: "ravi@x.io", role: "USER", status: "ACTIVE" } as User,
     { id: "u2", name: "Mia Chen", email: "mia@x.io", role: "USER", status: "LOCKED" } as User,
     { id: "u3", name: "Raj Patel", email: "raj@x.io", role: "CLIENT_ADMIN", status: "ACTIVE" } as User,
+    { id: "s2", name: "Sam Super", email: "sam@x.io", role: "SUPER_ADMIN", status: "ACTIVE" } as User,
 ]
 vi.mock("react-redux", () => ({ useDispatch: () => vi.fn(), useSelector: () => ({ loading: false, error: null, roleFilter: null }) }))
 vi.mock("@/components/forms/use-app-data", () => ({
@@ -25,7 +26,7 @@ const selectAll = () => userEvent.click(screen.getByRole("checkbox", { name: "Se
 beforeEach(() => openForm.mockReset())
 
 describe("Users selection", () => {
-    it("🟢 select all picks everyone except yourself", async () => {
+    it("🟢 select all picks everyone except yourself and other super admins", async () => {
         render(<Users />)
         await selectAll()
         expect(selectedCount()).toBe("3")
@@ -77,5 +78,13 @@ describe("Users selection", () => {
         render(<Users />)
         const row = screen.getByRole("checkbox", { name: "Select Raj Patel" }).closest("tr")!
         expect(within(row).getByText("No client")).toBeInTheDocument()
+    })
+
+    it("🔴 another super admin's row is view-only", () => {
+        render(<Users />)
+        expect(screen.getByRole("checkbox", { name: "Select Sam Super" })).toBeDisabled()
+        expect(screen.getByRole("button", { name: "View Sam Super" })).toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Edit Sam Super" })).not.toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "View Ada Admin" })).toBeInTheDocument()
     })
 })

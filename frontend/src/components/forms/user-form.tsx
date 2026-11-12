@@ -6,6 +6,7 @@ import {
     IconBuilding,
     IconCheck,
     IconCopy,
+    IconLock,
     IconLockOpen,
     IconMailForward,
     IconRefresh,
@@ -91,9 +92,12 @@ type Values = {
 export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string }>) {
     const dispatch = useDispatch()
     const openForm = useForms()
-    const { users, clients } = useAppData()
+    const { users, clients, profile } = useAppData()
     const box = useRef<HTMLDivElement>(null)
     const cur = data.userId ? users.find((u) => u.id === data.userId) ?? null : null
+    // Your own account and other super admins are view-only here (the server enforces it too)
+    const isMe = !!cur && cur.id === profile?.id
+    const viewOnly = isMe || cur?.role === "SUPER_ADMIN"
     const managed = cur ? clients.find((c) => c.assignedAdmin?.id === cur.id) : undefined
     const [copied, setCopied] = useState(false)
     const [statusBusy, setStatusBusy] = useState(false)
@@ -156,21 +160,25 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
 
     return (
         <FormModal
-            title={cur ? "Edit user" : "Invite user"}
+            title={viewOnly ? "View user" : cur ? "Edit user" : "Invite user"}
             desc={cur ? cur.email : "Add someone to ProjoMan and choose what they can do."}
             icon={cur ? IconUserEdit : IconUserPlus}
             width={640}
             onClose={onClose}
-            onSubmit={save}
+            onSubmit={viewOnly ? undefined : save}
             closing={closing}
             shake={f.shake}
             boxRef={box}
             footer={
                 <FormFoot onClose={onClose}>
-                    <SubmitButton busy={f.busy} onClick={save}>{cur ? "Save changes" : v.mode === "INVITE" ? "Send invite" : "Create user"}</SubmitButton>
+                    {!viewOnly && <SubmitButton busy={f.busy} onClick={save}>{cur ? "Save changes" : v.mode === "INVITE" ? "Send invite" : "Create user"}</SubmitButton>}
                 </FormFoot>
             }
         >
+            {viewOnly && (
+                <Note icon={IconLock}>{isMe ? "This is you. Change your own details from Edit profile, under your name in the sidebar." : "Super admin accounts are view-only."}</Note>
+            )}
+            <fieldset disabled={viewOnly} className="contents">
             <Section>Profile</Section>
             <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3.5">
                 <Avatar name={v.name.trim() || "?"} seed={cur?.id} size={40} />
@@ -205,6 +213,8 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                     <Combo value={v.clientId} onChange={(x) => f.set("clientId", x)} options={clientOptions} placeholder="Choose client" searchPlaceholder="Search clients" onBlur={() => f.blur("clientId")} />
                 </Field>
             )}
+
+            </fieldset>
 
             {!cur && (
                 <>
@@ -242,7 +252,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                 </>
             )}
 
-            {cur && (
+            {cur && !isMe && (
                 <>
                     <Section>Account</Section>
                     <div className="grid rounded-[10px] border [&>*+*]:border-t">
@@ -267,7 +277,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                                 </Button>
                             )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 px-3.5 py-3 text-[13.5px]">
+                        {!viewOnly && <div className="flex flex-wrap items-center gap-3 px-3.5 py-3 text-[13.5px]">
                             <div className="flex-1">
                                 <div className="font-medium">Remove user</div>
                                 <div className="text-xs text-subtle-foreground">Turns off sign-in; their tasks become unassigned</div>
@@ -275,7 +285,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                             <Button type="button" size="sm" variant="outline" className="tone-red tone-fg" onClick={() => { onClose(); setTimeout(() => openForm("delete-user", { userIds: [cur.id] }), 200) }}>
                                 Remove…
                             </Button>
-                        </div>
+                        </div>}
                     </div>
                 </>
             )}

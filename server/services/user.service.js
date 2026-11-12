@@ -71,6 +71,20 @@ const requireSuperAdmin = (user, action) => {
   }
 };
 
+/**
+ * Accounts user administration may not change: your own (use Edit profile) and,
+ * for now, any other super admin (view only).
+ * @throws {ForbiddenError} If any target is protected.
+ */
+const assertManageable = (user, targets) => {
+  if (targets.some((t) => String(t.id ?? t._id) === user.id)) {
+    throw new ForbiddenError("You can't change your own account here; use Edit profile");
+  }
+  if (targets.some((t) => t.role === "SUPER_ADMIN")) {
+    throw new ForbiddenError("Super admin accounts can be viewed but not changed");
+  }
+};
+
 /** Drops cached user lists and the given users, after any write. */
 const invalidateUsers = async (ids = []) => {
   await cache.invalidate("users:all");
@@ -364,6 +378,7 @@ export const UserService = {
 
     const target = await UserRepo.findById(userId);
     if (!target) throw new NotFoundError("User not found");
+    assertManageable(user, [target]);
 
     const deleted = await UserRepo.delete(userId);
     await detachUser(userId);
@@ -639,6 +654,7 @@ export const UserService = {
 
     const target = await UserRepo.findById(id);
     if (!target) throw new NotFoundError("User not found");
+    assertManageable(user, [target]);
 
     if (fields.email) {
       fields.email = fields.email.toLowerCase();
@@ -671,6 +687,7 @@ export const UserService = {
 
     const targets = await UserRepo.findByIds(ids);
     if (targets.length !== ids.length) throw new NotFoundError("One or more users not found");
+    assertManageable(user, targets);
 
     // Never leave the system without a super admin
     if (role !== "SUPER_ADMIN") {
@@ -772,6 +789,7 @@ export const UserService = {
     if (ids.includes(user.id)) throw new ForbiddenError("You cannot delete your own account");
     const targets = await UserRepo.findByIds(ids);
     if (targets.length !== ids.length) throw new NotFoundError("One or more users not found");
+    assertManageable(user, targets);
 
     const deleted = await Promise.all(ids.map((id) => UserRepo.delete(id)));
     await Promise.all(ids.map(detachUser));

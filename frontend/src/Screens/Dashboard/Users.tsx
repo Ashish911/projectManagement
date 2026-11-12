@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { IconDownload, IconPencil, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
+import { IconDownload, IconEye, IconPencil, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { setUsersRoleFilter } from "@/redux/actions/usersListActions";
 import type { Role, User } from "@/types/userTypes";
 import { Button } from "@/components/ui/button";
@@ -60,8 +60,9 @@ export const Users: React.FC = () => {
     const locked = users.filter((u) => u.status === "LOCKED").length;
     const invited = users.filter((u) => u.status === "INVITED").length;
 
-    // Selection: you can act on anyone except yourself
-    const selectable = rows.filter((u) => u.id !== profile?.id);
+    // You can act on anyone except yourself and other super admins (view only, also enforced by the server)
+    const isProtected = (u: { id: string; role: string }) => u.id === profile?.id || u.role === "SUPER_ADMIN";
+    const selectable = rows.filter((u) => !isProtected(u));
     const selection = useSelection(selectable.map((u) => u.id));
     const bulk = (kind: "bulk-role" | "bulk-unlock" | "bulk-remove") => () => openForm(kind, { userIds: selection.selected });
 
@@ -132,7 +133,7 @@ export const Users: React.FC = () => {
                                         style={{ animationDelay: `${k * 35}ms` }}
                                     >
                                         <td className={tableCls.td}>
-                                            <Check label={`Select ${u.name}`} checked={selection.isSelected(u.id)} disabled={isMe} onChange={() => selection.toggle(u.id)} />
+                                            <Check label={`Select ${u.name}`} checked={selection.isSelected(u.id)} disabled={isProtected(u)} onChange={() => selection.toggle(u.id)} />
                                         </td>
                                         <td className={tableCls.td}>
                                             <div className="flex items-center gap-2.5">
@@ -164,8 +165,8 @@ export const Users: React.FC = () => {
                                         <td className={cn(tableCls.td, "text-xs text-subtle-foreground")}>{lastSeen(u.lastLoginAt)}</td>
                                         <td className={tableCls.td}><Tag tone={STATUS_TONE[st]}>{STATUS_LABEL[st]}</Tag></td>
                                         <td className={tableCls.td}>
-                                            <Button variant="ghost" size="icon" className="size-7" aria-label={`Edit ${u.name}`} onClick={(e) => { e.stopPropagation(); openForm("user", { userId: u.id }); }}>
-                                                <IconPencil />
+                                            <Button variant="ghost" size="icon" className="size-7" aria-label={`${isProtected(u) ? "View" : "Edit"} ${u.name}`} onClick={(e) => { e.stopPropagation(); openForm("user", { userId: u.id }); }}>
+                                                {isProtected(u) ? <IconEye /> : <IconPencil />}
                                             </Button>
                                         </td>
                                     </tr>
