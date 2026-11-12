@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Audience** | Anyone testing a build by hand before a release or after a large change |
-| **Last reviewed** | 2026-10-10 |
+| **Last reviewed** | 2026-11-11 |
 | **Related** | [BACKEND.md](BACKEND.md) (rules and errors per operation) · [FRONTEND.md](FRONTEND.md) (screens) · [../server/STATUS.md](../server/STATUS.md) · [../frontend/STATUS.md](../frontend/STATUS.md) |
 
-The automated suites (Jest on the server, Vitest on the frontend) mock their boundaries. This plan covers what they can't: the real stack, real roles and live notifications.
+The unit suites (Jest on the server, Vitest on the frontend) mock their boundaries. The Playwright e2e suite (`frontend/e2e/`) drives the real stack, but only for sign-in, role guards, clients, projects, the Tasks board, comments and live notifications. This plan covers the rest: every role and rule, the notification queue and worker, failure modes (worker down, Redis down, reconnects) and operations.
 
 ---
 
@@ -18,7 +18,7 @@ The automated suites (Jest on the server, Vitest on the frontend) mock their bou
 2. [Environment Setup](#2-environment-setup)
 3. [Test Data and Personas](#3-test-data-and-personas)
 4. [Test Cases](#4-test-cases)
-   - [4.1 Auth](#41-auth--auth) · [4.2 Routing & navigation](#42-routing--navigation--nav) · [4.3 Users](#43-users--usr) · [4.4 Clients](#44-clients--cli) · [4.5 Projects](#45-projects--prj) · [4.6 Tasks](#46-tasks--tsk) · [4.7 Sub-tasks](#47-sub-tasks--sub) · [4.8 Comments](#48-comments--cmt) · [4.9 Notifications](#49-notifications--ntf) · [4.10 Dashboards & analytics](#410-dashboards--analytics--dsh) · [4.11 Account & preferences](#411-account--preferences--acc) · [4.12 Security / API](#412-security--api--sec) · [4.13 Operations](#413-operations--ops)
+   - [4.1 Auth](#41-auth--auth) · [4.2 Routing & navigation](#42-routing--navigation--nav) · [4.3 Users](#43-users--usr) · [4.4 Clients](#44-clients--cli) · [4.5 Projects](#45-projects--prj) · [4.6 Tasks](#46-tasks--tsk) · [4.7 Sub-tasks](#47-sub-tasks--sub) · [4.8 Comments](#48-comments--cmt) · [4.9 Notifications](#49-notifications--ntf) · [4.10 Queue & worker](#410-queue--worker--que) · [4.11 Dashboards & analytics](#411-dashboards--analytics--dsh) · [4.12 Account & preferences](#412-account--preferences--acc) · [4.13 Security / API](#413-security--api--sec) · [4.14 Operations](#414-operations--ops)
 5. [Regression Smoke Checklist](#5-regression-smoke-checklist)
 6. [Known Issues to Expect](#6-known-issues-to-expect)
 7. [Appendix — API Operation Coverage](#appendix--api-operation-coverage)
@@ -27,11 +27,23 @@ The automated suites (Jest on the server, Vitest on the frontend) mock their bou
 
 ## 1. How to Use This Plan
 
-1. Set up the environment ([§2](#2-environment-setup)) and run both unit suites first. If they fail, stop and fix them before testing by hand.
+1. Set up the environment ([§2](#2-environment-setup)) and run the automated suites first (unit + e2e, see the smoke gate). If they fail, stop and fix them before testing by hand.
 2. Create the personas and seed data **once** ([§3](#3-test-data-and-personas)). Most cases depend on them.
-3. Work through [§4](#4-test-cases) in order. Later sections assume the data created earlier (e.g. tasks exist before comments).
-4. Mark each case in its **Result** column: `✅` pass, `❌` fail, `⏭` skipped. On a fail, write the case ID, what you saw and any console/server log lines in your bug tracker.
-5. After a fix, re-run the failing case plus the [smoke checklist](#5-regression-smoke-checklist).
+3. Run the [regression smoke checklist](#5-regression-smoke-checklist). If a core flow is broken, fix it before the full pass.
+4. Work through [§4](#4-test-cases) in order. Later sections assume the data created earlier (e.g. tasks exist before comments). A full pass is about 5 hours; split it into sessions:
+
+   | Session | Sections | Setup | Time |
+   |---|---|---|---|
+   | 1 | 4.1 Auth, 4.2 Navigation | One browser | 30 min |
+   | 2 | 4.3 Users, 4.4 Clients | SA, then CA-A | 45 min |
+   | 3 | 4.5 Projects, 4.6 Tasks, 4.7 Sub-tasks | Switch between CA-A, U-1, U-2 | 60 min |
+   | 4 | 4.8 Comments, 4.9 Notifications | **Two browsers** (normal + private window) | 45 min |
+   | 5 | 4.10 Queue & worker | A terminal in `server/` | 30 min |
+   | 6 | 4.11 Dashboards, 4.12 Account | SA, CA-A, U-1 | 30 min |
+   | 7 | 4.13 Security / API, 4.14 Operations | curl or Apollo Sandbox; stopping containers | 45 min |
+
+5. Mark each case in its **Result** column: `✅` pass, `❌` fail, `⏭` skipped. On a fail, write the case ID, what you saw and any console/server log lines (`docker logs ProjoMan-GraphQl`, `docker logs notification-worker`) in your bug tracker. A case that hits a [known issue](#6-known-issues-to-expect) is a known fail, not a new bug.
+6. After a fix, re-run the failing case plus the [smoke checklist](#5-regression-smoke-checklist).
 
 **Conventions**
 - **Role** is the persona you are signed in as (see §3).
@@ -52,6 +64,24 @@ The automated suites (Jest on the server, Vitest on the frontend) mock their bou
 ---
 
 ## 2. Environment Setup
+
+### Before you start: use a throwaway database
+
+This plan creates, edits, force-deletes and bulk-deletes real records. **Never run it against a shared or production database**, including the Atlas cluster in a developer's `.env.local`. Point the dev stack at a local database first:
+
+```bash
+# server/.env.local (the API runs in Docker, so it reaches the host's mongod via host.docker.internal)
+MONGO_URI=mongodb://host.docker.internal:27017/projoman-qa
+
+docker compose --profile dev up -d app worker   # recreate: `restart` doesn't re-read env_file
+curl -s localhost:8000/health/ready        # {"status":"ok","checks":{"mongo":"up","redis":"up"}}
+```
+
+Reset between full passes with `mongosh projoman-qa --eval 'db.dropDatabase()'` and flush Redis (`docker exec redis redis-cli FLUSHALL`) so cached data and old jobs don't carry over.
+
+**Email.** With `BIRD_API_KEY` set, invite and reset emails are really sent, so made-up domains like `@test.local` never arrive. Use addresses you can read, e.g. plus-addresses of one Gmail inbox (`you+sa@gmail.com`, `you+caa@gmail.com`, …).
+
+**Container names** (dev profile), used throughout: API `ProjoMan-GraphQl`, worker `notification-worker`, `redis`, `prometheus`, `grafana`. Run `docker compose` commands from `server/`.
 
 ### Option A — Docker (recommended: includes the worker, Redis, Prometheus and Grafana)
 
@@ -89,8 +119,13 @@ cd frontend && npm install && npm run dev
 ```bash
 cd server && node --experimental-vm-modules node_modules/.bin/jest     # all suites green
 cd frontend && npm run test:run                                          # all suites green
-curl -s localhost:8000/health/ready                                       # mongo: up
+cd frontend && npm run e2e:redis                                         # once per boot: e2e Redis on 6380
+cd frontend && npm run e2e                                               # Playwright, all specs green
+curl -s localhost:8000/health/ready                                       # mongo: up, redis: up
+docker ps --format '{{.Names}}' | grep notification-worker                # the worker is running
 ```
+
+The e2e suite starts its own stack (in-memory MongoDB on 27018, API on 8001, worker, Vite on 4001), so it doesn't touch the dev database and can run while the dev stack is up. It needs Node ≥ 20.19; if `node -v` is older, run it as `PATH=/opt/homebrew/bin:$PATH npm run e2e`.
 
 ---
 
@@ -98,7 +133,7 @@ curl -s localhost:8000/health/ready                                       # mong
 
 ### 3.1 Bootstrap the first super admin
 
-Public sign-up always creates a `USER`, and no seed script exists. Create the first super admin by hand:
+Public sign-up always creates a `USER`. `server/scripts/seed-e2e.js` exists but builds the e2e fixture (one user per role, "Acme Corp", "Website Revamp"), not the personas below, and refuses non-local URIs. Create the first super admin by hand:
 
 1. Register `sa@test.local` through the UI (`/register`).
 2. Promote it in MongoDB:
@@ -110,7 +145,7 @@ Public sign-up always creates a `USER`, and no seed script exists. Create the fi
 
 ### 3.2 Personas
 
-Use one password for all, e.g. `Passw0rd!23`.
+Use one password for all, e.g. `Passw0rd!23`. The `@test.local` emails below are placeholders: if email is configured, swap them for addresses you can read (see [§2](#before-you-start-use-a-throwaway-database)), or the invite and reset cases can't be finished.
 
 | Persona | Email | Role | Belongs to |
 |---|---|---|---|
@@ -282,6 +317,9 @@ All as **SA** unless stated.
 | TSK-19 | CA-A | API: `createTask` with `currentStatus:"RESOLVED"`. | Rejected; only NEW / IN_PROGRESS are allowed at creation. | |
 | TSK-20 | any | API: `task(id:"123")`. | `VALIDATION_ERROR` (not a 24-hex ObjectId). | |
 | TSK-21 | any admin | Two windows as different admins: change a task in one. | The other does **not** update live (F-7); it updates after reload. | |
+| TSK-22 | CA-A | Delete a throwaway task, then **reload the page within 5 s** (before the Undo toast expires). | The delete is still sent when the page unloads (best effort): the task is gone after the reload. Applies to every Undo delete (users, clients, projects, tasks). | |
+| TSK-23 | CA-A | `docker compose stop app`, delete a task, wait 5 s. Start the app again. | The task comes back in the list with a "Couldn't delete: …" error toast; no blank screen. After the restart the task still exists. | |
+| TSK-24 | CA-A | Board: drag a task to another column while the API is stopped. | The card returns to its original column and an error is shown (no silent "moved" state that's lost on reload). | |
 
 ### 4.7 Sub-tasks — SUB
 
@@ -328,12 +366,32 @@ Use two browsers: the **actor** and the **recipient**. The recipient stays on an
 | NTF-06 | Delete one notification; then "delete all". | Removed; the list is empty and stays empty after reload. | |
 | NTF-07 | Recipient: devtools → Network → **Offline**. Actor triggers 2 events. Back online. | After reconnect the list reloads and shows both. | |
 | NTF-08 | Stop the worker (`docker compose stop worker`). Trigger an event. Wait. Start the worker. | Nothing arrives while it's stopped; on start the queued job is delivered (toast + list). | |
-| NTF-09 | Stop Redis. Trigger an event. | The mutation still succeeds (it may take up to ~3 s: S-6). The notification is saved to MongoDB and appears after reload. *(Live push needs Redis PubSub, so no toast.)* Restart Redis afterwards. | |
+| NTF-09 | Stop Redis (`docker compose stop redis`). Trigger an event. | The mutation still succeeds (it may take up to ~3 s: S-6). The API logs **"Notification queue unavailable, delivering directly"**. The notification is saved to MongoDB and appears after reload. *(Live push needs Redis PubSub, so no toast.)* Restart Redis afterwards and check NTF-01 works again. | |
 | NTF-10 | Sign out U-1, sign in as U-2 in the same tab. | U-2 sees only U-2's notifications; no U-1 toasts arrive (the socket was reopened with U-2's token). | |
 | NTF-11 | Leave the app idle on one page for 10 min, watching the Network tab. | No request loop; at most one safety poll every 5 min. | |
 | NTF-12 | API: `notification(id:<someone else's>)`, `markAsRead(<someone else's>)`. | `FORBIDDEN` "You do not have access to this notification". | |
+| NTF-13 | Recipient open in **two tabs**. Trigger an event. | Both tabs show the toast. After a reload the notification is in the list **once**. | |
+| NTF-14 | API (not used by the UI): `markNotificationsRead(ids:[<own unread 1>, <own unread 2>, <someone else's>])`. | Only the caller's two are marked read; the other user's notification stays unread. | |
+| NTF-15 | Mark all read, then trigger a new event. | The new notification arrives unread and the dot comes back; the old ones stay read. | |
+| NTF-16 | Trigger an event for a user who is **signed out**. Sign in as them. | It's in the list (unread) on sign-in; no toast for it (toasts are for live pushes only). | |
 
-### 4.10 Dashboards & analytics — DSH
+### 4.10 Queue & worker — QUE
+
+What the NTF cases can't show: that notifications really go through the BullMQ `notifications` queue (`queues/notification.queue.js`, 3 attempts, back-off 1 s / 2 s / 4 s) and the separate worker (`worker/notification.worker.js`, concurrency 5). If `queue.add` failed, `notify()` would deliver directly and NTF-01 would still pass. Run these from `server/` with the dev stack up. `<id>` is a job id from the worker log or `bull:notifications:id`.
+
+| ID | Steps | Expected | Result |
+|---|---|---|---|
+| QUE-01 | `docker exec redis redis-cli ZCARD bull:notifications:completed` (note N). Trigger one event in the UI (e.g. CA-A assigns a task to U-1). Run it again; check `docker logs notification-worker --since 1m`. | Count is N+1; the worker logs "Notification job completed"; the API log has **no** "Notification queue unavailable" warning. The recipient gets it live (NTF-01). | |
+| QUE-02 | `docker exec redis redis-cli HGETALL bull:notifications:<id>` for the job from QUE-01. | `data` holds only `user` and `content`; `attemptsMade` 0 or absent (first try); no token, password or email in the payload. | |
+| QUE-03 | Queue a job that must fail (invalid user id):<br>`docker exec notification-worker node -e "import('./queues/notification.queue.js').then(async m=>{const j=await m.getNotificationQueue().add('notify',{user:'not-an-id',content:'retry test'});console.log(j.id);process.exit(0)})"`<br>Watch `docker logs -f notification-worker`. | Three "Notification job failed" lines about 1 s, 2 s, 4 s apart. Then `ZRANGE bull:notifications:failed 0 -1` contains the id and `HGET bull:notifications:<id> attemptsMade` is `3`. Nothing saved to MongoDB; the worker keeps running. | |
+| QUE-04 | Jobs wait while the worker is down: see NTF-08. Also check `docker exec redis redis-cli LLEN bull:notifications:wait` is 1 while the worker is stopped, 0 after it starts. | As NTF-08; the wait list drains once the worker is back. | |
+| QUE-05 | Jobs survive a Redis restart: `docker compose stop worker`; trigger an event; `docker exec redis redis-cli SAVE`; `docker compose restart redis`; `docker compose start worker`. | The recipient gets the notification **once**. *(`SAVE` forces the RDB snapshot to `redis-data`; without it, a job queued just before a restart can be lost.)* | |
+| QUE-06 | Graceful stop: `docker compose stop worker`. | The worker logs "Notification worker shutting down" and the container stops within the 10 s grace period (not force-killed). | |
+| QUE-07 | Burst: as SA, bulk-change the role of 6+ users (USR-14 style), or add 6+ users to a project at once. | Each recipient gets **exactly one** notification; `bull:notifications:completed` grows by the same number; no failed jobs. | |
+| QUE-08 | `docker exec redis redis-cli CONFIG GET maxmemory-policy` | `noeviction` (BullMQ requirement; an evicting policy can silently drop queued jobs). | |
+| QUE-09 | Worker running with the API stopped (`docker compose stop app`): queue a job as in QUE-03 but with a real user id. Start the app, sign in as that user. | The worker delivers it while the API is down (saved to MongoDB); it's in the list after sign-in. The worker doesn't depend on the API. | |
+
+### 4.11 Dashboards & analytics — DSH
 
 | ID | Role | Steps | Expected | Result |
 |---|---|---|---|---|
@@ -343,12 +401,17 @@ Use two browsers: the **actor** and the **recipient**. The recipient stays on an
 | DSH-04 | SA / CA-A | Click each stat card. | Opens the matching page, already filtered. | |
 | DSH-05 | SA | Switch range 7d → 30d → 90d; reload. | The "created vs resolved" chart and resolved count change; the chosen range is remembered after reload. | |
 | DSH-06 | SA | Compare figures with the data: count overdue tasks, resolved in range, active projects by hand. | They match. | |
-| DSH-07 | U-1 | Open Dashboard. | Member dashboard: "Needs attention" tabs Overdue / Today / This week with own tasks only; one-click resolve works; "Your projects" with progress; "My week". | |
+| DSH-07 | U-1 | Open Dashboard. | Member dashboard: "Needs attention" tabs Overdue / Today / This week with own tasks only; one-click resolve works; "My projects" with progress; "My week" (tasks due per day); "Activity". | |
 | DSH-08 | U-1 | Resolve a task from "Needs attention". | It leaves the list; progress bars update. | |
 | DSH-09 | SA / CA-A | Open Analytics. | Stat cards, project-status and user-role donuts, client health, largest teams. Clicking through opens filtered pages. *(Not restyled; dark mode may look off: F-4.)* | |
 | DSH-10 | any | New account with no data (U-NEW). | Empty states, not errors or `NaN`. | |
+| DSH-11 | SA / CA-A | Check **Upcoming deadlines**, **Workload** (open tasks by assignee) and **Activity** against the data. | Deadlines lists open tasks due this week, soonest first ("Nothing due this week" when none). Workload counts match each assignee's open tasks. Activity shows recent changes for the role's scope only (CA-A never sees Client B). | |
+| DSH-12 | SA | **Project status** panel: compare in progress / completed / not started with the Projects page tabs. | Counts match. (CA-A sees **Project progress** for Client A's projects instead.) | |
+| DSH-13 | SA | Range 30d, then in devtools set `localStorage['pm-dash-range'] = "bogus"` and reload. | Falls back to 30d; no error. | |
+| DSH-14 | any | Switch to dark mode on Dashboard, Projects, Tasks and Project detail. | Charts, pills and cards stay readable; no white panels. *(Account and Analytics excepted: F-4.)* | |
+| DSH-15 | U-1 | Get a notification about a task (e.g. CA-A assigns one), then go to Dashboard without reloading. | The task appears in "Needs attention", at the latest after a reload. If it needs a reload, note it under F-7 (no live task updates), not as a new bug. | |
 
-### 4.11 Account & preferences — ACC
+### 4.12 Account & preferences — ACC
 
 | ID | Role | Steps | Expected | Result |
 |---|---|---|---|---|
@@ -357,7 +420,7 @@ Use two browsers: the **actor** and the **recipient**. The recipient stays on an
 | ACC-03 | any | Toggle theme in the header; reload; sign in on another browser. | Theme switches instantly with no flash on reload. The server preference (`theme`) is saved. | |
 | ACC-04 | any | Change language preference. | Saved and returned by `preference` after reload. | |
 
-### 4.12 Security / API — SEC
+### 4.13 Security / API — SEC
 
 | ID | Steps | Expected | Result |
 |---|---|---|---|
@@ -373,9 +436,12 @@ Use two browsers: the **actor** and the **recipient**. The recipient stays on an
 | SEC-10 | WebSocket: connect to `ws://localhost:8000/graphql` with a bad token (e.g. change `localStorage.token`, reload). | Socket closes with code **4403**; the client does not keep reconnecting. | |
 | SEC-11 | Dev only: send the same operation > 100 times in a minute from one IP. | Refused with a too-many-requests error, and the UI shows the message. *(Prod relies on AWS infra instead.)* | |
 | SEC-12 | Check the API response for `users`/`user`/`profile`. | No `password`, `resetToken` or hash fields are exposed. | |
-| SEC-13 | Put `<img src=x onerror=alert(1)>` into a task title, a comment and a client name. | Rendered as text; no alert. | |
+| SEC-13 | Put `<img src=x onerror=alert(1)>` into a task title, a comment and a client name. | Rendered as text; no alert. Also check the notification toast and sheet for a task with that title. | |
+| SEC-14 | Copy U-1's token. As SA, delete U-1 (let the Undo expire). Call `profile` and open a WebSocket with the old token. | Ideally `UNAUTHORIZED` / no data for a deleted user. If the token still works until it expires, log it as a bug (a JWT stays valid after its user is deleted). | |
+| SEC-15 | Subscription scope: U-1 and U-2 signed in (two browsers). Trigger a notification for U-2 only. | Only U-2 receives it. `notificationCreated` takes no user argument; it's scoped to the socket's user. | |
+| SEC-16 | Grep the logs after a full pass: `docker logs ProjoMan-GraphQl 2>&1 \| grep -iE 'password\|Bearer \|resetToken'` and the same for `notification-worker`. | Only redacted values (`[REDACTED]`); no raw passwords, JWTs or reset tokens. | |
 
-### 4.13 Operations — OPS
+### 4.14 Operations — OPS
 
 | ID | Steps | Expected | Result |
 |---|---|---|---|
@@ -388,6 +454,10 @@ Use two browsers: the **actor** and the **recipient**. The recipient stays on an
 | OPS-07 | Prod-like run (`npm run start` with `.env.prod` pointed at a test DB): kill one cluster worker process. | The primary re-forks it; the API keeps answering. | |
 | OPS-08 | `npm run db:indexes -- --dry-run` | Lists the index changes without applying them. | |
 | OPS-09 | Restart the API while the frontend is open. | The WebSocket reconnects with back-off and the notification list refreshes; no blank screen. | |
+| OPS-10 | Restart Redis (`docker compose restart redis`) while the app is open. Then trigger a notification. | API and worker reconnect on their own (no restart needed); the next notification is queued and delivered live (QUE-01). Cached reads still work (cache misses at first). | |
+| OPS-11 | Prometheus `localhost:9091` → Status → Targets. | The API target is **UP**. | |
+| OPS-12 | Stop the worker for 5+ minutes. | Nothing alerts: there is no queue-depth or worker metric yet. Record as a known gap (see §6), not a fail. | |
+| OPS-13 | Dev only: save any file under `server/services/` (no real change needed). Then trigger a notification. | Both the API and worker containers reload (nodemon) and keep working; the notification arrives once. | |
 
 ---
 
@@ -409,6 +479,7 @@ A ~15-minute pass after any change. All IDs refer to §4.
 | 10 | SUB-02 | Sub-task quick add |
 | 11 | CMT-01, CMT-09 | Comment + outsider blocked |
 | 12 | NTF-01, NTF-05 | Live notification + mark all read |
+| 12a | QUE-01 | The notification went through the queue and worker, not the fallback |
 | 13 | DSH-01, DSH-07 | Both dashboards render with real numbers |
 | 14 | SEC-01, SEC-05 | Auth required; USER can't call admin mutations |
 | 15 | OPS-02 | Readiness probe |
@@ -424,8 +495,10 @@ These are documented limitations. A case that hits one is a **known fail**: reco
 | S-1: `CLIENT_ADMIN` `updateClient` saves every field (incl. `assignedAdmin`, `deleteRequest`) | CLI-17 | `server/STATUS.md` |
 | S-2: `tasks` / `task` / `subTasks` / `subTask` don't scope `CLIENT_ADMIN` to their client | TSK-18, SEC-06 | `server/STATUS.md` |
 | S-3: SA user lists can be up to 5 min stale after `register`, `deleteUser`, `promoteToAdmin` (cache) | USR-01, USR-17, USR-21: if a change doesn't show, wait or flush Redis before failing the case | `server/STATUS.md` |
-| S-4: rare duplicate notification after a Redis timeout | NTF-09 | `server/STATUS.md` |
+| S-4: rare duplicate notification after a Redis timeout | NTF-09, QUE-05 | `server/STATUS.md` |
+| S-5: no alert on queue depth or job age; a stopped worker goes unnoticed | OPS-12, QUE-04 | `server/STATUS.md` |
 | S-6: notifying mutations take up to 3 s while Redis is down | NTF-09 | `server/STATUS.md` |
+| SEC-03: the public-operation check trusts the operation **name** | SEC-03 | Code reading (not yet in `STATUS.md`) |
 | F-2: `npm run build` fails on 35 legacy `tsc` errors (`vite build` works) | Setup | `frontend/STATUS.md` |
 | F-4: Account, Analytics and auth screens not restyled / dark mode off | ACC-*, DSH-09 | `frontend/STATUS.md` |
 | F-6: invite link shows "reset password" wording | USR-03 | `frontend/STATUS.md` |
@@ -448,5 +521,6 @@ Every operation in `server/graphql/schema.js` and the cases that exercise it. Wh
 | Tasks | `tasks` TSK-17–18 · `task` TSK-17, TSK-20 · `allTasks` TSK-03–05, TSK-17 · `createTask` TSK-01–02, TSK-19 · `updateTask` TSK-10–12 · `updateTaskStatus` TSK-06–09 · `deleteTask` TSK-14–16 |
 | Sub-tasks | `subTasks` SUB-09 · `subTask` SUB-09 · `createSubTask` SUB-01–03 · `updateSubTask` SUB-05, SUB-08 · `updateSubTaskStatus` SUB-04–05 · `deleteSubTask` SUB-06–08 |
 | Comments | `taskComments` CMT-01, CMT-09 · `subTaskComments` CMT-03 · `addTaskComment` CMT-01–02 · `addSubTaskComment` CMT-03 · `updateComment` CMT-05–06, CMT-12 · `deleteComment` CMT-07–08, CMT-11 |
-| Notifications | `notifications` NTF-03 · `notification` NTF-12 · `markAsRead` NTF-04, NTF-12 · `markAllAsRead` NTF-05 · `markNotificationsRead` NTF-05 (bulk path, if the UI uses it) · `deleteNotification` / `deleteAllNotifications` NTF-06 · `notificationCreated` (subscription) NTF-01–02, NTF-10, SEC-10 |
+| Notifications | `notifications` NTF-03 · `notification` NTF-12 · `markAsRead` NTF-04, NTF-12 · `markAllAsRead` NTF-05 · `markNotificationsRead` NTF-14 (API only; the UI doesn't call it) · `deleteNotification` / `deleteAllNotifications` NTF-06 · `notificationCreated` (subscription) NTF-01–02, NTF-10, NTF-13, SEC-10, SEC-15 |
+| Queue & worker (not GraphQL) | `notify()` → queue QUE-01–02, QUE-07 · fallback to `deliver()` NTF-09 · retries / failed set QUE-03 · worker down NTF-08, QUE-04 · Redis restart QUE-05, OPS-10 · shutdown QUE-06 · `noeviction` QUE-08 · worker without API QUE-09 |
 | Preferences | `preference` / `updatePreference` ACC-03–04 |
