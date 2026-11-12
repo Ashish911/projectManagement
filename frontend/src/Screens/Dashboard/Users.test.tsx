@@ -72,4 +72,10 @@ describe("Users selection", () => {
         await userEvent.click(screen.getByRole("checkbox", { name: "Select Raj Patel" }))
         expect(selectedCount()).toBe("1")
     })
+
+    it("🔴 a client admin without a client is flagged", () => {
+        render(<Users />)
+        const row = screen.getByRole("checkbox", { name: "Select Raj Patel" }).closest("tr")!
+        expect(within(row).getByText("No client")).toBeInTheDocument()
+    })
 })

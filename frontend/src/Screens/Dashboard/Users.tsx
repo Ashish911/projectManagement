@@ -145,7 +145,12 @@ export const Users: React.FC = () => {
                                         </td>
                                         <td className={tableCls.td}>
                                             <StatusBadge value={u.role} />
-                                            {clientOf.get(u.id) && <div className="mt-[3px] text-xs text-subtle-foreground">{clientOf.get(u.id)}</div>}
+                                            {clientOf.get(u.id) ? (
+                                                <div className="mt-[3px] text-xs text-subtle-foreground">{clientOf.get(u.id)}</div>
+                                            ) : u.role === "CLIENT_ADMIN" && (
+                                                // A client admin must have a client; assign one or change their role
+                                                <div className="mt-[3px]"><Tag tone="amber" className="h-5 text-[11px]">No client</Tag></div>
+                                            )}
                                         </td>
                                         <td className={cn(tableCls.td, "num")}>{projectCount.get(u.id) ?? 0}</td>
                                         <td className={tableCls.td}>

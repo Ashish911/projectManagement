@@ -379,6 +379,22 @@ export const ClientService = {
 
     const updated = await ClientRepo.update(data.id, { assignedAdmin: data.assignedAdmin });
 
+    // A client admin must have a client: the admin being replaced goes back to USER
+    const previousAdmin = adminIdOf(client.assignedAdmin);
+    if (previousAdmin && previousAdmin !== data.assignedAdmin) {
+      await UserRepo.update(previousAdmin, { role: "USER" });
+      logger.info(
+        { audit: true, userId: user.id, targetUserId: previousAdmin, targetClientId: data.id, action: "CLIENT_ADMIN_REPLACED", oldRole: "CLIENT_ADMIN", newRole: "USER" },
+        "AUDIT",
+      );
+      await cache.invalidate("users:all");
+      await cache.invalidate(`users:${previousAdmin}`);
+      await NotificationService.notify(
+        previousAdmin,
+        `You are no longer the admin for client "${client.name}", so your role is now User.`,
+      ).catch(() => {});
+    }
+
     logger.info(
       {
         audit: true,

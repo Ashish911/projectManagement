@@ -35,6 +35,10 @@ npm run test:indexes
 npm run test:graphqlTypes
 npm run test:server
 
+# List client admins without a client (a client admin must have one); add `-- --demote` to make them users
+npm run db:orphan-admins
+npm run db:orphan-admins:prod
+
 # Apply schema indexes to the database (dev / prod); add `-- --dry-run` to preview
 npm run db:indexes
 npm run db:indexes:prod

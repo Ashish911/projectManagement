@@ -12,6 +12,7 @@ const mockClientUpdate = jest.fn();
 const mockClientDelete = jest.fn();
 
 const mockUserFindById = jest.fn();
+const mockUserUpdate = jest.fn().mockResolvedValue({});
 const mockNotify = jest.fn().mockResolvedValue({});
 
 // ─── Mock the modules ─────────────────────────────────────────────
@@ -31,6 +32,7 @@ jest.unstable_mockModule("../repositories/client.repo.js", () => ({
 jest.unstable_mockModule("../repositories/user.repo.js", () => ({
   UserRepo: {
     findById: mockUserFindById,
+    update: mockUserUpdate,
   },
 }));
 
@@ -601,6 +603,30 @@ describe("ClientService", () => {
       expect(mockClientUpdate).toHaveBeenCalledWith(assignAdminData.id, {
         assignedAdmin: assignAdminData.assignedAdmin,
       });
+    });
+
+    it("🟢 demotes the admin being replaced, so no client admin is left without a client", async () => {
+      const previousAdmin = "648a1b2c3d4e5f6a7b8c9d2b";
+      mockClientFindById.mockResolvedValue({ ...mockClient, assignedAdmin: previousAdmin });
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockClientUpdate.mockResolvedValue(mockClientWithAdmin);
+
+      await ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin });
+
+      expect(mockUserUpdate).toHaveBeenCalledWith(previousAdmin, { role: "USER" });
+      expect(mockNotify).toHaveBeenCalledWith(previousAdmin, expect.stringContaining("no longer the admin"));
+    });
+
+    it("🟢 re-assigning the same admin demotes nobody", async () => {
+      mockClientFindById.mockResolvedValue(mockClientWithAdmin);
+      mockUserFindById.mockResolvedValue(mockClientAdmin);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockClientUpdate.mockResolvedValue(mockClientWithAdmin);
+
+      await ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin });
+
+      expect(mockUserUpdate).not.toHaveBeenCalled();
     });
 
     it("🟢 should not call update if validation fails", async () => {

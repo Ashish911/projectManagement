@@ -22,6 +22,8 @@
     "test:indexes": "node --experimental-vm-modules node_modules/.bin/jest tests/indexes.test.js --verbose",
     "db:indexes": "env-cmd -f .env.local node scripts/sync-indexes.js",
     "db:indexes:prod": "env-cmd -f .env.prod node scripts/sync-indexes.js",
+    "db:orphan-admins": "env-cmd -f .env.local node scripts/orphan-client-admins.js",
+    "db:orphan-admins:prod": "env-cmd -f .env.prod node scripts/orphan-client-admins.js",
     "test:graphqlTypes": "node --experimental-vm-modules node_modules/.bin/jest tests/graphqlTypes.test.js --verbose"
   },
   "jest": {
