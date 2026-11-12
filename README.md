@@ -44,7 +44,12 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 | Client Deletion Review (request, approve, decline with message) | Complete |
 | All Tasks Query (`allTasks`, role-scoped, with created/resolved dates for dashboards) | Complete |
 | Authentication (JWT, login throttling, account lockout) | Complete |
-| Forgot / Reset Password (emailed link via Bird, hashed token, 1-hour expiry) | Complete |
+| Forgot / Reset Password (emailed link via Bird, hashed token, 1-hour expiry) | Complete — production needs a verified Bird sending domain (`EMAIL_FROM`) |
+| Dev email catcher (SMTP to Mailpit when `SMTP_HOST` is set; UI on `:8025`) | Complete |
+| Activity / audit log (role changes with reasons, task reopens, client-admin moves; `activity` query, role-scoped) | Complete |
+| Current role read from the database on every request (role changes apply at once; deleted users get 401) | Complete |
+| Resolved tasks read-only until reopened (server-enforced, incl. sub-tasks) | Complete |
+| People's phone numbers validated per country (AU / NZ / US / NP) and stored as E.164 | Complete |
 | Role-Based Access Control (SUPER_ADMIN, CLIENT_ADMIN, USER) | Complete, with two known `CLIENT_ADMIN` gaps (S-1, S-2 in `server/STATUS.md`) |
 | Redis Caching (entity-level, 5-minute TTL, invalidation on write) | Complete |
 | Async Notification Queue (BullMQ + Worker) | Complete — `notify()` enqueues, the worker saves and publishes; delivers directly if Redis is down |
@@ -53,7 +58,7 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 | User Profile Update (name, number, dob, gender) | Complete |
 | User Preferences (theme, language) | Complete |
 | Notification Triggers (tasks, subtasks, comments, projects, promotions, client assignment) | Complete |
-| Unit Tests (Jest + mocks, all service domains) | Complete |
+| Unit Tests (Jest + mocks, all service domains; 458 tests) | Complete |
 | Structured Logging (Pino, per-request child loggers, audit trail incl. login/password reset, secret redaction) | Complete |
 | Prometheus Metrics + Grafana Dashboards (provisioned dashboard, cluster-aggregated metrics, cache hit ratio) | Complete |
 | Prometheus Alert Rules (API down, error rate > 5%, p95 > 1s) | Complete |
@@ -223,8 +228,8 @@ Prometheus Plugin ◄───────────────────�
 
 | Role | Capabilities |
 |---|---|
-| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; invites or creates users (`createUser`), edits them (`updateUser`), changes roles in bulk (`changeUserRoles`), unlocks (`unlockUsers`), resends invites, deletes (`deleteUser`, `deleteUsers`); assigns `CLIENT_ADMIN` users to clients via `assignAdmin`; promotes `USER` → `CLIENT_ADMIN` via `promoteToAdmin`; approves or declines client deletion requests; queries all users |
-| `CLIENT_ADMIN` | Manages their assigned client and its projects/tasks; queries users assigned to their client's projects; can request client deletion; can comment on, and delete any comment in, their client's projects |
+| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; invites or creates users (`createUser`), edits them (`updateUser`), changes roles person by person with a reason (`updateUserRoles`, or `changeUserRoles` for one role), every change logged to Activity; unlocks (`unlockUsers`), resends invites, deletes (`deleteUser`, `deleteUsers`); assigns `CLIENT_ADMIN` users to clients via `assignAdmin`; promotes `USER` → `CLIENT_ADMIN` via `promoteToAdmin`; approves or declines client deletion requests (deleting a client with an admin requires reassigning or demoting that admin); queries all users. Their own account and other super admins are view-only in user admin |
+| `CLIENT_ADMIN` | Manages their assigned client (always exactly one; `myClient` returns it even before it has projects) and its projects/tasks, with access from client ownership; queries users assigned to their client's projects; can request client deletion; can comment on, and delete any comment in, their client's projects |
 | `USER` | Access to projects they are assigned to; can update/change status on their own tasks and subtasks; can create subtasks on tasks assigned to them; can comment on tasks and subtasks in their projects and edit/delete their own comments |
 
 ## Public Operations (no JWT required)
@@ -275,6 +280,8 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `taskComments` | `taskId` | Project members |
 | `subTaskComments` | `subTaskId` | Project members |
 | `notifications` | — | Own only, newest first |
+| `activity` | `limit` | Role-scoped: all / client's projects / own projects |
+| `myClient` | — | CLIENT_ADMIN: the client they administer (null otherwise) |
 | `notification` | `id` | Own only |
 | `preference` | — | Own only |
 
@@ -291,7 +298,8 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `deleteUser` | SUPER_ADMIN: permanent delete |
 | `createUser` | SUPER_ADMIN: invite by email or set a temporary password |
 | `updateUser` | SUPER_ADMIN: edit details |
-| `changeUserRoles` | SUPER_ADMIN: bulk role change (one super admin must remain) |
+| `changeUserRoles` | SUPER_ADMIN: one role for several people, optional `reason` (delegates to `updateUserRoles`) |
+| `updateUserRoles` | SUPER_ADMIN: per-person roles with a shared reason and per-person overrides; logged to Activity |
 | `unlockUsers` | SUPER_ADMIN: clear lockouts |
 | `resendInvite` | SUPER_ADMIN: new 48-hour invite link |
 | `deleteUsers` | SUPER_ADMIN: bulk delete |
@@ -300,8 +308,8 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `updateClient` | SUPER_ADMIN or assigned CLIENT_ADMIN |
 | `assignAdmin` | SUPER_ADMIN: assign CLIENT_ADMIN to client |
 | `confirmDeleteClient` | CLIENT_ADMIN: flags client for deletion |
-| `deleteClientBySuperAdmin` | SUPER_ADMIN: deletes flagged client |
-| `forceDeleteClient` | SUPER_ADMIN: deletes without flag check |
+| `deleteClientBySuperAdmin` | SUPER_ADMIN: deletes flagged client; if it has an admin, `adminAction` (REASSIGN + `reassignTo`, or DEMOTE) and `reason` are required |
+| `forceDeleteClient` | SUPER_ADMIN: deletes without flag check; same admin plan as above |
 | `declineClientDeletion` | SUPER_ADMIN: clears the request, notifies the client admin |
 | `addProject` | SUPER_ADMIN / CLIENT_ADMIN |
 | `updateProject` | SUPER_ADMIN / CLIENT_ADMIN |
@@ -310,7 +318,7 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `removeUserFromProject` | SUPER_ADMIN / CLIENT_ADMIN |
 | `createTask` | SUPER_ADMIN / CLIENT_ADMIN |
 | `updateTask` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
-| `updateTaskStatus` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
+| `updateTaskStatus` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER; a resolved task can only move to REOPENED (optional `reason`, logged to Activity) |
 | `deleteTask` | SUPER_ADMIN / CLIENT_ADMIN (cascades to subtasks and comments) |
 | `createSubTask` | SUPER_ADMIN / CLIENT_ADMIN / task-assigned USER |
 | `updateSubTask` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
@@ -409,8 +417,12 @@ A React + TypeScript SPA connecting to the GraphQL backend with full role-based 
 | Dark mode (header toggle, synced with Preference, no flash on reload) | Complete |
 | Redesign: shell, Dashboard, Users, Clients, Projects + project detail, Tasks (from `ProjoMan Dashboard (standalone) (1).html`) | Complete — Account, Analytics and auth screens not yet restyled |
 | Comments (task sheet) | Complete — subtask comments planned |
-| Unit / component tests (Vitest + Testing Library, 82 tests) | Complete |
-| E2E / Integration tests | Planned |
+| Unit / component tests (Vitest + Testing Library, 219 tests) | Complete |
+| E2E tests (Playwright, 30 specs incl. role guides, collapsed sidebar, two-tab sync) | Complete |
+| In-app Guide (`/guide`, role-based, reachable from ⌘K "help" and the account menu) | Complete |
+| Live refresh (notification-driven refetch, cross-tab sync via BroadcastChannel, refresh on focus; no polling) | Complete |
+| Tasks filter / sort (project multi-select, due / priority / status / updated, group by project; kept in the URL) | Complete |
+| Shared loading skeletons and one shared date picker (incl. birthdate mode, project quick picks) | Complete |
 
 ## Frontend Tech Stack
 
