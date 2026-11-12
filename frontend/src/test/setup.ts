@@ -10,6 +10,8 @@ class NoopObserver {
 }
 globalThis.IntersectionObserver ??= NoopObserver as unknown as typeof IntersectionObserver
 globalThis.ResizeObserver ??= NoopObserver as unknown as typeof ResizeObserver
+// jsdom has no layout, so scrolling into view is a no-op (used by the ⌘K palette's highlighted row)
+Element.prototype.scrollIntoView ??= function () {}
 window.matchMedia ??= ((query: string) => ({
     matches: false, media: query, onchange: null,
     addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false,

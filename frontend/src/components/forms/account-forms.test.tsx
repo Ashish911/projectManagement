@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 const profile = { id: "me", name: "Ada Admin", email: "admin@gmail.com", role: "SUPER_ADMIN", number: "+61412345678", dob: null, gender: "FEMALE" }
 vi.mock("react-redux", () => ({ useDispatch: () => vi.fn() }))
@@ -106,5 +106,20 @@ describe("AccountMenu — identity (PROF-01)", () => {
         expect(screen.getAllByText("admin@gmail.com")).toHaveLength(1)
         expect(screen.getAllByText("Ada Admin")).toHaveLength(1)
         expect(screen.getByText("Super admin")).toBeInTheDocument()
+    })
+})
+
+describe("AccountMenu — guide link (GLB-05)", () => {
+    it("🟢 Guide & help opens the Guide", async () => {
+        render(
+            <MemoryRouter initialEntries={["/dashboard"]}>
+                <Routes>
+                    <Route path="/dashboard" element={<AccountMenu data={{}} onClose={vi.fn()} closing={false} />} />
+                    <Route path="/guide" element={<h1>Guide page</h1>} />
+                </Routes>
+            </MemoryRouter>,
+        )
+        await userEvent.click(screen.getByText("Guide & help"))
+        expect(screen.getByRole("heading", { name: "Guide page" })).toBeInTheDocument()
     })
 })

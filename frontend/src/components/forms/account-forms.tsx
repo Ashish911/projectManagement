@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { useDispatch } from "react-redux"
 import { useNavigate } from "react-router-dom"
-import { IconChevronDown, IconId, IconLock, IconLockCheck, IconLogout, IconMessagePlus, IconMoon, IconSun, IconUserCircle } from "@tabler/icons-react"
+import { IconChevronDown, IconChevronRight, IconHelpCircle, IconId, IconLock, IconLockCheck, IconLogout, IconMessagePlus, IconMoon, IconSun, IconUserCircle } from "@tabler/icons-react"
 import { changePassword, updateProfile } from "@/api/userApi"
 import { addTaskComment } from "@/api/commentApi"
 import { updateTaskStatus } from "@/api/taskApi"
@@ -170,6 +170,12 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                         <FormError message={pw.formError} />
                     </div>
                 )}
+
+                <div onClick={() => { onClose(); navigate("/guide") }} className="flex cursor-pointer items-center gap-3 px-3.5 py-3 text-[13.5px] transition-colors duration-fast hover:bg-surface-2">
+                    <IconHelpCircle size={17} className="text-subtle-foreground" />
+                    <span className="flex-1">Guide & help</span>
+                    <IconChevronRight size={16} className="text-subtle-foreground" />
+                </div>
 
                 <div className="flex items-center gap-3 px-3.5 py-3 text-[13.5px]">
                     {theme === "DARK" ? <IconMoon size={17} className="text-subtle-foreground" /> : <IconSun size={17} className="text-subtle-foreground" />}

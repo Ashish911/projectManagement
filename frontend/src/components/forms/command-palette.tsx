@@ -35,8 +35,12 @@ type Item = {
     icon?: Icon
     person?: { id: string; name: string }
     trail?: React.ReactNode
+    /** Extra words that should find this item, e.g. "help" for the Guide */
+    keywords?: string
     run: () => void
 }
+
+const PAGE_KEYWORDS: Record<string, string> = { "/guide": "help how to tutorial walkthrough docs" }
 
 /** ⌘K palette: actions, pages, projects, tasks and (super admins) people, all keyboard-driven. */
 export function CommandPalette({ onClose, closing }: FormProps) {
@@ -66,7 +70,7 @@ export function CommandPalette({ onClose, closing }: FormProps) {
         { group: "Actions", label: theme === "DARK" ? "Switch to light mode" : "Switch to dark mode", icon: theme === "DARK" ? IconSun : IconMoon, run: () => { onClose(); toggle() } },
     ]
     const pages: Item[] = [
-        ...(NAV_BY_ROLE[(role ?? "USER") as keyof typeof NAV_BY_ROLE] ?? []).map((n) => ({ group: "Go to", label: n.title, icon: n.icon, run: go(n.url) })),
+        ...(NAV_BY_ROLE[(role ?? "USER") as keyof typeof NAV_BY_ROLE] ?? []).map((n) => ({ group: "Go to", label: n.title, icon: n.icon, keywords: PAGE_KEYWORDS[n.url], run: go(n.url) })),
         { group: "Go to", label: "Account", icon: IconUserCircle, run: later(() => openForm("account")) },
     ]
     const projectItems: Item[] = projects.map((p) => ({ group: "Projects", label: p.name, sub: p.client?.name, icon: IconFolder, trail: <StatusBadge value={p.status} />, run: go(`/projects/${p.id}`) }))
@@ -84,7 +88,7 @@ export function CommandPalette({ onClose, closing }: FormProps) {
     const s = q.trim().toLowerCase()
     const items = s
         ? [...actions, ...pages, ...projectItems, ...taskItems, ...people]
-            .filter((x) => `${x.label} ${x.sub ?? ""}`.toLowerCase().includes(s))
+            .filter((x) => `${x.label} ${x.sub ?? ""} ${x.keywords ?? ""}`.toLowerCase().includes(s))
             .reduce<Item[]>((acc, x) => (acc.filter((y) => y.group === x.group).length < 5 ? [...acc, x] : acc), [])
         : [...actions, ...pages, ...taskItems.filter((_, i) => visibleTasks[i].currentStatus !== "RESOLVED").slice(0, 4).map((t) => ({ ...t, group: "Open tasks" }))]
 
