@@ -85,7 +85,10 @@ export function useForm<T extends Record<string, any>>(init: T, rules: Rules<T>,
         }
     }
 
-    return { v, set, setV, err, blur, submit, busy, shake, formError, setFormError }
+    /** Every rule passes for the current values (for disabling Save until then) */
+    const isValid = Object.keys(check(v)).length === 0
+
+    return { v, set, setV, err, blur, submit, busy, shake, formError, setFormError, isValid }
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────

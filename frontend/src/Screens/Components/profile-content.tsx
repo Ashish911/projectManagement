@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, X } from "lucide-react";
+import { PhoneInput, formatPhone, phoneError, toE164 } from "@/components/forms/phone-input";
 
 const GENDER_OPTIONS = [
     { value: "MALE", label: "Male" },
@@ -71,7 +72,7 @@ export default function ProfileContent() {
         setSaving(true);
         setSaveError(null);
         try {
-            const updated = await updateProfile(editForm);
+            const updated = await updateProfile({ ...editForm, number: toE164(editForm.number) });
             dispatch({ type: USER_PROFILE_SUCCESS, payload: updated });
             setEditing(false);
             setSaveSuccess(true);
@@ -132,11 +133,8 @@ export default function ProfileContent() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-phone">Phone</Label>
-                                        <Input
-                                            id="edit-phone"
-                                            value={editForm.number}
-                                            onChange={(e) => setEditForm({ ...editForm, number: e.target.value })}
-                                        />
+                                        <PhoneInput label="Phone" value={editForm.number} onChange={(number) => setEditForm({ ...editForm, number })} />
+                                        {phoneError(editForm.number) && <p className="text-xs text-destructive">{phoneError(editForm.number)}</p>}
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-dob">Date of Birth</Label>
@@ -162,7 +160,7 @@ export default function ProfileContent() {
                                 </div>
                                 {saveError && <p className="text-sm text-destructive">{saveError}</p>}
                                 <div className="flex items-center gap-3">
-                                    <Button onClick={handleProfileSave} disabled={saving || !editForm.name}>
+                                    <Button onClick={handleProfileSave} disabled={saving || !editForm.name || !editForm.number || !!phoneError(editForm.number)}>
                                         {saving ? "Saving…" : "Save Changes"}
                                     </Button>
                                     {saveSuccess && <span className="text-sm text-green-600">Saved successfully</span>}
@@ -180,7 +178,7 @@ export default function ProfileContent() {
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="phone">Phone</Label>
-                                    <Input id="phone" value={profile?.number ?? ""} readOnly disabled />
+                                    <Input id="phone" value={formatPhone(profile?.number)} readOnly disabled />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="dob">Date of Birth</Label>

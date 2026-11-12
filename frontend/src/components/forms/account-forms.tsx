@@ -21,6 +21,7 @@ import { assigneeOptions } from "./options"
 import { useAppData } from "./use-app-data"
 import type { FormProps } from "./forms-context"
 import { toast } from "./toaster"
+import { PhoneInput, phoneError, toE164 } from "./phone-input"
 import { dueLabel, parseDate } from "@/components/pm/dates"
 
 /** Clickable row inside the account menu's bordered list. */
@@ -31,6 +32,12 @@ const MenuRow = ({ icon: I, label, open, onClick }: { icon: typeof IconId; label
         <IconChevronDown size={16} className={cn("text-subtle-foreground transition-transform duration-base", open && "rotate-180")} />
     </div>
 )
+
+/** Same rule as the server: letters (any script), spaces, apostrophes, dots and hyphens. */
+export const nameError = (x: string) =>
+    !x.trim() ? "Name is required"
+        : x.trim().length > 100 ? "Keep the name under 100 characters"
+            : !/^[\p{L}\p{M}' .-]+$/u.test(x.trim()) ? "Use letters, spaces, apostrophes, dots or hyphens" : null
 
 /** 0–4: one point each for 8+ characters, mixed case, a digit and a symbol. */
 export function passwordStrength(pw: string) {
@@ -62,7 +69,11 @@ export function AccountMenu({ onClose, closing }: FormProps) {
     const toDate = (v?: string | null) => (v ? new Date(/^\d+$/.test(v) ? Number(v) : v).toISOString().slice(0, 10) : "")
     const prof = useForm(
         { name: profile?.name ?? "", number: profile?.number ?? "", dob: toDate(profile?.dob), gender: profile?.gender ?? "OTHERS" },
-        { name: (x: string) => (x.trim() ? null : "Name is required"), number: (x: string) => (/^\+?[\d\s()-]{7,}$/.test(x.trim()) ? null : "Use digits, spaces or +") },
+        {
+            name: nameError,
+            number: (x: string) => (!x.trim() ? "Phone number is required" : phoneError(x)),
+            dob: (x: string) => (x && new Date(x).getTime() > Date.now() ? "Date of birth can’t be in the future" : null),
+        },
     )
     const pw = useForm(
         { current: "", next: "", confirm: "" },
@@ -76,7 +87,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
     if (!profile) return null
 
     const saveProfile = () => prof.submit(async (x) => {
-        const updated = await updateProfile({ name: x.name.trim(), number: x.number.trim(), dob: x.dob || undefined, gender: x.gender })
+        const updated = await updateProfile({ name: x.name.trim(), number: toE164(x.number), dob: x.dob || undefined, gender: x.gender })
         dispatch({ type: USER_PROFILE_SUCCESS, payload: { ...profile, ...updated } })
         toast({ text: "Profile updated" })
         setSection(null)
@@ -109,7 +120,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                         </Button>
                     }
                 >
-                    {section === "profile" && <SubmitButton busy={prof.busy} onClick={saveProfile}>Save profile</SubmitButton>}
+                    {section === "profile" && <SubmitButton busy={prof.busy} onClick={saveProfile} disabled={!prof.isValid}>Save profile</SubmitButton>}
                     {section === "password" && <SubmitButton busy={pw.busy} onClick={savePassword}>Update password</SubmitButton>}
                 </FormFoot>
             }
@@ -128,13 +139,13 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                 {section === "profile" && (
                     <div className="grid animate-pm-in gap-3 px-3.5 py-3">
                         <Field label="Full name" error={prof.err.name}>
-                            <input className={inputCls} value={prof.v.name} onChange={(e) => prof.set("name", e.target.value)} onBlur={() => prof.blur("name")} />
+                            <input aria-label="Full name" className={inputCls} maxLength={100} value={prof.v.name} onChange={(e) => prof.set("name", e.target.value)} onBlur={() => prof.blur("name")} />
                         </Field>
                         <Grid2>
                             <Field label="Phone" error={prof.err.number}>
-                                <input className={cn(inputCls, "num")} value={prof.v.number} onChange={(e) => prof.set("number", e.target.value)} onBlur={() => prof.blur("number")} />
+                                <PhoneInput label="Phone" value={prof.v.number} onChange={(x) => prof.set("number", x)} onBlur={() => prof.blur("number")} />
                             </Field>
-                            <Field label="Date of birth">
+                            <Field label="Date of birth" error={prof.err.dob}>
                                 <input className={cn(inputCls, "num")} type="date" value={prof.v.dob} onChange={(e) => prof.set("dob", e.target.value)} />
                             </Field>
                         </Grid2>

@@ -38,6 +38,7 @@
     "date-fns": "^4.1.0",
     "graphql": "^16.14.2",
     "graphql-ws": "^6.3.0",
+    "libphonenumber-js": "^1.13.16",
     "lucide-react": "^0.268.0",
     "motion": "^14.0.0",
     "react": "^18.2.0",

@@ -31,6 +31,7 @@ npm run test:subTask
 npm run test:notification
 npm run test:preference
 npm run test:userAdmin
+npm run test:validation
 npm run test:indexes
 npm run test:graphqlTypes
 npm run test:server
@@ -117,7 +118,7 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 **Error handling.** Custom error classes in `errors/` extend `AppError`. Throw these in services; Apollo's `formatError` maps them to structured GraphQL responses with `extensions.code` and `extensions.statusCode`.
 
-**Validation.** All service inputs validated via Zod schemas in `validation/schema.js` using `validate()` from `validation/validate.js`. All MongoDB IDs validated with the `objectId` regex before any DB call.
+**Validation.** All service inputs validated via Zod schemas in `validation/schema.js` using `validate()` from `validation/validate.js`. All MongoDB IDs validated with the `objectId` regex before any DB call. Save the object `validate()` returns, not the raw input: some validators transform (people's phone numbers become E.164 via `libphonenumber-js`, limited to AU / NZ / US / NP; names are trimmed).
 
 ### Testing Conventions
 

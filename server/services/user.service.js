@@ -566,12 +566,13 @@ export const UserService = {
   },
 
   async updateProfile(data, context) {
-    validate(updateProfileSchema, data);
+    // Save the validated values: trimmed name, E.164 phone
+    const fields = validate(updateProfileSchema, data);
 
     const { user } = context;
     const logger = createLogger(context);
 
-    const updated = await UserRepo.update(user.id, data);
+    const updated = await UserRepo.update(user.id, fields);
     if (!updated) throw new NotFoundError("User not found");
 
     await cache.invalidate(`users:${user.id}`);

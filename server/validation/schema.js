@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 // ─── Reusable validators ──────────────────────────────────────────
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid ID format");
@@ -9,6 +10,31 @@ const name = z.string().min(1).max(100);
 // Optional free-text contact fields: an empty string means "not provided"
 const optionalEmail = z.union([email, z.literal("")]).optional().nullable();
 const optionalPhone = z.union([z.string().regex(/^\+?[\d\s()-]{7,}$/, "Use digits, spaces or +"), z.literal("")]).optional().nullable();
+// People's phone numbers: one of the supported countries, stored in E.164 (e.g. +61412345678)
+export const PHONE_COUNTRIES = ["AU", "NZ", "US", "NP"];
+const PHONE_MESSAGE = "Enter a valid phone number for Australia, New Zealand, the United States or Nepal";
+const phone = z.string().trim().transform((value, ctx) => {
+  const parsed = parsePhoneNumberFromString(value);
+  if (!parsed?.isValid() || !PHONE_COUNTRIES.includes(parsed.country)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: PHONE_MESSAGE });
+    return z.NEVER;
+  }
+  return parsed.number;
+});
+// A person's name: letters (any script), spaces, apostrophes, dots and hyphens
+const personName = z
+  .string()
+  .trim()
+  .min(1, "Name is required")
+  .max(100, "Keep the name under 100 characters")
+  .regex(/^[\p{L}\p{M}' .-]+$/u, "Use letters, spaces, apostrophes, dots or hyphens");
+// Optional date of birth: a real date, not in the future
+const dob = z
+  .string()
+  .refine((v) => !v || !Number.isNaN(Date.parse(v)), "That isn’t a valid date")
+  .refine((v) => !v || Date.parse(v) <= Date.now(), "Date of birth can’t be in the future")
+  .optional()
+  .nullable();
 const role = z.enum(["SUPER_ADMIN", "CLIENT_ADMIN", "USER"]);
 const gender = z.enum(["MALE", "FEMALE", "OTHERS"]);
 
@@ -171,9 +197,9 @@ export const resetPasswordSchema = z.object({
 
 // ─── User Profile Update ──────────────────────────────────────────
 export const updateProfileSchema = z.object({
-  name: name.optional(),
-  number: z.string().min(1).optional(),
-  dob: z.string().optional(),
+  name: personName.optional(),
+  number: phone.optional(),
+  dob: dob,
   gender: z.enum(["MALE", "FEMALE", "OTHERS"]).optional(),
 });
 
@@ -188,11 +214,11 @@ export const notificationIdsSchema = z.object({
 
 export const createUserSchema = z
   .object({
-    name: name,
+    name: personName,
     email: email,
-    number: z.string().regex(/^\+?[\d\s()-]{7,}$/, "Use digits, spaces or +"),
+    number: phone,
     gender: gender,
-    dob: z.string().optional().nullable(),
+    dob: dob,
     role: role.default("USER"),
     clientId: nullableObjectId,
     mode: z.enum(["INVITE", "PASSWORD"]).default("INVITE"),
@@ -209,11 +235,11 @@ export const createUserSchema = z
 
 export const updateUserSchema = z.object({
   id: objectId,
-  name: name.optional(),
+  name: personName.optional(),
   email: email.optional(),
-  number: z.string().regex(/^\+?[\d\s()-]{7,}$/, "Use digits, spaces or +").optional(),
+  number: phone.optional(),
   gender: gender.optional(),
-  dob: z.string().optional().nullable(),
+  dob: dob,
 });
 
 export const changeUserRolesSchema = z

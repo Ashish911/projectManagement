@@ -1,4 +1,5 @@
 import { useSelector } from "react-redux";
+import { formatPhone } from "@/components/forms/phone-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -47,7 +48,7 @@ export default function ProfileHeader() {
                             {profile?.number && (
                                 <div className="flex items-center gap-1.5">
                                     <Phone className="size-4" />
-                                    {profile.number}
+                                    {formatPhone(profile.number)}
                                 </div>
                             )}
                             {profile?.dob && (

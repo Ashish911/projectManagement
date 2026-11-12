@@ -489,6 +489,18 @@ describe("UserService — administration", () => {
   // ════════════════════════════════════════════════════════════════
   // CHANGE PASSWORD
   // ════════════════════════════════════════════════════════════════
+  describe("updateProfile", () => {
+    it("🟢 saves the cleaned-up values: trimmed name, E.164 phone", async () => {
+      await UserService.updateProfile({ name: "  Sita K ", number: "+61 412 345 678" }, { user: member });
+      expect(mockUserUpdate).toHaveBeenCalledWith(member.id, { name: "Sita K", number: "+61412345678" });
+    });
+
+    it("🔴 refuses an invalid phone and saves nothing", async () => {
+      await expect(UserService.updateProfile({ number: "12345" }, { user: member })).rejects.toThrow("Enter a valid phone number");
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("changePassword", () => {
     it("🟢 should change the password when the current one is right", async () => {
       mockUserFindById.mockResolvedValue({ ...member, password: await bcrypt.hash("oldPassword1", 4) });

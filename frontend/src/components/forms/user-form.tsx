@@ -29,9 +29,10 @@ import { LogoChip } from "./options"
 import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toast, toastError } from "./toaster"
+import { PhoneInput, phoneError, toE164 } from "./phone-input"
+import { nameError } from "./account-forms"
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-const PHONE = /^\+?[\d\s()-]{7,}$/
 
 export const ROLES: [Role, Icon, string, string][] = [
     ["USER", IconUser, "User", "Works on tasks assigned to them"],
@@ -118,12 +119,12 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
             reason: "",
         },
         {
-            name: (x) => (x.trim() ? null : "Name is required"),
+            name: nameError,
             email: (x) =>
                 !x.trim() ? "Email is required"
                     : !EMAIL.test(x.trim()) ? "That doesn’t look like an email"
                         : users.some((u) => u.id !== cur?.id && u.email === x.trim().toLowerCase()) ? "Someone already uses this email" : null,
-            phone: (x) => (!x.trim() ? (cur ? null : "Phone number is required") : !PHONE.test(x.trim()) ? "Use digits, spaces or +" : null),
+            phone: (x) => (!x.trim() ? (cur ? null : "Phone number is required") : phoneError(x)),
             gender: (x) => (cur || x ? null : "Select one"),
             clientId: (x, a) => (a.role === "CLIENT_ADMIN" && !x ? "Pick the client they’ll manage" : null),
             password: (x, a) => (!cur && a.mode === "PASSWORD" && x.length < 8 ? "At least 8 characters" : null),
@@ -139,14 +140,15 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
         .map((c) => ({ value: c.id, label: c.name, sub: c.assignedAdmin ? "Managed by this user" : "No admin yet", lead: <LogoChip name={c.name} /> }))
 
     const save = () => f.submit(async (x) => {
-        const profile = { name: x.name.trim(), email: x.email.trim().toLowerCase(), number: x.phone.trim(), gender: x.gender || "OTHERS", dob: x.dob || null }
+        // An empty phone is left out (it's optional when editing); otherwise it's sent in E.164
+        const profile = { name: x.name.trim(), email: x.email.trim().toLowerCase(), ...(x.phone.trim() && { number: toE164(x.phone) }), gender: x.gender || "OTHERS", dob: x.dob || null }
         if (cur) {
             let updated: User = await updateUser({ id: cur.id, ...profile })
             if (roleChangedIn(x)) [updated] = await changeUserRoles([cur.id], x.role, x.role === "CLIENT_ADMIN" ? x.clientId : null, x.reason.trim())
             dispatch(upsertUsersInStore([updated]))
             toast({ text: <span>Saved <b>{updated.name}</b></span> })
         } else {
-            const created = await createUser({ ...profile, role: x.role, clientId: x.role === "CLIENT_ADMIN" ? x.clientId : null, mode: x.mode, password: x.mode === "PASSWORD" ? x.password : null })
+            const created = await createUser({ ...profile, number: toE164(x.phone), role: x.role, clientId: x.role === "CLIENT_ADMIN" ? x.clientId : null, mode: x.mode, password: x.mode === "PASSWORD" ? x.password : null })
             dispatch(upsertUsersInStore([created]))
             toast(x.mode === "INVITE"
                 ? { text: <span>Invite sent to <b>{created.email}</b></span>, icon: IconMailForward }
@@ -194,7 +196,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                     <input className={inputCls} type="email" value={v.email} onChange={(e) => f.set("email", e.target.value)} onBlur={() => f.blur("email")} placeholder="name@company.com" />
                 </Field>
                 <Field label="Phone" req={!cur} error={f.err.phone}>
-                    <input className={cn(inputCls, "num")} value={v.phone} onChange={(e) => f.set("phone", e.target.value)} onBlur={() => f.blur("phone")} placeholder="+977 98…" />
+                    <PhoneInput label="Phone" value={v.phone} onChange={(x) => f.set("phone", x)} onBlur={() => f.blur("phone")} />
                 </Field>
                 <Field label="Gender" req={!cur} error={f.err.gender}>
                     <div>

@@ -61,3 +61,41 @@ describe("AccountMenu — change password", () => {
         expect(screen.getByText(/Strong/)).toBeInTheDocument()
     })
 })
+
+describe("AccountMenu — edit profile", () => {
+    beforeEach(() => api.updateProfile.mockReset().mockResolvedValue({}))
+    const openProfile = async () => {
+        await open()
+        await userEvent.click(screen.getByText("Edit profile"))
+    }
+
+    it("🟢 shows the stored number with its country and saves E.164", async () => {
+        await openProfile()
+        expect(screen.getByRole("combobox", { name: "Country code" })).toHaveValue("AU")
+        const phone = screen.getByRole("textbox", { name: "Phone" })
+        await userEvent.clear(phone)
+        await userEvent.type(phone, "0499 888 777")
+        await userEvent.click(screen.getByRole("button", { name: "Save profile" }))
+        expect(api.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ number: "+61499888777" }))
+    })
+
+    it("🔴 an invalid number is flagged and nothing is saved", async () => {
+        await openProfile()
+        const phone = screen.getByRole("textbox", { name: "Phone" })
+        await userEvent.clear(phone)
+        await userEvent.type(phone, "0499")
+        await userEvent.tab()
+        expect(screen.getByText("Not a valid Australia number")).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
+    })
+
+    it("🔴 a name with symbols is flagged", async () => {
+        await openProfile()
+        const name = screen.getByRole("textbox", { name: "Full name" })
+        await userEvent.clear(name)
+        await userEvent.type(name, "Ada <3")
+        await userEvent.tab()
+        expect(screen.getByText("Use letters, spaces, apostrophes, dots or hyphens")).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
+    })
+})
