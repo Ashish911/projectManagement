@@ -22,6 +22,7 @@ import { useAppData } from "./use-app-data"
 import type { FormProps } from "./forms-context"
 import { toast } from "./toaster"
 import { PhoneInput, phoneError, toE164 } from "./phone-input"
+import { DatePicker, fromYmd, toYmd } from "./date-picker"
 import { dueLabel, parseDate } from "@/components/pm/dates"
 
 /** Clickable row inside the account menu's bordered list. */
@@ -145,7 +146,7 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                                 <PhoneInput label="Phone" value={prof.v.number} onChange={(x) => prof.set("number", x)} onBlur={() => prof.blur("number")} />
                             </Field>
                             <Field label="Date of birth" error={prof.err.dob}>
-                                <input className={cn(inputCls, "num")} type="date" value={prof.v.dob} onChange={(e) => prof.set("dob", e.target.value)} />
+                                <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(prof.v.dob)} onChange={(d) => prof.set("dob", toYmd(d))} />
                             </Field>
                         </Grid2>
                         <Field label="Gender">

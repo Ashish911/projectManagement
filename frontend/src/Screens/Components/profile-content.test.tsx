@@ -29,3 +29,11 @@ describe("Account page — profile", () => {
         expect(screen.getByRole("button", { name: "Save Changes" })).toBeDisabled()
     })
 })
+
+describe("Account page — date of birth (PROF-04)", () => {
+    it("🟢 uses the shared date picker", async () => {
+        render(<ProfileContent />)
+        await userEvent.click(screen.getByRole("button", { name: /Edit/ }))
+        expect(screen.getByRole("button", { name: /Choose a date/ })).toBeInTheDocument()
+    })
+})

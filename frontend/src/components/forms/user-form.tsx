@@ -30,6 +30,7 @@ import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toast, toastError } from "./toaster"
 import { PhoneInput, phoneError, toE164 } from "./phone-input"
+import { DatePicker, fromYmd, toYmd } from "./date-picker"
 import { nameError } from "./account-forms"
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -204,7 +205,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                     </div>
                 </Field>
                 <Field label="Date of birth" hint="Optional">
-                    <input className={cn(inputCls, "num")} type="date" value={v.dob} max="2010-12-31" onChange={(e) => f.set("dob", e.target.value)} />
+                    <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(v.dob)} onChange={(d) => f.set("dob", toYmd(d))} />
                 </Field>
             </Grid2>
 

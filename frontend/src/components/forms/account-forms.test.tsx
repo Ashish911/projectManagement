@@ -123,3 +123,12 @@ describe("AccountMenu — guide link (GLB-05)", () => {
         expect(screen.getByRole("heading", { name: "Guide page" })).toBeInTheDocument()
     })
 })
+
+describe("AccountMenu — date of birth (PROF-04)", () => {
+    it("🟢 uses the app's date picker, not the browser's", async () => {
+        await open()
+        await userEvent.click(screen.getByText("Edit profile"))
+        expect(document.querySelector('input[type="date"]')).toBeNull()
+        expect(screen.getByRole("button", { name: /Choose a date/ })).toBeInTheDocument()
+    })
+})

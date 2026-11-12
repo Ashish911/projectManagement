@@ -75,3 +75,10 @@ describe("UserForm — phone", () => {
         expect(api.updateUser).toHaveBeenCalledWith(expect.not.objectContaining({ number: expect.anything() }))
     })
 })
+
+describe("UserForm — date of birth (PROF-04)", () => {
+    it("🟢 uses the app's date picker", () => {
+        open("u1")
+        expect(document.querySelector('input[type="date"]')).toBeNull()
+    })
+})

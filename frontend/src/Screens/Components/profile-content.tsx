@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, X } from "lucide-react";
 import { PhoneInput, formatPhone, phoneError, toE164 } from "@/components/forms/phone-input";
+import { DatePicker, fromYmd, toYmd } from "@/components/forms/date-picker";
 
 const GENDER_OPTIONS = [
     { value: "MALE", label: "Male" },
@@ -137,12 +138,8 @@ export default function ProfileContent() {
                                         {phoneError(editForm.number) && <p className="text-xs text-destructive">{phoneError(editForm.number)}</p>}
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="edit-dob">Date of Birth</Label>
-                                        <Input
-                                            id="edit-dob"
-                                            value={editForm.dob}
-                                            onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })}
-                                        />
+                                        <Label>Date of Birth</Label>
+                                        <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(editForm.dob)} onChange={(d) => setEditForm({ ...editForm, dob: toYmd(d) })} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Gender</Label>

@@ -136,7 +136,7 @@ export function ProjectForm({ data, onClose, closing }: FormProps<{ projectId?: 
                             />
                         </Field>
                         <Field label="Target date">
-                            <DatePicker value={v.due} onChange={(d) => f.set("due", d)} placeholder="No target date" />
+                            <DatePicker quick="project" value={v.due} onChange={(d) => f.set("due", d)} placeholder="No target date" />
                         </Field>
                     </Grid2>
                     <Field label="Status">
