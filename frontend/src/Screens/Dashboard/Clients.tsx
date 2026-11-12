@@ -12,6 +12,7 @@ import {
     IconUserPlus,
 } from "@tabler/icons-react";
 import { confirmDeleteClient, getMyClient } from "@/api/clientApi";
+import { formatPhone } from "@/components/forms/phone-input";
 import { flagClientDeleteRequest, setClientsFilter } from "@/redux/actions/clientsActions";
 import type { Client } from "@/types/clientTypes";
 import type { Project } from "@/types/projectTypes";
@@ -263,6 +264,14 @@ export function RequestDeletionDialog({ client, onClose, onDone }: { client: Cli
 
 // ── detail panel ──────────────────────────────────────────────────────────────
 
+/** One titled block of the client panel; every block uses the same heading and spacing. */
+const DetailSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <section className="grid gap-2.5">
+        <h3 className="text-xs font-medium uppercase tracking-[.05em] text-subtle-foreground">{title}</h3>
+        {children}
+    </section>
+);
+
 function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign, onRequestDeletion, onApproveDeletion, onDeclineDeletion, onDelete }: {
     client: Client;
     projects: Project[];
@@ -280,7 +289,7 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
     const stats = [["Projects", projects.length], ["Open tasks", prog.open], ["Resolved", `${prog.pct}%`]] as const;
 
     return (
-        <aside className="sticky top-[76px] grid animate-slide-in gap-[18px] rounded-xl border bg-card p-5 shadow-sm">
+        <aside className="sticky top-[76px] grid animate-slide-in gap-5 rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-3">
                 <LogoChip name={client.name} large />
                 <div className="min-w-0 flex-1">
@@ -290,10 +299,6 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
                 <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Edit client"><IconPencil /></Button>
             </div>
 
-            <div className="flex flex-wrap gap-x-[18px] gap-y-2 text-[13px] text-muted-foreground">
-                <span className="flex items-center gap-1.5"><IconMail size={15} className="text-subtle-foreground" />{client.email || "No email"}</span>
-                <span className="flex items-center gap-1.5"><IconPhone size={15} className="text-subtle-foreground" />{client.phone || "No phone"}</span>
-            </div>
 
             {client.deleteRequest && (
                 <div className="tone-red tone-bg flex gap-3 rounded-lg px-3.5 py-3 text-[13.5px] text-foreground">
@@ -315,8 +320,18 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
                 </div>
             )}
 
-            <div>
-                <div className="mb-2 text-[13px] font-medium text-muted-foreground">Client admin</div>
+            <DetailSection title="Contact">
+                <dl className="m-0 grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-[13.5px]">
+                    {([["Email", IconMail, client.email], ["Phone", IconPhone, formatPhone(client.phone)]] as const).map(([label, I, value]) => (
+                        <React.Fragment key={label}>
+                            <dt id={`${client.id}-${label}`} className="flex items-center gap-1.5 text-muted-foreground"><I size={15} className="text-subtle-foreground" />{label}</dt>
+                            <dd aria-labelledby={`${client.id}-${label}`} className={cn("m-0 truncate", !value && "text-subtle-foreground")}>{value || `No ${label.toLowerCase()}`}</dd>
+                        </React.Fragment>
+                    ))}
+                </dl>
+            </DetailSection>
+
+            <DetailSection title="Client admin">
                 {client.assignedAdmin ? (
                     <button
                         disabled={!isSuperAdmin}
@@ -337,42 +352,53 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
                         <IconSelector size={16} />
                     </button>
                 ) : (
-                    <span className="text-xs text-subtle-foreground">Unassigned</span>
+                    <span className="text-[13.5px] text-subtle-foreground">Unassigned</span>
                 )}
-            </div>
+            </DetailSection>
 
-            <div className="grid grid-cols-3 gap-2 border-y py-3.5">
-                {stats.map(([label, value]) => (
-                    <div key={label}>
-                        <div className="num text-[22px] font-medium">{value}</div>
-                        <div className="text-xs text-subtle-foreground">{label}</div>
-                    </div>
-                ))}
-            </div>
+            <DetailSection title="At a glance">
+                <div className="grid grid-cols-3 gap-2">
+                    {stats.map(([label, value]) => (
+                        <div key={label} className="rounded-lg bg-surface-2 px-3 py-2.5">
+                            <div className="num text-xl font-medium leading-tight">{value}</div>
+                            <div className="text-xs text-subtle-foreground">{label}</div>
+                        </div>
+                    ))}
+                </div>
+            </DetailSection>
 
-            <div>
-                <div className="mb-2 text-[13px] font-medium text-muted-foreground">Projects</div>
+            <DetailSection title="Projects">
                 {projects.length === 0 ? (
-                    <div className="text-xs text-subtle-foreground">No projects yet.</div>
+                    <div className="text-[13.5px] text-subtle-foreground">No projects yet.</div>
                 ) : (
-                    projects.map((p) => (
-                        <button
-                            key={p.id}
-                            onClick={() => navigate(`/projects/${p.id}`)}
-                            className="flex w-full items-center gap-2.5 border-b py-2 text-left text-[13.5px] last:border-b-0 hover:text-accent-foreground"
-                        >
-                            <span className="flex-1 truncate font-medium">{p.name}</span>
-                            <StatusBadge value={p.status} />
-                            <span className="num w-9 text-right text-xs text-subtle-foreground">{projectProgress(tasks, p.id).pct}%</span>
-                        </button>
-                    ))
+                    <div className="-mx-2 grid">
+                        {projects.map((p) => {
+                            const pct = projectProgress(tasks, p.id).pct
+                            return (
+                                <button
+                                    key={p.id}
+                                    onClick={() => navigate(`/projects/${p.id}`)}
+                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 rounded-md px-2 py-2 text-left text-[13.5px] transition-colors duration-fast hover:bg-surface-2"
+                                >
+                                    <span className="truncate font-medium">{p.name}</span>
+                                    <StatusBadge value={p.status} />
+                                    <Progress value={pct} className="h-1" />
+                                    <span className="num w-9 text-right text-xs text-subtle-foreground">{pct}%</span>
+                                </button>
+                            )
+                        })}
+                    </div>
                 )}
-            </div>
+            </DetailSection>
 
-            {isSuperAdmin ? (
-                <Button variant="outline" className="tone-red tone-fg" onClick={onDelete}><IconTrash />Delete client</Button>
-            ) : (
-                !client.deleteRequest && <Button variant="outline" className="tone-red tone-fg" onClick={onRequestDeletion}><IconTrash />Request deletion</Button>
+            {(isSuperAdmin || !client.deleteRequest) && (
+                <div className="grid border-t pt-4">
+                    {isSuperAdmin ? (
+                        <Button variant="outline" className="tone-red tone-fg" onClick={onDelete}><IconTrash />Delete client</Button>
+                    ) : (
+                        <Button variant="outline" className="tone-red tone-fg" onClick={onRequestDeletion}><IconTrash />Request deletion</Button>
+                    )}
+                </div>
             )}
         </aside>
     );
