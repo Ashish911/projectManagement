@@ -94,4 +94,10 @@ describe("Users selection", () => {
         await userEvent.click(screen.getByRole("button", { name: "Export" }))
         expect(openForm).toHaveBeenCalledWith("export-users", { role: "all", userIds: ["u2"] })
     })
+
+    it("🟢 the bulk bar is attached to the page body, so no animated wrapper can push it off-screen", async () => {
+        render(<Users />)
+        await userEvent.click(screen.getByRole("checkbox", { name: "Select Mia Chen" }))
+        expect(screen.getByRole("toolbar", { name: "Bulk actions" }).parentElement).toBe(document.body)
+    })
 })

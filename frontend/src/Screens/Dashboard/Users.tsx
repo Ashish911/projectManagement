@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { IconDownload, IconEye, IconPencil, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { setUsersRoleFilter } from "@/redux/actions/usersListActions";
@@ -178,7 +179,11 @@ export const Users: React.FC = () => {
             </TableCard>
 
             {/* ── Floating bulk-action bar ─────────────────────────────────────── */}
-            <div
+            {/* Portalled to <body>: the page transition's transform would otherwise make
+                "fixed" relative to the page content, pushing the bar below long tables */}
+            {createPortal(<div
+                role="toolbar"
+                aria-label="Bulk actions"
                 className={cn(
                     "fixed bottom-6 left-1/2 z-20 flex items-center gap-2.5 rounded-xl border bg-card py-2 pl-4 pr-2.5 shadow-lg transition-[transform,opacity] duration-[420ms] ease-spring",
                     selection.selected.length ? "-translate-x-1/2 translate-y-0 opacity-100" : "pointer-events-none -translate-x-1/2 translate-y-[140%] opacity-0",
@@ -190,8 +195,8 @@ export const Users: React.FC = () => {
                 <Button size="sm" variant="outline" onClick={bulk("bulk-role")}>Change role</Button>
                 <Button size="sm" variant="outline" onClick={bulk("bulk-unlock")}>Unlock</Button>
                 <Button size="sm" variant="outline" className="tone-red tone-fg" onClick={bulk("bulk-remove")}>Remove</Button>
-                <Button size="icon" variant="ghost" className="size-7" aria-label="Clear selection" onClick={selection.clear}><IconX /></Button>
-            </div>
+                <Button size="sm" variant="ghost" aria-label="Clear selection" onClick={selection.clear}><IconX />Clear</Button>
+            </div>, document.body)}
         </>
     );
 };
