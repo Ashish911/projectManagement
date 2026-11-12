@@ -64,17 +64,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     return (
         <Sidebar {...props}>
-            <SidebarHeader className="px-3 pb-1 pt-3.5">
-                <Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-3.5 pt-1.5 text-base font-semibold tracking-[-0.02em] text-foreground hover:no-underline group-data-[collapsible=icon]:px-1.5">
+            <SidebarHeader className="px-3 pb-1 pt-3.5 group-data-[collapsible=icon]:px-0">
+                <Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-3.5 pt-1.5 text-base font-semibold tracking-[-0.02em] text-foreground hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0">
                     {/* Ring logo: accent ring around a dark core */}
                     <span className="size-[22px] flex-none rounded-full border-[5px] border-primary [box-shadow:inset_0_0_0_3px_oklch(var(--background)),inset_0_0_0_10px_oklch(var(--foreground))]" />
-                    <span className="truncate transition-opacity group-data-[collapsible=icon]:opacity-0">ProjoMan</span>
+                    <span className="truncate transition-opacity group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0">ProjoMan</span>
                 </Link>
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={navItems} />
             </SidebarContent>
-            <SidebarFooter className="border-t px-1.5 py-2.5">
+            <SidebarFooter className="border-t px-1.5 py-2.5 group-data-[collapsible=icon]:px-0">
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

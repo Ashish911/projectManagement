@@ -39,7 +39,7 @@ export function NavUser() {
     }
 
     return (
-        <SidebarMenu>
+        <SidebarMenu className="group-data-[collapsible=icon]:items-center">
             <SidebarMenuItem>
                 <SidebarMenuButton size="lg" onClick={() => openForm("account")} className="cursor-pointer gap-2.5 hover:bg-surface-2 group-data-[collapsible=icon]:!p-0" aria-label="Account menu">
                     <Avatar name={profile?.name} seed={profile?.id} size={32} />

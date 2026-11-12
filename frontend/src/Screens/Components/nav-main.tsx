@@ -23,9 +23,9 @@ export function NavMain({
     const location = useLocation()
 
     return (
-        <SidebarGroup className="px-3 py-0">
+        <SidebarGroup className="px-3 py-0 group-data-[collapsible=icon]:px-0">
             <SidebarGroupContent>
-                <SidebarMenu className="gap-0.5">
+                <SidebarMenu className="gap-0.5 group-data-[collapsible=icon]:items-center">
                     {items.map((item) => {
                         // Sub-pages (e.g. /projects/:id) keep their section highlighted
                         const isActive = location.pathname === item.url || location.pathname.startsWith(item.url + "/")
@@ -41,9 +41,10 @@ export function NavMain({
                                 )}
                                 <SidebarMenuButton
                                     tooltip={item.title}
+                                    aria-label={item.title}
                                     isActive={isActive}
                                     onClick={() => navigate(item.url)}
-                                    className="relative h-9 cursor-pointer gap-[11px] rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors duration-fast hover:bg-surface-2 hover:text-foreground data-[active=true]:bg-transparent data-[active=true]:text-foreground [&>svg]:size-[18px] data-[active=true]:[&>svg]:text-primary"
+                                    className="relative h-9 cursor-pointer gap-[11px] group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:[&>span]:hidden rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors duration-fast hover:bg-surface-2 hover:text-foreground data-[active=true]:bg-transparent data-[active=true]:text-foreground [&>svg]:size-[18px] data-[active=true]:[&>svg]:text-primary"
                                 >
                                     {item.icon && <item.icon />}
                                     <span>{item.title}</span>
