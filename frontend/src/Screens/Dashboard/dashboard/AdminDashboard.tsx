@@ -37,6 +37,7 @@ import type { Project } from "@/types/projectTypes"
 import type { Task } from "@/types/taskTypes"
 import { createdVsResolved, resolvedWithin, mergeActivity, taskActivity, useServerActivity, teamOf, todayLabel, useDashboardData, type Range } from "./use-dashboard-data"
 import { ActivityList, Workload } from "./widgets"
+import { Loading } from "@/components/pm/loading"
 
 const RANGE_SUB: Record<Range, string> = { "7d": "Daily, last 7 days", "30d": "Every 3 days, last 30 days", "90d": "Weekly, last 90 days" }
 const RANGE_DAYS: Record<Range, number> = { "7d": 7, "30d": 30, "90d": 90 }
@@ -131,8 +132,10 @@ export function AdminDashboard() {
                 >
                     {upcoming.length ? (
                         upcoming.map((t) => <TaskRow key={t.id} task={t} onOpen={() => openForm("task-view", { id: t.id })} onToggle={() => toggleResolved(t)} />)
+                    ) : tasksLoaded ? (
+                        <EmptyState icon={IconCalendarDue} title="Nothing due this week" />
                     ) : (
-                        <EmptyState icon={IconCalendarDue} title={tasksLoaded ? "Nothing due this week" : "Loading tasks…"} />
+                        <Loading kind="lines" label="Loading tasks" />
                     )}
                 </Panel>
                 <Panel index={7} title="Workload" sub="Open tasks by assignee">

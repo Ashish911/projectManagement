@@ -265,7 +265,7 @@ export function SubmitButton({ busy, children, onClick, danger, disabled }: {
     disabled?: boolean
 }) {
     return (
-        <Button type="button" variant={danger ? "destructive" : "default"} onClick={onClick} disabled={disabled} className={cn("min-w-[124px]", busy && "pointer-events-none")}>
+        <Button type="button" variant={danger ? "destructive" : "default"} onClick={onClick} disabled={disabled || busy} aria-busy={busy || undefined} className={cn("min-w-[124px]", busy && "disabled:opacity-100")}>
             {busy && <Spinner />}
             {busy ? "Saving…" : children}
         </Button>

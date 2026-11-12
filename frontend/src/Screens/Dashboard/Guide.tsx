@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/pm/status-badge"
 import { EmptyState } from "@/components/pm/empty-state"
 import { guideFor, ROLE_INTRO, type ResolvedTopic, type Role, type Waiting } from "./guide/guide-content"
 import { Illustration } from "./guide/illustrations"
+import { Loading } from "@/components/pm/loading"
 
 const asRole = (r: unknown): Role => (r === "SUPER_ADMIN" || r === "CLIENT_ADMIN" ? r : "USER")
 
@@ -21,7 +22,7 @@ const matches = (t: ResolvedTopic, q: string) =>
 export const Guide = () => {
     const profile = useSelector((s: any) => s.profile.profile)
     // The sidebar loads the profile; until then we don't know which guide to show
-    return profile ? <RoleGuide role={asRole(profile.role)} /> : <div className="py-16 text-center text-sm text-muted-foreground">Loading guide…</div>
+    return profile ? <RoleGuide role={asRole(profile.role)} /> : <Loading kind="panel" label="Loading guide" />
 }
 
 function RoleGuide({ role }: { role: Role }) {

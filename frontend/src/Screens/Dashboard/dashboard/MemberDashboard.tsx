@@ -17,6 +17,7 @@ import { useTaskActions } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
 import { resolvedWithin, mergeActivity, taskActivity, useServerActivity, todayLabel, useDashboardData } from "./use-dashboard-data"
 import { ActivityList } from "./widgets"
+import { Loading } from "@/components/pm/loading"
 
 const greeting = () => {
     const h = new Date().getHours()
@@ -87,7 +88,7 @@ export function MemberDashboard() {
                         </div>
                         <div key={tab} className="min-h-[150px] animate-pm-tab pt-1.5">
                             {!tasksLoaded ? (
-                                <div className="py-10 text-center text-sm text-muted-foreground">Loading tasks…</div>
+                                <Loading kind="lines" label="Loading tasks" />
                             ) : shown.length ? (
                                 shown.map((t, k) => (
                                     <div key={t.id} className="animate-pm-in" style={{ animationDelay: `${k * 50}ms` }}>

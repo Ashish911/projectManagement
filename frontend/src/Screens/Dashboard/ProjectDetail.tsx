@@ -40,6 +40,7 @@ import { useForms } from "@/components/forms/forms-context";
 import { useAppData } from "@/components/forms/use-app-data";
 import { useTaskActions } from "@/components/forms/task-actions";
 import { cn } from "@/lib/utils";
+import { Loading } from "@/components/pm/loading";
 
 type Tab = "overview" | "tasks" | "team";
 
@@ -101,7 +102,7 @@ export const ProjectDetail: React.FC = () => {
 
     if (!project) {
         return loading || !projects.length ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">Loading project…</div>
+            <Loading kind="panel" label="Loading project" />
         ) : (
             <div className="rounded-xl border bg-card">
                 <EmptyState icon={IconFolderOff} title="Project not found" hint="It may have been deleted, or you're not on its team." />
@@ -233,7 +234,7 @@ export const ProjectDetail: React.FC = () => {
                             bodyClassName="px-2.5 pb-2.5 pt-1.5"
                         >
                             {!tasksLoaded ? (
-                                <div className="py-8 text-center text-sm text-muted-foreground">Loading tasks…</div>
+                                <Loading kind="lines" label="Loading tasks" />
                             ) : open.length === 0 ? (
                                 <EmptyState icon={IconCircleCheck} title={all.length ? "Everything's resolved" : "No tasks yet"} />
                             ) : (

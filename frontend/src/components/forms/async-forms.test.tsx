@@ -116,7 +116,7 @@ describe.each(cases)("$name", (c) => {
         render(c.render(() => {}))
         await c.prepare?.()
         await userEvent.click(screen.getByRole("button", { name: c.button }))
-        expect(screen.getByRole("button", { name: /saving/i })).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled() // Can't be pressed twice
         await act(async () => d.resolve(c.ok))
     })
 

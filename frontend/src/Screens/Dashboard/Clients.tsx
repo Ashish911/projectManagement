@@ -32,6 +32,7 @@ import { toast, toastError } from "@/components/forms/toaster";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/types/taskTypes";
 import { useAsyncAction } from "@/hooks/use-async-action";
+import { Loading } from "@/components/pm/loading";
 
 type Tab = "all" | "attn" | "del";
 
@@ -153,7 +154,7 @@ export const Clients: React.FC = () => {
                     <div className="grid items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
                         <TableCard>
                             {loading && allClients.length === 0 ? (
-                                <div className="py-16 text-center text-sm text-muted-foreground">Loading clients…</div>
+                                <Loading kind="table" rows={4} label="Loading clients" />
                             ) : error ? (
                                 <div className="tone-red tone-fg py-16 text-center text-sm">Failed to load clients.</div>
                             ) : rows.length === 0 ? (

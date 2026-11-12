@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/pm/empty-state";
 import { ProjectCard, projectProgress } from "@/components/pm/project-card";
 import { useForms } from "@/components/forms/forms-context";
 import { useAppData } from "@/components/forms/use-app-data";
+import { Loading } from "@/components/pm/loading";
 
 const STATUS_OPTIONS = [
     { value: "NOT_STARTED", label: "Not started" },
@@ -75,7 +76,7 @@ export const Projects: React.FC = () => {
             </div>
 
             {loading && all.length === 0 ? (
-                <div className="py-16 text-center text-sm text-muted-foreground">Loading projects…</div>
+                <Loading kind="cards" label="Loading projects" />
             ) : error ? (
                 <div className="tone-red tone-fg py-16 text-center text-sm">Failed to load projects.</div>
             ) : view === "grid" ? (

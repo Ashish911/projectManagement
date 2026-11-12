@@ -36,6 +36,7 @@ import { GhostAvatar, PRIORITY_TOKENS, assigneeOptions, parseDayToken } from "./
 import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toastError } from "./toaster"
+import { Loading } from "@/components/pm/loading"
 
 const STATUSES = ["NEW", "IN_PROGRESS", "REOPENED", "RESOLVED"] as const
 const PRIORITIES = ["URGENT", "HIGH", "NORMAL", "BACKLOG"] as const
@@ -345,7 +346,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                         </Note>
                     )}
                     {subs === null ? (
-                        <div className="text-xs text-subtle-foreground">Loading subtasks…</div>
+                        <Loading kind="lines" rows={2} label="Loading subtasks" />
                     ) : shown.length > 0 ? (
                         <div className="-mx-2 grid gap-0.5">
                             {shown.map((s) => (
@@ -389,7 +390,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                         {comments && comments.length > 0 && <span className="num text-xs text-subtle-foreground">{comments.length}</span>}
                     </div>
                     {comments === null ? (
-                        <div className="text-xs text-subtle-foreground">Loading comments…</div>
+                        <Loading kind="lines" rows={2} label="Loading comments" />
                     ) : comments.length === 0 ? (
                         <div className="flex items-center gap-2 text-xs text-subtle-foreground"><IconMessage size={15} />No comments yet.</div>
                     ) : (

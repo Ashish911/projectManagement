@@ -6,10 +6,11 @@ const projects = [{ id: "p1", name: "Portal", user: [] }, { id: "p2", name: "App
 const task = (id: string, project: { id: string; name: string }, o = {}) => ({
     id, title: id, priority: "NORMAL", currentStatus: "NEW", deadline: null, assignedTo: null, createdBy: null, project, ...o,
 })
+const app = vi.hoisted(() => ({ loaded: true }))
 const tasks = [task("Fix login", projects[0], { priority: "HIGH" }), task("Ship app", projects[1], { priority: "URGENT" }), task("Write docs", projects[0])]
 vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
-    useAppData: () => ({ profile: { id: "me" }, role: "SUPER_ADMIN", tasks, projects, tasksLoaded: true }),
+    useAppData: () => ({ profile: { id: "me" }, role: "SUPER_ADMIN", tasks, projects, tasksLoaded: app.loaded }),
 }))
 vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ setStatus: vi.fn(), toggleResolved: vi.fn() }) }))
 vi.mock("@/components/forms/forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => vi.fn() }))
@@ -49,5 +50,14 @@ describe("Tasks — filter and sort", () => {
         await userEvent.click(screen.getByRole("button", { name: "List" }))
         expect(screen.getByRole("heading", { name: /Portal/ })).toBeInTheDocument()
         expect(screen.getByRole("heading", { name: /App/ })).toBeInTheDocument()
+    })
+})
+
+describe("Tasks — loading", () => {
+    afterEach(() => { app.loaded = true })
+    it("🟢 shows a board skeleton while tasks load", () => {
+        app.loaded = false
+        mount()
+        expect(screen.getByRole("status", { name: "Loading tasks" })).toBeInTheDocument()
     })
 })

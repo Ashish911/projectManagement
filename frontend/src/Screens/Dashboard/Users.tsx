@@ -18,6 +18,7 @@ import { openTaskCount, useAppData } from "@/components/forms/use-app-data";
 import { STATUS_LABEL, STATUS_TONE } from "@/components/forms/user-form";
 import { cn } from "@/lib/utils";
 import { useSelection } from "@/hooks/use-selection";
+import { Loading } from "@/components/pm/loading";
 
 type RoleTab = "all" | Role;
 
@@ -95,7 +96,7 @@ export const Users: React.FC = () => {
 
             <TableCard>
                 {loading && users.length === 0 ? (
-                    <div className="py-16 text-center text-sm text-muted-foreground">Loading users…</div>
+                    <Loading kind="table" label="Loading users" />
                 ) : error ? (
                     <div className="tone-red tone-fg py-16 text-center text-sm">Failed to load users.</div>
                 ) : rows.length === 0 ? (

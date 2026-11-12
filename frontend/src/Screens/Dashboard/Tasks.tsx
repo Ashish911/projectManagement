@@ -23,6 +23,7 @@ import { inputCls } from "@/components/forms/form-kit"
 import { SORTS, applyTaskView, readTaskView, writeTaskView, type TaskGroup, type TaskSort, type TaskView } from "./tasks-view"
 import type { Task, TaskStatus } from "@/types/taskTypes"
 import type { SubTask } from "@/types/subTaskTypes"
+import { Loading } from "@/components/pm/loading"
 
 const COLUMNS: TaskStatus[] = ["NEW", "IN_PROGRESS", "REOPENED", "RESOLVED"]
 const COLUMN_LABEL: Record<TaskStatus, string> = { NEW: "New", IN_PROGRESS: "In progress", REOPENED: "Reopened", RESOLVED: "Resolved" }
@@ -206,7 +207,7 @@ export const Tasks: React.FC = () => {
             </div>
 
             {!tasksLoaded ? (
-                <div className="py-16 text-center text-sm text-muted-foreground">Loading tasks…</div>
+                <Loading kind="board" label="Loading tasks" />
             ) : view === "board" ? (
                 <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
                     <div key={`b-${who}`} className="grid animate-pm-tab grid-cols-[repeat(4,minmax(240px,1fr))] items-start gap-3.5 overflow-x-auto pb-1.5">
