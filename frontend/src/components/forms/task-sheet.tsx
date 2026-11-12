@@ -34,7 +34,7 @@ import { Combo } from "./combo"
 import { DatePicker, daysFromToday } from "./date-picker"
 import { GhostAvatar, PRIORITY_TOKENS, assigneeOptions, parseDayToken } from "./options"
 import { useAppData } from "./use-app-data"
-import type { FormProps } from "./forms-context"
+import { useForms, type FormProps } from "./forms-context"
 import { scheduleDelete, toastError } from "./toaster"
 
 const STATUSES = ["NEW", "IN_PROGRESS", "REOPENED", "RESOLVED"] as const
@@ -161,6 +161,7 @@ const timeAgo = (iso?: string | null) => {
 /** Task detail side-sheet: every field saves as you change it. */
 export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>) {
     const dispatch = useDispatch()
+    const openForm = useForms()
     const { profile, role, users, projects, tasks } = useAppData()
     const task = tasks.find((t) => t.id === data.id)
     const project = projects.find((p) => p.id === task?.project?.id)
@@ -283,7 +284,7 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                     <Note tone="green" icon={IconCircleCheck}>
                         <span className="flex flex-wrap items-center gap-2">
                             <span className="flex-1">This task is resolved, so it’s read-only. Reopen it to make changes; comments stay open.</span>
-                            {mayEdit && <Button size="sm" variant="outline" onClick={() => setStatus("REOPENED")}>Reopen task</Button>}
+                            {mayEdit && <Button size="sm" variant="outline" onClick={() => openForm("reopen-task", { taskId: task.id, returnToSheet: true })}>Reopen task</Button>}
                         </span>
                     </Note>
                 )}

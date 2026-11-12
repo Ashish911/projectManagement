@@ -49,6 +49,11 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   UserRepo: {},
 }));
 
+const mockRecordActivity = jest.fn().mockResolvedValue({});
+jest.unstable_mockModule("../services/activity.service.js", () => ({
+  ActivityService: { record: mockRecordActivity },
+}));
+
 jest.unstable_mockModule("../services/notification.service.js", () => ({
   NotificationService: {
     notify: mockNotify,
@@ -727,12 +732,22 @@ describe("TaskService", () => {
       expect(mockTaskUpdate).not.toHaveBeenCalled();
     });
 
-    it("🟢 can be reopened", async () => {
+    it("🟢 can be reopened, and the reopen is logged in Activity with its reason", async () => {
       mockTaskFindById.mockResolvedValue(resolved);
       mockTaskUpdate.mockResolvedValue({ ...resolved, currentStatus: "REOPENED" });
       mockNotify.mockResolvedValue({});
-      await TaskService.updateTaskStatus(mockTask._id, "REOPENED", { user: mockSuperAdmin });
+      await TaskService.updateTaskStatus(mockTask._id, "REOPENED", { user: mockSuperAdmin }, "Bug came back");
       expect(mockTaskUpdate).toHaveBeenCalledWith(mockTask._id, expect.objectContaining({ currentStatus: "REOPENED" }));
+      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({
+        action: "TASK_REOPENED", actor: mockSuperAdmin.id, task: mockTask._id, project: mockTask.project, reason: "Bug came back",
+      }));
+    });
+
+    it("🟢 other status changes aren't logged as reopens", async () => {
+      mockTaskFindById.mockResolvedValue(mockTask);
+      mockTaskUpdate.mockResolvedValue({ ...mockTask, currentStatus: "IN_PROGRESS" });
+      await TaskService.updateTaskStatus(mockTask._id, "IN_PROGRESS", { user: mockSuperAdmin });
+      expect(mockRecordActivity).not.toHaveBeenCalled();
     });
   });
 });

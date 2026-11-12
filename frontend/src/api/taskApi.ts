@@ -33,8 +33,9 @@ export const updateTask = async (vars: {
     priority?: string;
 }): Promise<Task> => (await gql<{ updateTask: Task }>(UPDATE_TASK, vars)).updateTask;
 
-export const updateTaskStatus = async (id: string, status: string): Promise<Task> =>
-    (await gql<{ updateTaskStatus: Task }>(UPDATE_TASK_STATUS, { id, status })).updateTaskStatus;
+/** `reason` is saved in Activity when a task is reopened. */
+export const updateTaskStatus = async (id: string, status: string, reason?: string): Promise<Task> =>
+    (await gql<{ updateTaskStatus: Task }>(UPDATE_TASK_STATUS, { id, status, reason: reason ?? null })).updateTaskStatus;
 
 export const deleteTask = async (id: string): Promise<void> => {
     await gql(DELETE_TASK, { id });

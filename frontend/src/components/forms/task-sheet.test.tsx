@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 
 const me = { id: "me", name: "Ada Admin", role: "SUPER_ADMIN" }
 const base = { id: "t1", title: "Fix login", priority: "HIGH", deadline: null, assignedTo: { id: "u1", name: "Ravi Shah" }, createdBy: me, project: { id: "p1", name: "Portal" }, createdAt: null }
@@ -12,6 +13,9 @@ const api = vi.hoisted(() => ({ updateTaskStatus: vi.fn(), getSubTasks: vi.fn(),
 vi.mock("@/api/taskApi", async (orig) => ({ ...(await orig<object>()), updateTaskStatus: api.updateTaskStatus }))
 vi.mock("@/api/subTaskApi", async (orig) => ({ ...(await orig<object>()), getSubTasks: api.getSubTasks }))
 vi.mock("@/api/commentApi", async (orig) => ({ ...(await orig<object>()), getTaskComments: api.getTaskComments }))
+
+const openForm = vi.hoisted(() => vi.fn())
+vi.mock("./forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => openForm }))
 
 const { TaskSheet } = await import("./task-sheet")
 const sub = { id: "s1", title: "Write test", currentStatus: "NEW", priority: "NORMAL", deadline: null, assignedTo: null }
@@ -33,7 +37,9 @@ describe("TaskSheet — resolved tasks are read-only", () => {
         expect(screen.getByLabelText("Task title")).toBeDisabled()
         expect(screen.queryByPlaceholderText("Add a subtask, then press Enter")).not.toBeInTheDocument()
         expect(screen.getByRole("checkbox", { name: /Mark Write test/ })).toBeDisabled()
-        expect(screen.getByRole("button", { name: "Reopen task" })).toBeInTheDocument()
+        await userEvent.click(screen.getByRole("button", { name: "Reopen task" }))
+        expect(openForm).toHaveBeenCalledWith("reopen-task", { taskId: "t1", returnToSheet: true })
+        expect(api.updateTaskStatus).not.toHaveBeenCalled()
     })
 
     it("🟢 comments stay open on a resolved task", async () => {

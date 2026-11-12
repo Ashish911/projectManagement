@@ -482,6 +482,7 @@ const Mutation = new GraphQLObjectType({
             }),
           ),
         },
+        reason: { type: GraphQLString }, // Why a task is reopened; saved in Activity
       },
       resolve: taskResolvers.Mutation.updateTaskStatus,
     },

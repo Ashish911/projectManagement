@@ -43,8 +43,8 @@ export const UPDATE_TASK = `
 `;
 
 export const UPDATE_TASK_STATUS = `
-    mutation UpdateTaskStatus($id: ID!, $status: TaskStatus!) {
-        updateTaskStatus(id: $id, status: $status) {
+    mutation UpdateTaskStatus($id: ID!, $status: TaskStatus!, $reason: String) {
+        updateTaskStatus(id: $id, status: $status, reason: $reason) {
             ${TASK_FIELDS}
         }
     }

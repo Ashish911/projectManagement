@@ -14,6 +14,7 @@ import {
   updateTaskSchema,
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
+import { ActivityService } from "./activity.service.js";
 import { NotificationService } from "./import.service.js";
 
 /** Business logic and role checks for tasks. Admins have full access; USERs are limited to their own. */
@@ -214,10 +215,12 @@ export const TaskService = {
    * @param {string} id      Task ID.
    * @param {string} status  New status, e.g. "RESOLVED" or "REOPENED".
    * @param {object} context GraphQL context with the current `user`.
+   * @param {string} [reason] Why it was reopened; saved in Activity.
    * @returns {Promise<object>} The updated task.
    * @throws {ForbiddenError} If a USER is not the task's assignee.
+   * @throws {ConflictError}  If a resolved task is moved anywhere but REOPENED.
    */
-  async updateTaskStatus(id, status, context) {
+  async updateTaskStatus(id, status, context, reason) {
     validate(updateSubTaskStatusSchema, { id, status }); // Tasks and subtasks share the same status rules
 
     const { user } = context;
@@ -261,8 +264,16 @@ export const TaskService = {
       }
     }
 
-    // Notify creator when task is reopened
+    // Notify creator when task is reopened, and log why
     if (status === "REOPENED") {
+      await ActivityService.record({
+        actor: user.id,
+        action: "TASK_REOPENED",
+        task: id,
+        project: task.project,
+        summary: `reopened “${task.title}”`,
+        reason: reason?.trim().slice(0, 500) || null,
+      });
       await NotificationService.notify(
         task.createdBy,
         `Task "${task.title}" has been reopened`,

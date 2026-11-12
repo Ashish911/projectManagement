@@ -12,8 +12,8 @@ export const taskResolvers = {
       await TaskService.createTask(args, context),
     updateTask: async (_, args, context) =>
       await TaskService.updateTask(args, context),
-    updateTaskStatus: async (_, { id, status }, context) =>
-      await TaskService.updateTaskStatus(id, status, context),
+    updateTaskStatus: async (_, { id, status, reason }, context) =>
+      await TaskService.updateTaskStatus(id, status, context, reason),
     deleteTask: async (_, { id }, context) =>
       await TaskService.deleteTask(id, context),
   },
