@@ -72,7 +72,7 @@ export const Users: React.FC = () => {
                 title="Users"
                 sub={`${users.length} people${locked ? ` · ${locked} locked` : ""}${invited ? ` · ${invited} pending invite${invited === 1 ? "" : "s"}` : ""}`}
             >
-                <Button variant="outline" onClick={() => openForm("export-users", { role: tab })} disabled={!users.length}><IconDownload />Export</Button>
+                <Button variant="outline" onClick={() => openForm("export-users", { role: tab, ...(selection.selected.length && { userIds: selection.selected }) })} disabled={!users.length}><IconDownload />Export</Button>
                 <Button onClick={() => openForm("user")}><IconUserPlus />Invite user</Button>
             </PageHead>
 

@@ -87,4 +87,11 @@ describe("Users selection", () => {
         expect(screen.queryByRole("button", { name: "Edit Sam Super" })).not.toBeInTheDocument()
         expect(screen.getByRole("button", { name: "View Ada Admin" })).toBeInTheDocument()
     })
+
+    it("🟢 Export passes the selected rows", async () => {
+        render(<Users />)
+        await userEvent.click(screen.getByRole("checkbox", { name: "Select Mia Chen" }))
+        await userEvent.click(screen.getByRole("button", { name: "Export" }))
+        expect(openForm).toHaveBeenCalledWith("export-users", { role: "all", userIds: ["u2"] })
+    })
 })

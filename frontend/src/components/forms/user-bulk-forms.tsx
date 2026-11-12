@@ -139,15 +139,17 @@ const COLUMNS: [Column, string][] = [
 ]
 
 /** Download the user list as CSV or JSON with chosen columns and a live preview. */
-export function ExportUsersForm({ data, onClose, closing }: FormProps<{ role?: Role | "all" }>) {
+export function ExportUsersForm({ data, onClose, closing }: FormProps<{ role?: Role | "all"; userIds?: string[] }>) {
     const { users, clients, projects, tasks } = useAppData()
     const filtered = data.role && data.role !== "all" ? users.filter((u) => u.role === data.role) : null
+    const selected = data.userIds?.length ? users.filter((u) => data.userIds!.includes(u.id)) : null
     const [format, setFormat] = useState<"csv" | "json">("csv")
-    const [scope, setScope] = useState<"all" | "filter">(filtered ? "filter" : "all")
+    // Default to the narrowest thing the person was looking at: their selection, then the role tab
+    const [scope, setScope] = useState<"all" | "filter" | "selected">(selected ? "selected" : filtered ? "filter" : "all")
     const [cols, setCols] = useState<Column[]>(["name", "email", "role", "client", "open", "status"])
     const [busy, setBusy] = useState(false)
 
-    const rows = scope === "filter" && filtered ? filtered : users
+    const rows = scope === "selected" && selected ? selected : scope === "filter" && filtered ? filtered : users
     const chosen = COLUMNS.filter(([k]) => cols.includes(k))
     const value = (u: User, k: Column): string | number => {
         switch (k) {
@@ -198,7 +200,11 @@ export function ExportUsersForm({ data, onClose, closing }: FormProps<{ role?: R
                         <Segmented
                             value={scope}
                             onChange={setScope}
-                            options={[{ value: "all", label: `All (${users.length})` }, ...(filtered && data.role !== "all" ? [{ value: "filter" as const, label: `${roleLabel(data.role as Role)}s (${filtered.length})` }] : [])]}
+                            options={[
+                                ...(selected ? [{ value: "selected" as const, label: `Selected (${selected.length})` }] : []),
+                                ...(filtered && data.role !== "all" ? [{ value: "filter" as const, label: `${roleLabel(data.role as Role)}s (${filtered.length})` }] : []),
+                                { value: "all" as const, label: `All (${users.length})` },
+                            ]}
                         />
                     </div>
                 </Field>
