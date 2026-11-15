@@ -80,3 +80,33 @@ describe("DatePicker — layering (PROF-07)", () => {
         expect(screen.queryByRole("dialog", { name: "Choose a date" })).not.toBeInTheDocument()
     })
 })
+
+describe("DatePicker — day states (PROF-08)", () => {
+    const cell = (d: Date) => screen.getByRole("button", { name: d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) })
+
+    it("🟢 today is marked as the current date; the picked day is pressed", async () => {
+        await open()
+        const today = cell(daysFromToday(0))
+        expect(today).toHaveAttribute("aria-current", "date")
+        expect(today).toHaveAttribute("data-today")
+    })
+
+    it("🟢 days before today are marked past for due dates", async () => {
+        await open()
+        const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+        if (first < daysFromToday(0)) expect(cell(first)).toHaveAttribute("data-past")
+    })
+
+    it("🔴 but not for a date of birth, where every day is in the past", async () => {
+        render(<DatePicker birthdate quick="none" value={new Date(1998, 2, 14)} onChange={vi.fn()} />)
+        await userEvent.click(screen.getByRole("button", { name: /14 Mar 1998/ }))
+        expect(cell(new Date(1998, 2, 10))).not.toHaveAttribute("data-past")
+        expect(cell(new Date(1998, 2, 14))).toHaveAttribute("aria-pressed", "true")
+    })
+
+    it("🟢 days outside the shown month are marked as such", async () => {
+        render(<DatePicker birthdate quick="none" value={new Date(1998, 2, 14)} onChange={vi.fn()} />)
+        await userEvent.click(screen.getByRole("button", { name: /14 Mar 1998/ }))
+        expect(cell(new Date(1998, 1, 23))).toHaveAttribute("data-outside")
+    })
+})

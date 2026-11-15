@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { IconCalendar, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
+import { IconCalendar, IconChevronDown, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { calendarDay, daysFrom, plainDate } from "@/components/pm/dates"
@@ -33,6 +33,29 @@ const untilWeekday = (wd: number) => ((wd - new Date().getDay() + 7) % 7) || 7
 
 const sameDay = (a?: Date | null, b?: Date | null) => !!a && !!b && a.toDateString() === b.toDateString()
 export const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+
+/** Month or year selector in the calendar header: a native select with a centred chevron of our own. */
+function MonthYearSelect({ label, value, onChange, options, className }: {
+    label: string
+    value: number
+    onChange: (v: number) => void
+    options: [number, string][]
+    className?: string
+}) {
+    return (
+        <span className="relative inline-flex">
+            <select
+                aria-label={label}
+                value={value}
+                onChange={(e) => onChange(Number(e.target.value))}
+                className={cn("h-8 cursor-pointer appearance-none rounded-md border border-border-strong bg-card bg-none pl-2.5 pr-7 text-[13px] font-semibold text-foreground outline-none transition-[border-color,box-shadow] duration-fast hover:border-subtle-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/35", className)}
+            >
+                {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
+            </select>
+            <IconChevronDown size={14} aria-hidden className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-subtle-foreground" />
+        </span>
+    )
+}
 
 /**
  * The app's one date field: quick picks, a Monday-first month calendar, and × to clear.
@@ -85,30 +108,32 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
             {open && (
                 <Floating ref={pop} anchor={ref} role="dialog" aria-label="Choose a date" className="w-[296px]">
                     {quick.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-1.5 border-b px-1 pb-2.5 pt-1">
+                        <div className="mb-2 grid grid-cols-3 gap-1.5 border-b px-1 pb-2.5 pt-1 [&>*]:justify-center">
                             {quick.map(([label, d]) => <Chip key={label} on={sameDay(d, value)} onClick={() => pick(d)}>{label}</Chip>)}
                         </div>
                     )}
-                    <div className="flex items-center gap-1 pb-1.5 pl-1.5 pr-0.5">
+                    <div className="flex h-8 items-center gap-1 px-1 pb-1">
                         {birthdate ? (
-                            <span className="flex flex-1 gap-1">
-                                <select aria-label="Month" value={month.getMonth()} onChange={(e) => setMonth(new Date(month.getFullYear(), Number(e.target.value), 1))} className="h-7 rounded-md border bg-card px-1.5 text-[13px] font-semibold">
-                                    {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-                                </select>
-                                <select aria-label="Year" value={month.getFullYear()} onChange={(e) => setMonth(new Date(Number(e.target.value), month.getMonth(), 1))} className="num h-7 rounded-md border bg-card px-1.5 text-[13px] font-semibold">
-                                    {Array.from({ length: 101 }, (_, i) => thisYear - i).map((y) => <option key={y} value={y}>{y}</option>)}
-                                </select>
+                            <span className="flex flex-1 gap-1.5">
+                                <MonthYearSelect label="Month" value={month.getMonth()} onChange={(m) => setMonth(new Date(month.getFullYear(), m, 1))}
+                                    options={MONTHS.map((m, i) => [i, m])} />
+                                <MonthYearSelect label="Year" value={month.getFullYear()} onChange={(y) => setMonth(new Date(y, month.getMonth(), 1))}
+                                    options={Array.from({ length: 101 }, (_, i) => [thisYear - i, String(thisYear - i)])} className="num" />
                             </span>
                         ) : (
-                            <b className="flex-1 text-[13.5px] font-semibold">{MONTHS[month.getMonth()]} {month.getFullYear()}</b>
+                            <b className="flex-1 pl-1.5 text-[13.5px] font-semibold">{MONTHS[month.getMonth()]} {month.getFullYear()}</b>
                         )}
-                        <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><IconChevronLeft /></Button>
-                        <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><IconChevronRight /></Button>
+                        <Button type="button" variant="ghost" size="icon" className="size-8 [&_svg]:size-4" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><IconChevronLeft /></Button>
+                        <Button type="button" variant="ghost" size="icon" className="size-8 [&_svg]:size-4" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><IconChevronRight /></Button>
                     </div>
-                    <div key={month.getMonth()} className="grid animate-pm-in grid-cols-7 gap-0.5">
-                        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i} className="py-1 text-center font-mono text-[11px] font-medium text-subtle-foreground">{d}</span>)}
+                    <div key={month.getMonth()} className="grid animate-pm-in grid-cols-7 gap-0.5 px-0.5 pb-0.5">
+                        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i} className="pb-1 pt-1.5 text-center font-mono text-[11px] font-medium text-subtle-foreground">{d}</span>)}
                         {cells.map((d) => {
                             const on = sameDay(d, value)
+                            const isToday = sameDay(d, today)
+                            const outside = d.getMonth() !== month.getMonth()
+                            // Past days are dimmed for due dates only; every date of birth is in the past
+                            const past = !birthdate && d < today
                             const future = birthdate && d > today
                             return (
                                 <button
@@ -116,14 +141,20 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
                                     key={d.toDateString()}
                                     aria-label={d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                                     aria-pressed={on}
+                                    aria-current={isToday ? "date" : undefined}
+                                    data-today={isToday || undefined}
+                                    data-past={past || undefined}
+                                    data-outside={outside || undefined}
                                     disabled={future}
                                     onClick={() => pick(d)}
                                     className={cn(
-                                        "h-[34px] rounded-lg font-mono text-[13px] transition-colors duration-fast hover:bg-surface-2",
-                                        (d < today || d.getMonth() !== month.getMonth()) && "text-subtle-foreground",
-                                        d.getMonth() !== month.getMonth() && "opacity-55",
-                                        sameDay(d, today) && "font-semibold shadow-[inset_0_0_0_1px_oklch(var(--border-strong))]",
-                                        on && "bg-primary text-primary-foreground hover:bg-primary",
+                                        "relative grid h-9 place-items-center rounded-lg font-mono text-[13px] text-foreground outline-none transition-colors duration-fast",
+                                        "hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/35",
+                                        "data-[past]:text-muted-foreground data-[outside]:text-subtle-foreground data-[outside]:opacity-60",
+                                        "data-[today]:font-semibold data-[today]:text-primary",
+                                        // Today: a small dot under the number, kept when it's also the picked day
+                                        "after:absolute after:bottom-1 after:size-1 after:rounded-full after:bg-current after:opacity-0 data-[today]:after:opacity-100",
+                                        on && "bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary data-[today]:text-primary-foreground",
                                         future && "cursor-not-allowed opacity-30 hover:bg-transparent",
                                     )}
                                 >
