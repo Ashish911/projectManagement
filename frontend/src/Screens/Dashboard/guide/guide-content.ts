@@ -1,4 +1,5 @@
 import type { Icon } from "@tabler/icons-react"
+import { FEATURES } from "@/lib/features"
 import {
     IconBell,
     IconBolt,
@@ -289,7 +290,7 @@ const TOPICS: Topic[] = [
         title: "Analytics",
         icon: IconChartBar,
         summary: "The bigger picture for your client: project status, team sizes and how healthy things look.",
-        roles: ["CLIENT_ADMIN"],
+        roles: FEATURES.clientAdminAnalytics ? ["CLIENT_ADMIN"] : [], // Hidden with the page (CA-01)
         art: "analytics",
         link: { label: "Open analytics", url: "/analytics" },
         steps: [

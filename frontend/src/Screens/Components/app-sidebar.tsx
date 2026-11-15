@@ -22,7 +22,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import { fetchProfile } from "@/redux/actions/userActions.ts";
 import { BrandLogo } from "@/components/pm/brand"
+import { FEATURES } from "@/lib/features";
 import { fetchPreference } from "@/redux/actions/preferenceActions.ts";
+
+/** Who may open /analytics: super admins, and client admins only while the flag is on (CA-01). */
+export const analyticsRoles = () => (FEATURES.clientAdminAnalytics ? ["SUPER_ADMIN", "CLIENT_ADMIN"] : ["SUPER_ADMIN"])
 
 // Kanban is reachable at /kanban but no longer listed; the Tasks board replaces it in the redesign
 export const NAV_BY_ROLE = {
@@ -39,7 +43,8 @@ export const NAV_BY_ROLE = {
         { title: "Clients",   url: "/clients",   icon: IconBuilding },
         { title: "Projects",  url: "/projects",  icon: IconFolder },
         { title: "Tasks",     url: "/tasks",     icon: IconListDetails },
-        { title: "Analytics", url: "/analytics", icon: IconChartBar },
+        // Behind a flag until it shows something the Dashboard doesn't (CA-01)
+        ...(FEATURES.clientAdminAnalytics ? [{ title: "Analytics", url: "/analytics", icon: IconChartBar }] : []),
         { title: "Guide",     url: "/guide",     icon: IconHelpCircle },
     ],
     USER: [

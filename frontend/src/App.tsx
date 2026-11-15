@@ -17,6 +17,7 @@ import { ForgotPassword } from "@/Screens/Auth/ForgotPassword.tsx";
 import { ResetPassword } from "@/Screens/Auth/ResetPassword.tsx";
 import { ProtectedRoute, PublicRoute } from "@/Screens/RouteHandler/RouteNavigator.tsx";
 import { AppLayout } from "@/Screens/Components/AppLayout.tsx";
+import { analyticsRoles } from "@/Screens/Components/app-sidebar.tsx";
 
 const queryClient = new QueryClient();
 
@@ -42,7 +43,7 @@ function App() {
                 <Route path="/tasks"     element={<ProtectedRoute roles={["SUPER_ADMIN", "CLIENT_ADMIN", "USER"]} element={<Tasks />} />} />
                 {/* The Tasks board replaced the Kanban page */}
                 <Route path="/kanban"    element={<Navigate to="/tasks" replace />} />
-                <Route path="/analytics" element={<ProtectedRoute roles={["SUPER_ADMIN", "CLIENT_ADMIN"]} element={<Analytics />} />} />
+                <Route path="/analytics" element={<ProtectedRoute roles={analyticsRoles()} element={<Analytics />} />} />
                 {/* Help for the signed-in user's role */}
                 <Route path="/guide"     element={<Guide />} />
               </Route>

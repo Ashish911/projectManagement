@@ -75,7 +75,7 @@ src/
 | `/clients` | Clients | SUPER_ADMIN, CLIENT_ADMIN |
 | `/projects`, `/projects/:id` | Projects, ProjectDetail | Any |
 | `/tasks` | Tasks (board with drag and drop, and list) | Any |
-| `/analytics` | Analytics | SUPER_ADMIN, CLIENT_ADMIN |
+| `/analytics` | Analytics | SUPER_ADMIN; CLIENT_ADMIN only with `VITE_FEATURE_CA_ANALYTICS=true` (`src/lib/features.ts`, off: it repeats their Dashboard) |
 | `/kanban` | Redirects to `/tasks` | — |
 
 Signed-in routes are children of one `AppLayout` route (sidebar, header, `PageTransition`, `FormsProvider`).

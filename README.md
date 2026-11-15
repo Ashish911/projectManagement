@@ -486,7 +486,7 @@ npm test          # Vitest (watch); npm run test:run for a single run
 | `/projects/:id` | Project detail | Protected | All |
 | `/tasks` | Task board + list | Protected | All |
 | `/kanban` | Redirects to `/tasks` | — | — |
-| `/analytics` | Analytics Dashboard | Protected | SUPER_ADMIN, CLIENT_ADMIN |
+| `/analytics` | Analytics Dashboard | Protected | SUPER_ADMIN; CLIENT_ADMIN behind `VITE_FEATURE_CA_ANALYTICS` (off by default) |
 
 ## Role-Based UI Summary
 
@@ -509,7 +509,7 @@ npm test          # Vitest (watch); npm run test:run for a single run
 | Create / Delete task | ✓ | ✓ (own client only) | — |
 | Update task status | ✓ | ✓ (own client; assigned only elsewhere) | ✓ (assigned only) |
 | Create subtask | ✓ | ✓ | ✓ (if on parent task) |
-| Analytics page | ✓ | ✓ | — |
+| Analytics page | ✓ | Behind a flag (off) | — |
 | Notifications | ✓ | ✓ | ✓ |
 | Profile + Preferences | ✓ | ✓ | ✓ |
 
