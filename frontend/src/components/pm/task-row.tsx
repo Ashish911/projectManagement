@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils"
 import type { Task } from "@/types/taskTypes"
 import { SubtaskChip } from "@/components/forms/task-sheet"
+import { useTaskPending } from "@/components/forms/task-actions"
+import { Spinner } from "@/components/forms/form-kit"
 import { Avatar } from "./avatar"
 import { Check } from "./check"
 import { StatusBadge } from "./status-badge"
@@ -22,13 +24,19 @@ export function TaskRow({ task, showStatus, showProject = true, onOpen, onToggle
     const due = parseDate(task.deadline)
     const done = task.currentStatus === "RESOLVED"
     const overdue = !!due && !done && daysFrom(due) < 0
+    const pending = useTaskPending(task.id)
 
     return (
         <div
             onClick={onOpen}
             className={cn("flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors duration-fast hover:bg-surface-2", onOpen && "cursor-pointer")}
         >
-            {onToggle && <Check checked={done} label={done ? `Reopen ${task.title}` : `Resolve ${task.title}`} onChange={onToggle} />}
+            {onToggle && (
+                <span aria-busy={pending || undefined} className="relative grid place-items-center">
+                    <Check checked={done} label={done ? `Reopen ${task.title}` : `Resolve ${task.title}`} onChange={onToggle} disabled={pending} />
+                    {pending && <span className="absolute text-primary [&>span]:size-3"><Spinner /></span>}
+                </span>
+            )}
             <div className="min-w-0 flex-1">
                 <div className={cn("truncate text-[13.5px] font-medium transition-colors duration-base", done && "text-subtle-foreground line-through")}>{task.title}</div>
                 {showProject && task.project && <div className="truncate text-xs text-subtle-foreground">{task.project.name}</div>}

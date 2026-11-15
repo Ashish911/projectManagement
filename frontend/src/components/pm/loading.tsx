@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 
 /** One grey placeholder block. */
-const Bone = ({ className }: { className?: string }) => <span data-skeleton className={cn("block animate-pulse rounded-md bg-surface-3", className)} />
+export const Bone = ({ className }: { className?: string }) => <span data-skeleton className={cn("block animate-pulse rounded-md bg-surface-3", className)} />
 
 /**
  * The app's one loading state: a skeleton shaped like what's coming (table rows, cards,
@@ -58,6 +58,19 @@ export function Loading({ kind, label, rows = 6, className }: {
                 <div className="grid gap-2 py-1">{Array.from({ length: Math.min(rows, 4) }, (_, i) => <Bone key={i} className={cn("h-3", i % 2 ? "w-2/3" : "w-5/6")} />)}</div>
             )}
             <span className="sr-only">{label}…</span>
+        </div>
+    )
+}
+
+/**
+ * A thin pulsing bar for a refetch of data that's already on screen (after a save, a live
+ * refresh or a tab focus). First loads use the skeletons above instead.
+ */
+export function RefreshBar({ busy, className }: { busy: boolean; className?: string }) {
+    if (!busy) return null
+    return (
+        <div role="status" aria-label="Refreshing" className={cn("pointer-events-none h-0.5 overflow-hidden", className)}>
+            <span className="block h-full w-full animate-pulse bg-primary/70" />
         </div>
     )
 }

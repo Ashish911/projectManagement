@@ -23,7 +23,7 @@ import { Avatar } from "@/components/pm/avatar"
 import { Tag } from "@/components/pm/status-badge"
 import { cn } from "@/lib/utils"
 import type { Role, User } from "@/types/userTypes"
-import { Field, FormError, FormFoot, FormModal, Grid2, Note, Section, SubmitButton, inputCls, useForm } from "./form-kit"
+import { ActionButton, Field, FormError, FormFoot, FormModal, Grid2, Note, Section, SubmitButton, inputCls, useForm } from "./form-kit"
 import { Combo } from "./combo"
 import { GhostAvatar, LogoChip } from "./options"
 import { useAppData } from "./use-app-data"
@@ -279,16 +279,16 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                             </div>
                             <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
                             {status === "LOCKED" && (
-                                <Button type="button" size="sm" variant="outline" disabled={statusBusy}
+                                <ActionButton size="sm" variant="outline" busy={statusBusy}
                                     onClick={() => runStatus(async () => { dispatch(upsertUsersInStore(await unlockUsers([cur.id]))); toast({ text: `${cur.name} unlocked`, icon: IconLockOpen }) })}>
-                                    <IconLockOpen />Unlock
-                                </Button>
+                                    {!statusBusy && <IconLockOpen />}Unlock
+                                </ActionButton>
                             )}
                             {status === "INVITED" && (
-                                <Button type="button" size="sm" variant="outline" disabled={statusBusy}
+                                <ActionButton size="sm" variant="outline" busy={statusBusy}
                                     onClick={() => runStatus(async () => { toast({ text: await resendInvite(cur.id), icon: IconMailForward }) })}>
                                     Resend
-                                </Button>
+                                </ActionButton>
                             )}
                         </div>
                         {!viewOnly && <div className="flex flex-wrap items-center gap-3 px-3.5 py-3 text-[13.5px]">

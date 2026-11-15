@@ -58,7 +58,7 @@ export function AdminDashboard() {
     const navigate = useNavigate()
     const openForm = useForms()
     const { toggleResolved } = useTaskActions()
-    const { profile, users, clients, projects, tasks, tasksLoaded } = useDashboardData()
+    const { profile, users, clients, projects, tasks, tasksLoaded, loaded: lists } = useDashboardData()
     const serverActivity = useServerActivity()
     const isSuper = profile?.role === "SUPER_ADMIN"
     // A client admin adds tasks only to projects they run, and projects only under a client they run
@@ -74,20 +74,19 @@ export function AdminDashboard() {
     const overdue = tasks.filter(isOverdue).length
     const series = createdVsResolved(tasks, range)
     const upcoming = tasks.filter((t) => ["overdue", "today", "week"].includes(dueBucket(t))).sort(byDeadline).slice(0, 5)
-    const loaded = (n: number) => (tasksLoaded ? n : null)
 
     const kpis = isSuper
         ? [
-            { label: "Users", icon: IconUsers, value: users.length, sub: `${users.filter((u) => u.role === "SUPER_ADMIN").length} super · ${users.filter((u) => u.role === "CLIENT_ADMIN").length} client admins`, onClick: () => navigate("/users") },
-            { label: "Clients", icon: IconBuilding, value: clients.length, sub: `${clients.filter((c) => !c.assignedAdmin).length} without an admin`, onClick: () => navigate("/clients") },
-            { label: "Active projects", icon: IconFolder, value: inProgress, suffix: ` / ${projects.length}`, sub: `${completed} completed · ${notStarted} not started`, onClick: () => navigate("/projects") },
-            { label: "Overdue tasks", icon: IconAlertTriangle, value: loaded(overdue), bad: true, sub: `of ${openTasks.length} open`, onClick: () => navigate("/tasks") },
+            { label: "Users", icon: IconUsers, value: users.length, loading: lists && !lists.users, sub: `${users.filter((u) => u.role === "SUPER_ADMIN").length} super · ${users.filter((u) => u.role === "CLIENT_ADMIN").length} client admins`, onClick: () => navigate("/users") },
+            { label: "Clients", icon: IconBuilding, value: clients.length, loading: lists && !lists.clients, sub: `${clients.filter((c) => !c.assignedAdmin).length} without an admin`, onClick: () => navigate("/clients") },
+            { label: "Active projects", icon: IconFolder, value: inProgress, loading: lists && !lists.projects, suffix: ` / ${projects.length}`, sub: `${completed} completed · ${notStarted} not started`, onClick: () => navigate("/projects") },
+            { label: "Overdue tasks", icon: IconAlertTriangle, value: overdue, loading: !tasksLoaded, bad: true, sub: `of ${openTasks.length} open`, onClick: () => navigate("/tasks") },
         ]
         : [
-            { label: "Projects", icon: IconFolder, value: projects.length, sub: `${inProgress} in progress`, onClick: () => navigate("/projects") },
-            { label: "Team members", icon: IconUsersGroup, value: team.length, sub: `across ${projects.length} projects` },
-            { label: "Resolved", icon: IconCircleCheck, value: loaded(resolvedWithin(tasks, RANGE_DAYS[range])), sub: "tasks this period", onClick: () => navigate("/tasks") },
-            { label: "Overdue tasks", icon: IconAlertTriangle, value: loaded(overdue), bad: true, sub: `of ${openTasks.length} open`, onClick: () => navigate("/tasks") },
+            { label: "Projects", icon: IconFolder, value: projects.length, loading: lists && !lists.projects, sub: `${inProgress} in progress`, onClick: () => navigate("/projects") },
+            { label: "Team members", icon: IconUsersGroup, value: team.length, loading: lists && !lists.projects, sub: `across ${projects.length} projects` },
+            { label: "Resolved", icon: IconCircleCheck, value: resolvedWithin(tasks, RANGE_DAYS[range]), loading: !tasksLoaded, sub: "tasks this period", onClick: () => navigate("/tasks") },
+            { label: "Overdue tasks", icon: IconAlertTriangle, value: overdue, loading: !tasksLoaded, bad: true, sub: `of ${openTasks.length} open`, onClick: () => navigate("/tasks") },
         ]
 
     return (

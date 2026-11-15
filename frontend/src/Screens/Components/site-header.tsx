@@ -8,6 +8,8 @@ import { useTheme } from "@/components/hooks/use-theme"
 import { useForms } from "@/components/forms/forms-context"
 import { toast } from "@/components/forms/toaster"
 import { onNewNotification, useNotifications } from "@/hooks/use-notifications"
+import { listsRefreshing } from "@/components/forms/use-app-data"
+import { RefreshBar } from "@/components/pm/loading"
 
 const PAGE_TITLES: Record<string, string> = {
     "/dashboard": "Dashboard",
@@ -27,6 +29,7 @@ export function SiteHeader() {
     const title = PAGE_TITLES[location.pathname] ?? "ProjoMan"
     // /projects/:id shows "Projects › <name>"
     const projectId = location.pathname.match(/^\/projects\/([^/]+)$/)?.[1]
+    const refreshing: boolean | undefined = useSelector(listsRefreshing)
     const projectName: string | undefined = useSelector((state: any) =>
         projectId ? state.projects.projects.find((p: any) => p.id === projectId)?.name : undefined)
     const { theme, toggle: toggleTheme } = useTheme()
@@ -85,6 +88,8 @@ export function SiteHeader() {
                     {unreadCount > 0 && <span className="absolute right-2 top-2 size-[7px] rounded-full bg-[oklch(0.64_0.17_27)] ring-2 ring-background" />}
                 </Button>
             </div>
+            {/* A loaded list is refetching (after a save, a live refresh or coming back to the tab) */}
+            <RefreshBar busy={!!refreshing} className="absolute inset-x-0 bottom-[-1px]" />
         </header>
     )
 }

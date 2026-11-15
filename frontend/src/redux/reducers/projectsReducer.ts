@@ -11,6 +11,8 @@ import type { Project } from '@/types/projectTypes';
 
 interface ProjectsState {
     loading: boolean;
+    /** True once the first fetch finished, so screens can tell "none" from "not loaded yet" */
+    loaded: boolean;
     projects: Project[];
     error: string | null;
     statusFilter: string | null;
@@ -18,6 +20,7 @@ interface ProjectsState {
 
 const initialState: ProjectsState = {
     loading: false,
+    loaded: false,
     projects: [],
     error: null,
     statusFilter: null,
@@ -28,9 +31,9 @@ export const projectsReducer = (state = initialState, action: any): ProjectsStat
         case PROJECTS_LIST_REQUEST:
             return { ...state, loading: true, error: null };
         case PROJECTS_LIST_SUCCESS:
-            return { ...state, loading: false, projects: action.payload };
+            return { ...state, loading: false, loaded: true, projects: action.payload };
         case PROJECTS_LIST_FAIL:
-            return { ...state, loading: false, error: action.payload };
+            return { ...state, loading: false, loaded: true, error: action.payload };
         case PROJECTS_LIST_ADD:
             return { ...state, projects: [...state.projects, action.payload] };
         case PROJECTS_LIST_UPDATE:

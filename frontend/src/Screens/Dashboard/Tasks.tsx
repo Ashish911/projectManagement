@@ -15,7 +15,7 @@ import { daysFrom, dueLabel, parseDate } from "@/components/pm/dates"
 import { SubtaskChip } from "@/components/forms/task-sheet"
 import { useForms } from "@/components/forms/forms-context"
 import { canManageProject, managedProjects, useAppData } from "@/components/forms/use-app-data"
-import { useTaskActions } from "@/components/forms/task-actions"
+import { useTaskActions, useTaskPending } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
 import { useSearchParams } from "react-router-dom"
 import { Combo } from "@/components/forms/combo"
@@ -57,9 +57,11 @@ function TaskCard({ task, dragging, overlay }: { task: Task; dragging?: boolean;
 
 /** Card wrapper that can be dragged to another column; a click (without dragging) opens the task. */
 function DraggableCard({ task, canDrag, onOpen }: { task: Task; canDrag: boolean; onOpen: () => void }) {
-    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !canDrag })
+    // While its move is being saved the card dims and can't be dragged again
+    const pending = useTaskPending(task.id)
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !canDrag || pending })
     return (
-        <div ref={setNodeRef} {...attributes} {...listeners} onClick={onOpen} className="animate-pm-in outline-none" aria-label={task.title}>
+        <div ref={setNodeRef} {...attributes} {...listeners} onClick={onOpen} aria-busy={pending || undefined} className={cn("animate-pm-in outline-none transition-opacity duration-fast", pending && "opacity-60")} aria-label={task.title}>
             <TaskCard task={task} dragging={isDragging} />
         </div>
     )
@@ -115,7 +117,7 @@ function ExpandableRow({ task, onOpen, onToggle }: { task: Task; onOpen: () => v
             {open && (
                 <div className="mb-2 ml-9 grid animate-pm-in gap-px border-l-[1.5px] pl-3">
                     {subs === null ? (
-                        <div className="px-2 py-1.5 text-xs text-subtle-foreground">Loading…</div>
+                        <Loading kind="lines" rows={2} label="Loading subtasks" className="px-2" />
                     ) : subs.map((s) => {
                         const due = parseDate(s.deadline)
                         const done = s.currentStatus === "RESOLVED"

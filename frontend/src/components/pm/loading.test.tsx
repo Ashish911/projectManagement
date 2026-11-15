@@ -14,3 +14,17 @@ describe("Loading", () => {
         expect(screen.getByRole("status").querySelectorAll("[data-row]")).toHaveLength(4)
     })
 })
+
+describe("RefreshBar (LDR-01)", () => {
+    it("🟢 shows a refreshing status while busy", async () => {
+        const { RefreshBar } = await import("./loading")
+        render(<RefreshBar busy />)
+        expect(screen.getByRole("status", { name: "Refreshing" })).toBeInTheDocument()
+    })
+
+    it("🔴 renders nothing when idle", async () => {
+        const { RefreshBar } = await import("./loading")
+        render(<RefreshBar busy={false} />)
+        expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    })
+})

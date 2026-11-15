@@ -7,12 +7,14 @@ const task = (id: string, project: { id: string; name: string }, o = {}) => ({
     id, title: id, priority: "NORMAL", currentStatus: "NEW", deadline: null, assignedTo: null, createdBy: null, project, ...o,
 })
 const app = vi.hoisted(() => ({ loaded: true, role: "SUPER_ADMIN", projects: null as null | object[] }))
-const tasks = [task("Fix login", projects[0], { priority: "HIGH" }), task("Ship app", projects[1], { priority: "URGENT" }), task("Write docs", projects[0])]
+const tasks = [task("Fix login", projects[0], { priority: "HIGH", subTaskStats: { done: 0, total: 1 } }), task("Ship app", projects[1], { priority: "URGENT" }), task("Write docs", projects[0])]
 vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
     useAppData: () => ({ profile: { id: "me" }, role: app.role, tasks, projects: app.projects ?? projects, tasksLoaded: app.loaded }),
 }))
-vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ setStatus: vi.fn(), toggleResolved: vi.fn() }) }))
+vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ setStatus: vi.fn(), toggleResolved: vi.fn() }), useTaskPending: () => false }))
+const subs = vi.hoisted(() => ({ getSubTasks: vi.fn() }))
+vi.mock("@/api/subTaskApi", () => subs)
 vi.mock("@/components/forms/forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => vi.fn() }))
 
 const { Tasks } = await import("./Tasks")
@@ -55,6 +57,14 @@ describe("Tasks — filter and sort", () => {
 
 describe("Tasks — loading", () => {
     afterEach(() => { app.loaded = true })
+    it("🟢 expanding a task shows a skeleton while its subtasks load (LDR-01)", async () => {
+        subs.getSubTasks.mockReturnValue(new Promise(() => {}))
+        mount()
+        await userEvent.click(screen.getByRole("button", { name: "List" }))
+        await userEvent.click(screen.getByRole("button", { name: "Show subtasks" }))
+        expect(screen.getByRole("status", { name: "Loading subtasks" })).toBeInTheDocument()
+    })
+
     it("🟢 shows a board skeleton while tasks load", () => {
         app.loaded = false
         mount()

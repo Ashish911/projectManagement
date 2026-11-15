@@ -2,16 +2,16 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
-const data = vi.hoisted(() => ({ clients: [] as object[], role: "SUPER_ADMIN", projects: [] as object[] }))
+const data = vi.hoisted(() => ({ clients: [] as object[], role: "SUPER_ADMIN", projects: [] as object[], loaded: true }))
 vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
-    useAppData: () => ({ profile: { id: "u1", name: "Ada Admin", role: data.role }, role: data.role, users: [], clients: data.clients, projects: data.projects, tasks: [], tasksLoaded: true }),
+    useAppData: () => ({ profile: { id: "u1", name: "Ada Admin", role: data.role }, role: data.role, users: [], clients: data.clients, projects: data.projects, tasks: [], tasksLoaded: data.loaded, loaded: { users: data.loaded, clients: data.loaded, projects: data.loaded, tasks: data.loaded } }),
     openTaskCount: () => 0,
 }))
 const dispatch = vi.hoisted(() => vi.fn())
 vi.mock("react-redux", async (orig) => ({ ...(await orig<object>()), useDispatch: () => dispatch }))
 vi.mock("@/api/activityApi", () => ({ getActivity: async () => [] }))
-vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ toggleResolved: vi.fn() }) }))
+vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ toggleResolved: vi.fn() }), useTaskPending: () => false }))
 
 const { AdminDashboard } = await import("./AdminDashboard")
 
@@ -96,3 +96,20 @@ describe("AdminDashboard — a client admin", () => {
         expect(screen.getByText("Atlas")).toBeInTheDocument()
     })
 })
+
+describe("AdminDashboard — loading (LDR-01)", () => {
+    afterEach(() => { data.loaded = true })
+
+    it("🟢 KPI cards show skeletons, not zeros, until their lists load", () => {
+        data.loaded = false
+        mount()
+        for (const label of ["Users", "Clients", "Active projects", "Overdue tasks"])
+            expect(screen.getByRole("status", { name: `Loading ${label}` })).toBeInTheDocument()
+    })
+
+    it("🔴 loaded lists show their numbers", () => {
+        mount()
+        expect(screen.queryByRole("status", { name: "Loading Users" })).not.toBeInTheDocument()
+    })
+})
+

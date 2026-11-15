@@ -17,7 +17,7 @@ import { useTaskActions } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
 import { resolvedWithin, mergeActivity, taskActivity, useServerActivity, todayLabel, useDashboardData } from "./use-dashboard-data"
 import { ActivityList } from "./widgets"
-import { Loading } from "@/components/pm/loading"
+import { Bone, Loading } from "@/components/pm/loading"
 
 const greeting = () => {
     const h = new Date().getHours()
@@ -138,7 +138,11 @@ export function MemberDashboard() {
                         {mini.map(({ label, value, icon: I, bad }, i) => (
                             <div key={label} className="animate-pm-in rounded-xl border bg-card p-3.5 shadow-sm transition duration-base ease-out hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md" style={{ animationDelay: `${i * 60}ms` }}>
                                 <div className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground"><I size={15} className="text-subtle-foreground" />{label}</div>
-                                <div className={cn("num mt-1.5 text-[28px] font-medium", bad && value > 0 && "tone-red tone-fg")}><CountUp value={value} /></div>
+                                {tasksLoaded ? (
+                                    <div className={cn("num mt-1.5 text-[28px] font-medium", bad && value > 0 && "tone-red tone-fg")}><CountUp value={value} /></div>
+                                ) : (
+                                    <div role="status" aria-label={`Loading ${label}`} aria-busy="true" className="mt-1.5"><Bone className="h-[30px] w-12" /></div>
+                                )}
                             </div>
                         ))}
                     </div>

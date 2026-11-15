@@ -8,7 +8,7 @@ vi.mock("./toaster", async (orig) => ({ ...(await orig<object>()), toastError: v
 const openForm = vi.hoisted(() => vi.fn())
 vi.mock("./forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => openForm }))
 
-const { useTaskActions } = await import("./task-actions")
+const { useTaskActions, useTaskPending } = await import("./task-actions")
 const task = (currentStatus: string) => ({ id: "t1", title: "Fix", currentStatus }) as Task
 
 beforeEach(() => { api.updateTaskStatus.mockReset().mockResolvedValue(task("REOPENED")); openForm.mockReset() })
@@ -32,5 +32,27 @@ describe("useTaskActions", () => {
         const { result } = renderHook(() => useTaskActions())
         await act(() => result.current.setStatus(task("NEW"), "IN_PROGRESS"))
         expect(api.updateTaskStatus).toHaveBeenCalledWith("t1", "IN_PROGRESS")
+    })
+
+    it("🟢 the task is pending while its request runs (LDR-01)", async () => {
+        let finish!: (t: Task) => void
+        api.updateTaskStatus.mockReturnValue(new Promise<Task>((r) => { finish = r }))
+        const { result } = renderHook(() => ({ actions: useTaskActions(), pending: useTaskPending("t1") }))
+        let p!: Promise<unknown>
+        act(() => { p = result.current.actions.setStatus(task("NEW"), "IN_PROGRESS") })
+        expect(result.current.pending).toBe(true)
+        await act(async () => { finish(task("IN_PROGRESS")); await p })
+        expect(result.current.pending).toBe(false)
+    })
+
+    it("🔴 a second change while one is pending is ignored (no double submit)", async () => {
+        let finish!: (t: Task) => void
+        api.updateTaskStatus.mockReturnValue(new Promise<Task>((r) => { finish = r }))
+        const { result } = renderHook(() => useTaskActions())
+        let p!: Promise<unknown>
+        act(() => { p = result.current.setStatus(task("NEW"), "IN_PROGRESS") })
+        await act(() => result.current.setStatus(task("NEW"), "RESOLVED"))
+        expect(api.updateTaskStatus).toHaveBeenCalledTimes(1)
+        await act(async () => { finish(task("IN_PROGRESS")); await p })
     })
 })

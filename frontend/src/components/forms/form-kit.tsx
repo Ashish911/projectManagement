@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { Icon } from "@tabler/icons-react"
 import { IconAlertCircle, IconX } from "@tabler/icons-react"
@@ -93,6 +93,9 @@ export function useForm<T extends Record<string, any>>(init: T, rules: Rules<T>,
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
+/** Set by the dialog's SubmitButton while its request runs, so the dialog can't be closed mid-save. */
+const ModalBusy = createContext<{ busy: boolean; setBusy: (b: boolean) => void } | null>(null)
+
 /**
  * Centered dialog with a blurred overlay. Esc closes, ⌘/Ctrl+Enter submits,
  * the first text field is focused on open, and `shake` changes replay a shake.
@@ -115,8 +118,12 @@ export function FormModal({ title, desc, icon: I, tone, width = 560, onClose, on
     const box = boxRef ?? own
     const submitRef = useRef(onSubmit)
     submitRef.current = onSubmit
-    const closeRef = useRef(onClose)
-    closeRef.current = onClose
+    const [busy, setBusy] = useState(false)
+    const busyRef = useRef(busy)
+    busyRef.current = busy
+    // While a save is in flight the dialog stays open: it closes itself when the request finishes
+    const closeRef = useRef(() => { if (!busyRef.current) onClose() })
+    closeRef.current = () => { if (!busyRef.current) onClose() }
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -140,8 +147,9 @@ export function FormModal({ title, desc, icon: I, tone, width = 560, onClose, on
                 "fixed inset-0 z-modal flex items-start justify-center overflow-y-auto bg-[oklch(0.22_0.01_65/.34)] px-5 pb-12 pt-[8vh] backdrop-blur-[4px] dark:bg-[oklch(0.05_0_0/.6)]",
                 closing ? "animate-fm-fade-out" : "animate-fm-fade",
             )}
-            onMouseDown={onClose}
+            onMouseDown={() => closeRef.current()}
         >
+            <ModalBusy.Provider value={{ busy, setBusy }}>
             <div
                 ref={box}
                 role="dialog"
@@ -164,11 +172,12 @@ export function FormModal({ title, desc, icon: I, tone, width = 560, onClose, on
                         <h2 className="text-lg font-semibold tracking-[-0.02em]">{title}</h2>
                         {desc && <div className="mt-[3px] text-[13px] text-subtle-foreground">{desc}</div>}
                     </div>
-                    <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close"><IconX /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onClose} disabled={busy} aria-label="Close"><IconX /></Button>
                 </header>
                 <div className="grid gap-4 px-5 pb-[22px] pt-[18px]">{children}</div>
                 {footer && <footer className="flex flex-wrap items-center gap-2 rounded-b-[14px] border-t bg-surface-2 py-3 pl-5 pr-4">{footer}</footer>}
             </div>
+            </ModalBusy.Provider>
         </div>,
         document.body,
     )
@@ -245,13 +254,14 @@ export const Spinner = () => <span className="size-3.5 flex-none animate-spin ro
 
 /** Footer: keyboard hints (or a custom left slot), then Cancel and the given actions. */
 export function FormFoot({ onClose, left, children }: { onClose: () => void; left?: React.ReactNode; children?: React.ReactNode }) {
+    const busy = useContext(ModalBusy)?.busy
     return (
         <>
             {left !== undefined ? left : (
                 <span className="hidden items-center gap-1 text-xs text-subtle-foreground sm:flex"><Kbd>⌘</Kbd><Kbd>↵</Kbd>save<span className="ml-2"><Kbd>esc</Kbd></span>close</span>
             )}
             <span className="flex-1" />
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
             {children}
         </>
     )
@@ -264,10 +274,26 @@ export function SubmitButton({ busy, children, onClick, danger, disabled }: {
     danger?: boolean
     disabled?: boolean
 }) {
+    // Tell the dialog around it, so Esc / backdrop / Cancel wait for the request
+    const modal = useContext(ModalBusy)
+    useEffect(() => {
+        modal?.setBusy(!!busy)
+        return () => modal?.setBusy(false)
+    }, [busy])
     return (
         <Button type="button" variant={danger ? "destructive" : "default"} onClick={onClick} disabled={disabled || busy} aria-busy={busy || undefined} className={cn("min-w-[124px]", busy && "disabled:opacity-100")}>
             {busy && <Spinner />}
             {busy ? "Saving…" : children}
+        </Button>
+    )
+}
+
+/** A button that calls the API outside a form: spinner and disabled while `busy`, label kept. */
+export function ActionButton({ busy, children, disabled, ...props }: React.ComponentProps<typeof Button> & { busy?: boolean }) {
+    return (
+        <Button type="button" {...props} disabled={disabled || busy} aria-busy={busy || undefined} className={cn(props.className, busy && "disabled:opacity-100")}>
+            {busy && <Spinner />}
+            {children}
         </Button>
     )
 }

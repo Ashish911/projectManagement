@@ -130,6 +130,7 @@ Also re-exported from `@/hooks`: `useTheme`, `useIsMobile`, `useForm`, `useForms
 - Any screen opens a form with `useForms()` → `openForm(kind, data)` (kinds in `forms-context.ts`, registry in `form-host.tsx`).
 - `form-kit.tsx` provides `useForm`, `FormModal` (Esc, ⌘↵, shake on invalid), `Field`, `SubmitButton`, etc.
 - Deletes go through `scheduleDelete` (5s Undo toast) in `toaster.tsx`.
+- **Loading states (LDR-01):** first loads use `Loading` skeletons (`pm/loading.tsx`) gated on the list's `loaded` flag (`useAppData().loaded`), never a `0`; a refetch of data already on screen shows `RefreshBar` under the header (`listsRefreshing`). In a `FormModal`, `SubmitButton`'s `busy` also blocks Esc / backdrop / × / Cancel until the request settles. Buttons that call the API outside a form use `ActionButton busy`. Task status changes mark the task pending (`useTaskPending`): its check-off and board card show busy and ignore a second change.
 
 ## Testing
 

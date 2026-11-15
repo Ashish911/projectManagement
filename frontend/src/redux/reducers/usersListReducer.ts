@@ -11,6 +11,8 @@ import type { User } from '@/types/userTypes';
 
 interface UsersListState {
     loading: boolean;
+    /** True once the first fetch finished, so screens can tell "none" from "not loaded yet" */
+    loaded: boolean;
     users: User[];
     error: string | null;
     roleFilter: string | null;
@@ -18,6 +20,7 @@ interface UsersListState {
 
 const initialState: UsersListState = {
     loading: false,
+    loaded: false,
     users: [],
     error: null,
     roleFilter: null,
@@ -28,9 +31,9 @@ export const usersListReducer = (state = initialState, action: any): UsersListSt
         case USERS_LIST_REQUEST:
             return { ...state, loading: true, error: null };
         case USERS_LIST_SUCCESS:
-            return { ...state, loading: false, users: action.payload };
+            return { ...state, loading: false, loaded: true, users: action.payload };
         case USERS_LIST_FAIL:
-            return { ...state, loading: false, error: action.payload };
+            return { ...state, loading: false, loaded: true, error: action.payload };
         case USERS_LIST_REMOVE:
             return { ...state, users: state.users.filter((u) => u.id !== action.payload) };
         case USERS_LIST_PROMOTE:

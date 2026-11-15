@@ -12,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, X } from "lucide-react";
 import { PhoneInput, formatPhone, phoneError, toE164 } from "@/components/forms/phone-input";
+import { ActionButton } from "@/components/forms/form-kit";
+import { Loading } from "@/components/pm/loading";
 import { DatePicker, fromYmd, toYmd } from "@/components/forms/date-picker";
 
 const GENDER_OPTIONS = [
@@ -157,9 +159,9 @@ export default function ProfileContent() {
                                 </div>
                                 {saveError && <p className="text-sm text-destructive">{saveError}</p>}
                                 <div className="flex items-center gap-3">
-                                    <Button onClick={handleProfileSave} disabled={saving || !editForm.name || !editForm.number || !!phoneError(editForm.number)}>
+                                    <ActionButton onClick={handleProfileSave} busy={saving} disabled={!editForm.name || !editForm.number || !!phoneError(editForm.number)}>
                                         {saving ? "Saving…" : "Save Changes"}
-                                    </Button>
+                                    </ActionButton>
                                     {saveSuccess && <span className="text-sm text-green-600">Saved successfully</span>}
                                 </div>
                             </>
@@ -207,7 +209,7 @@ export default function ProfileContent() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {prefLoading ? (
-                            <p className="text-sm text-muted-foreground">Loading preferences…</p>
+                            <Loading kind="lines" rows={3} label="Loading preferences" />
                         ) : (
                             <>
                                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -238,9 +240,9 @@ export default function ProfileContent() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <Button onClick={handleSave} disabled={prefSaving}>
+                                    <ActionButton onClick={handleSave} busy={prefSaving}>
                                         {prefSaving ? "Saving…" : "Save Preferences"}
-                                    </Button>
+                                    </ActionButton>
                                     {prefSaved && (
                                         <span className="text-sm text-green-600">Saved successfully</span>
                                     )}

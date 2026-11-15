@@ -22,6 +22,9 @@ export function useAppData() {
     const projects: Project[] = useSelector((s: any) => s.projects.projects)
     const tasks: Task[] = useSelector((s: any) => s.tasks.tasks)
     const tasksLoaded: boolean = useSelector((s: any) => s.tasks.loaded)
+    const usersLoaded: boolean = useSelector((s: any) => s.usersList.loaded)
+    const clientsLoaded: boolean = useSelector((s: any) => s.clients.loaded)
+    const projectsLoaded: boolean = useSelector((s: any) => s.projects.loaded)
     const role = profile?.role as Role | undefined
 
     useEffect(() => {
@@ -33,8 +36,17 @@ export function useAppData() {
         if (role !== "USER") dispatch(fetchClients() as any)
     }, [dispatch, role])
 
-    return { profile, role, users, clients, projects, tasks, tasksLoaded }
+    // Which lists have arrived; screens show skeletons, not zeros, until then
+    const loaded = { users: usersLoaded, clients: clientsLoaded, projects: projectsLoaded, tasks: tasksLoaded }
+    return { profile, role, users, clients, projects, tasks, tasksLoaded, loaded }
 }
+
+/** True while a list that's already on screen refetches (first loads show skeletons instead). */
+export const listsRefreshing = (s: any) =>
+    (s.usersList.loading && s.usersList.users.length > 0) ||
+    (s.clients.loading && s.clients.clients.length > 0) ||
+    (s.projects.loading && s.projects.projects.length > 0) ||
+    (s.tasks.loading && s.tasks.loaded)
 
 /**
  * True if the viewer runs the project: a super admin always does; a client admin only for

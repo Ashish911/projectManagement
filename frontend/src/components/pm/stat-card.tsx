@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { CountUp } from "./count-up"
 import { Sparkline } from "./charts/sparkline"
 import { tokenColor } from "./charts/smooth"
+import { Bone } from "./loading"
 
 type Props = {
     label: string
@@ -15,12 +16,14 @@ type Props = {
     spark?: number[]
     /** "Bad" metrics (e.g. overdue) render red and invert the delta colour */
     bad?: boolean
+    /** The list behind the number hasn't loaded yet: show a skeleton, not a misleading 0 */
+    loading?: boolean
     index?: number
     onClick?: () => void
 }
 
 /** KPI card: icon chip + label, large count-up number, optional sparkline and change indicator. */
-export function StatCard({ label, icon: I, value, suffix, delta, sub, spark, bad, index = 0, onClick }: Props) {
+export function StatCard({ label, icon: I, value, suffix, delta, sub, spark, bad, loading, index = 0, onClick }: Props) {
     const good = delta == null || delta === 0 ? null : (delta > 0) !== !!bad
     return (
         <div
@@ -37,10 +40,14 @@ export function StatCard({ label, icon: I, value, suffix, delta, sub, spark, bad
                 <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
             </div>
             <div className="flex items-end justify-between gap-2">
-                <div className={cn("num text-[34px] font-medium leading-none", bad && value && "tone-red tone-fg")}>
-                    {value == null ? <span className="text-subtle-foreground">—</span> : <CountUp value={value} />}
-                    {suffix && value != null && <span className="text-base text-subtle-foreground">{suffix}</span>}
-                </div>
+                {loading ? (
+                    <div role="status" aria-label={`Loading ${label}`} aria-busy="true"><Bone className="h-[34px] w-16" /></div>
+                ) : (
+                    <div className={cn("num text-[34px] font-medium leading-none", bad && value && "tone-red tone-fg")}>
+                        {value == null ? <span className="text-subtle-foreground">—</span> : <CountUp value={value} />}
+                        {suffix && value != null && <span className="text-base text-subtle-foreground">{suffix}</span>}
+                    </div>
+                )}
                 {spark && <Sparkline points={spark} color={tokenColor(bad ? "chart-4" : "chart-1")} />}
             </div>
             <div className="flex items-center gap-2 text-[12.5px] text-subtle-foreground">

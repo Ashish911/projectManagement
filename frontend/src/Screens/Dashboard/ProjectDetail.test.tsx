@@ -8,7 +8,7 @@ vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
     useAppData: () => ({ role: "CLIENT_ADMIN", users: [], projects: [project], tasks: [], tasksLoaded: true }),
 }))
-vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ toggleResolved: vi.fn() }) }))
+vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ toggleResolved: vi.fn() }), useTaskPending: () => false }))
 const openForm = vi.hoisted(() => vi.fn())
 vi.mock("@/components/forms/forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => openForm }))
 

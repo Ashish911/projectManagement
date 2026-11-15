@@ -12,6 +12,8 @@ import type { Client } from '@/types/clientTypes';
 
 interface ClientsState {
     loading: boolean;
+    /** True once the first fetch finished, so screens can tell "none" from "not loaded yet" */
+    loaded: boolean;
     clients: Client[];
     error: string | null;
     activeFilter: 'pending' | 'unassigned' | null;
@@ -19,6 +21,7 @@ interface ClientsState {
 
 const initialState: ClientsState = {
     loading: false,
+    loaded: false,
     clients: [],
     error: null,
     activeFilter: null,
@@ -29,9 +32,9 @@ export const clientsReducer = (state = initialState, action: any): ClientsState 
         case CLIENTS_LIST_REQUEST:
             return { ...state, loading: true, error: null };
         case CLIENTS_LIST_SUCCESS:
-            return { ...state, loading: false, clients: action.payload };
+            return { ...state, loading: false, loaded: true, clients: action.payload };
         case CLIENTS_LIST_FAIL:
-            return { ...state, loading: false, error: action.payload };
+            return { ...state, loading: false, loaded: true, error: action.payload };
         case CLIENTS_LIST_ADD:
             return { ...state, clients: [...state.clients, action.payload] };
         case CLIENTS_LIST_UPDATE:
