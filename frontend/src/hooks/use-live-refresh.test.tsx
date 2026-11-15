@@ -21,7 +21,8 @@ class FakeChannel {
 }
 vi.stubGlobal("BroadcastChannel", FakeChannel)
 
-const { useLiveRefresh, onActivityRefresh, scopesFor } = await import("./use-live-refresh")
+const { useLiveRefresh, onActivityRefresh, scopesFor, scopesForMutation } = await import("./use-live-refresh")
+const { announceChange } = await import("@/api/sync")
 const types = () => dispatch.mock.calls.map(([a]) => a.type).sort()
 
 describe("useLiveRefresh (GLB-04)", () => {
@@ -86,4 +87,41 @@ describe("useLiveRefresh (GLB-04)", () => {
         act(() => { vi.advanceTimersByTime(31_000); window.dispatchEvent(new Event("focus")); vi.advanceTimersByTime(400) })
         expect(dispatch).not.toHaveBeenCalled()
     })
+
+    it("🟢 a mutation in this tab refetches what it touched here too (USR-08)", () => {
+        renderHook(() => useLiveRefresh())
+        act(() => announceChange("mutation UpdateUserRoles($changes: [RoleChangeInput!]!) { updateUserRoles }"))
+        act(() => { vi.advanceTimersByTime(400) })
+        expect(types()).toEqual(["clients", "projects", "users"])
+        expect(dispatch.mock.calls.every(([a]) => a.force === true)).toBe(true)
+    })
+
+    it("🔴 a mutation that touches no list (marking notifications read) refetches nothing", () => {
+        renderHook(() => useLiveRefresh())
+        act(() => announceChange("mutation MarkAllAsRead { markAllAsRead }"))
+        act(() => { vi.advanceTimersByTime(400) })
+        expect(dispatch).not.toHaveBeenCalled()
+    })
 })
+
+describe("scopesForMutation (USR-08)", () => {
+    it.each([
+        ["mutation UpdateUser($id: ID!) { x }", ["users", "clients", "projects", "activity"]],
+        ["mutation AssignAdmin { x }", ["clients", "users", "activity"]],
+        ["mutation AddUserToProject { x }", ["projects", "users", "activity"]],
+        ["mutation UpdateTaskStatus { x }", ["tasks", "projects", "activity"]],
+        ["mutation CreateSubTask { x }", ["tasks", "projects", "activity"]],
+        ["mutation UpdateProfile { x }", ["profile", "users"]],
+        ["mutation ForceDeleteClient { x }", ["clients", "users", "projects", "tasks", "activity"]],
+        ["mutation DeleteUsers { x }", ["users", "clients", "projects", "tasks", "activity"]],
+        ["mutation DeleteProject { x }", ["projects", "users", "tasks", "activity"]],
+    ])("🟢 %s", (q, scopes) => {
+        expect([...scopesForMutation(q)].sort()).toEqual([...scopes].sort())
+    })
+
+    it("🔴 notification, comment and preference writes touch no list", () => {
+        for (const q of ["mutation MarkAsRead { x }", "mutation AddTaskComment { x }", "mutation UpdatePreference { x }", "mutation ChangePassword { x }"])
+            expect(scopesForMutation(q)).toEqual([])
+    })
+})
+

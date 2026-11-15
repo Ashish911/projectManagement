@@ -50,7 +50,7 @@ describe("gql — telling other tabs (GLB-04)", () => {
     it("🟢 a successful mutation is announced to other tabs", async () => {
         post.mockResolvedValue({ data: { data: { ok: 1 } } })
         await gql("  mutation UpdateTask { ok }")
-        expect(announce).toHaveBeenCalledTimes(1)
+        expect(announce).toHaveBeenCalledWith("  mutation UpdateTask { ok }")
     })
 
     it("🔴 queries and failed mutations aren't", async () => {

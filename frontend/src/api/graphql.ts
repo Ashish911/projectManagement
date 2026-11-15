@@ -20,7 +20,7 @@ export async function gql<T>(query: string, variables?: Record<string, unknown>)
         const response = await api.post<GraphqlResponse<T>>("", { query, variables });
         if (response.data.errors?.length) throw new Error(response.data.errors[0].message);
         // Let other open tabs know so they can refetch (GLB-04)
-        if (/^\s*mutation\b/.test(query)) announceChange();
+        if (/^\s*mutation\b/.test(query)) announceChange(query);
         return response.data.data;
     } catch (e) {
         // Non-2xx replies (401, 429…) still carry GraphQL errors; prefer their message over Axios's

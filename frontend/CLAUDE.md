@@ -121,7 +121,7 @@ Subscriptions go through `subscribe(query, onData)` in `src/api/ws.ts`, or `useS
 | `useOutside(ref, fn, active)` | Close popovers on an outside press |
 | `useSubscription(query, onData, { variables?, enabled? })` | Keep a GraphQL subscription open while mounted |
 | `useNotifications()` / `onNewNotification()` | The live notification store |
-| `useLiveRefresh()` | Mounted once in `AppLayout`: refetches data a new notification touches, everything when another tab announces a change (`api/sync.ts`, a `BroadcastChannel` posted by `gql()` after each mutation), and on focus after 30 s. No polling. `onActivityRefresh()` lets the Activity feed reload too |
+| `useLiveRefresh()` | Mounted once in `AppLayout`: refetches data a new notification touches, everything when another tab announces a change (`api/sync.ts`, a `BroadcastChannel` posted by `gql()` after each mutation), what a mutation in *this* tab touched (`scopesForMutation`, by operation name, so derived columns like a user's client don't go stale), and on focus after 30 s. No polling. `onActivityRefresh()` lets the Activity feed reload too |
 
 Also re-exported from `@/hooks`: `useTheme`, `useIsMobile`, `useForm`, `useForms`, `useAppData`, `useTaskActions`.
 

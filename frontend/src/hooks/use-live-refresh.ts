@@ -6,7 +6,7 @@ import { fetchUsers } from "@/redux/actions/usersListActions"
 import { fetchClients } from "@/redux/actions/clientsActions"
 import { fetchProfile } from "@/redux/actions/userActions"
 import { onNewNotification } from "@/hooks/use-notifications"
-import { syncChannel } from "@/api/sync"
+import { onLocalChange, syncChannel } from "@/api/sync"
 
 export type Scope = "tasks" | "projects" | "users" | "clients" | "profile" | "activity"
 const EVERYTHING: Scope[] = ["tasks", "projects", "users", "clients", "profile", "activity"]
@@ -21,6 +21,25 @@ export function scopesFor(content: string): Scope[] {
     if (/project/.test(c)) return ["projects", "tasks", "activity"]
     if (/task|subtask|comment/.test(c)) return ["tasks", "projects", "activity"]
     return ["tasks", "projects", "activity"]
+}
+
+/**
+ * What a mutation made in this tab touched, from its operation name. Optimistic store updates
+ * already show the edited row; this refetch brings the lists derived from it back in line.
+ */
+export function scopesForMutation(query: string): Scope[] {
+    const name = query.match(/mutation\s+(\w+)/)?.[1] ?? ""
+    if (/Comment|Notification|MarkA|Preference|Password/.test(name)) return []
+    if (/Profile/.test(name)) return ["profile", "users"]
+    // Deletes cascade: a client takes its projects and tasks, a user or project its assignments
+    if (/^(Force)?Delete\w*Client/.test(name)) return ["clients", "users", "projects", "tasks", "activity"]
+    if (/^DeleteUsers?$/.test(name)) return ["users", "clients", "projects", "tasks", "activity"]
+    if (name === "DeleteProject") return ["projects", "users", "tasks", "activity"]
+    if (/Client|AssignAdmin/.test(name)) return ["clients", "users", "activity"]
+    if (/User|Invite|PromoteToAdmin/.test(name) && !/ToProject|FromProject/.test(name)) return ["users", "clients", "projects", "activity"]
+    if (/Project/.test(name)) return ["projects", "users", "activity"]
+    if (/Task/.test(name)) return ["tasks", "projects", "activity"]
+    return []
 }
 
 // The dashboard's Activity feed loads itself; it listens here for refreshes
@@ -63,6 +82,10 @@ export function useLiveRefresh() {
         }
 
         const offNotification = onNewNotification((n) => refresh(scopesFor(n.content)))
+        const offLocal = onLocalChange((mutation) => {
+            const scopes = scopesForMutation(mutation)
+            if (scopes.length) refresh(scopes)
+        })
 
         const channel = syncChannel()
         const onMessage = (e: MessageEvent) => e.data?.type === "changed" && refresh(EVERYTHING)
@@ -76,6 +99,7 @@ export function useLiveRefresh() {
 
         return () => {
             offNotification()
+            offLocal()
             if (channel && channel.onmessage === (onMessage as any)) channel.onmessage = null
             window.removeEventListener("focus", onFocus)
             document.removeEventListener("visibilitychange", onFocus)
