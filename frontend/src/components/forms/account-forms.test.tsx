@@ -12,6 +12,7 @@ const toast = vi.hoisted(() => vi.fn())
 vi.mock("./toaster", async (orig) => ({ ...(await orig<object>()), toast }))
 
 const { AccountMenu } = await import("./account-forms")
+const { onOwnRow } = await import("@/test/layout")
 
 // FormModal focuses its first text field 80 ms after opening; let that happen before typing
 const open = async () => {
@@ -132,3 +133,13 @@ describe("AccountMenu — date of birth (PROF-04)", () => {
         expect(screen.getByRole("button", { name: /Choose a date/ })).toBeInTheDocument()
     })
 })
+
+describe("AccountMenu — phone and date of birth rows (PROF-06)", () => {
+    it("🟢 each gets a full-width row", async () => {
+        await open()
+        await userEvent.click(screen.getByText("Edit profile"))
+        expect(onOwnRow(screen.getByRole("button", { name: /Choose a date/ }))).toBe(true)
+        expect(onOwnRow(screen.getByLabelText("Phone"))).toBe(true)
+    })
+})
+

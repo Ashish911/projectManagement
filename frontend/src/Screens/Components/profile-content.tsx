@@ -135,12 +135,12 @@ export default function ProfileContent() {
                                         <Label htmlFor="edit-email">Email</Label>
                                         <Input id="edit-email" value={profile?.email ?? ""} readOnly disabled />
                                     </div>
-                                    <div className="space-y-1.5">
+                                    <div className="col-span-full space-y-1.5">
                                         <Label htmlFor="edit-phone">Phone</Label>
                                         <PhoneInput label="Phone" value={editForm.number} onChange={(number) => setEditForm({ ...editForm, number })} />
                                         {phoneError(editForm.number) && <p className="text-xs text-destructive">{phoneError(editForm.number)}</p>}
                                     </div>
-                                    <div className="space-y-1.5">
+                                    <div className="col-span-full space-y-1.5">
                                         <Label>Date of Birth</Label>
                                         <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(editForm.dob)} onChange={(d) => setEditForm({ ...editForm, dob: toYmd(d) })} />
                                     </div>

@@ -15,7 +15,7 @@ import { StatusBadge } from "@/components/pm/status-badge"
 import { useTheme } from "@/components/hooks/use-theme"
 import { cn } from "@/lib/utils"
 import type { TaskStatus } from "@/types/taskTypes"
-import { Field, FormError, FormFoot, FormModal, Grid2, Pills, SubmitButton, Switch, inputCls, textareaCls, useForm } from "./form-kit"
+import { Field, FormError, FormFoot, FormModal, Pills, SubmitButton, Switch, inputCls, textareaCls, useForm } from "./form-kit"
 import { Combo } from "./combo"
 import { assigneeOptions } from "./options"
 import { useAppData } from "./use-app-data"
@@ -141,14 +141,13 @@ export function AccountMenu({ onClose, closing }: FormProps) {
                         <Field label="Full name" error={prof.err.name}>
                             <input aria-label="Full name" className={inputCls} maxLength={100} value={prof.v.name} onChange={(e) => prof.set("name", e.target.value)} onBlur={() => prof.blur("name")} />
                         </Field>
-                        <Grid2>
-                            <Field label="Phone" error={prof.err.number}>
-                                <PhoneInput label="Phone" value={prof.v.number} onChange={(x) => prof.set("number", x)} onBlur={() => prof.blur("number")} />
-                            </Field>
-                            <Field label="Date of birth" error={prof.err.dob}>
-                                <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(prof.v.dob)} onChange={(d) => prof.set("dob", toYmd(d))} />
-                            </Field>
-                        </Grid2>
+                        {/* Phone (with its country code) and date of birth each get a full row (PROF-06) */}
+                        <Field label="Phone" error={prof.err.number}>
+                            <PhoneInput label="Phone" value={prof.v.number} onChange={(x) => prof.set("number", x)} onBlur={() => prof.blur("number")} />
+                        </Field>
+                        <Field label="Date of birth" error={prof.err.dob}>
+                            <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(prof.v.dob)} onChange={(d) => prof.set("dob", toYmd(d))} />
+                        </Field>
                         <Field label="Gender">
                             <div><Segmented size="sm" value={prof.v.gender as any} onChange={(g: string) => prof.set("gender", g)} options={[{ value: "FEMALE", label: "Female" }, { value: "MALE", label: "Male" }, { value: "OTHERS", label: "Other" }]} /></div>
                         </Field>

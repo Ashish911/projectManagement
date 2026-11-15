@@ -198,7 +198,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                 <Field label="Email" req error={f.err.email}>
                     <input className={inputCls} type="email" value={v.email} onChange={(e) => f.set("email", e.target.value)} onBlur={() => f.blur("email")} placeholder="name@company.com" />
                 </Field>
-                <Field label="Phone" req={!cur} error={f.err.phone}>
+                <Field label="Phone" req={!cur} error={f.err.phone} className="col-span-full">
                     <PhoneInput label="Phone" value={v.phone} onChange={(x) => f.set("phone", x)} onBlur={() => f.blur("phone")} />
                 </Field>
                 <Field label="Gender" req={!cur} error={f.err.gender}>
@@ -206,7 +206,7 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                         <Segmented value={v.gender as any} onChange={(x: string) => f.set("gender", x)} options={[{ value: "FEMALE", label: "Female" }, { value: "MALE", label: "Male" }, { value: "OTHERS", label: "Other" }]} />
                     </div>
                 </Field>
-                <Field label="Date of birth" hint="Optional">
+                <Field label="Date of birth" hint="Optional" className="col-span-full">
                     <DatePicker birthdate quick="none" placeholder="Choose a date" value={fromYmd(v.dob)} onChange={(d) => f.set("dob", toYmd(d))} />
                 </Field>
             </Grid2>

@@ -15,6 +15,7 @@ vi.mock("./toaster", async (orig) => ({ ...(await orig<object>()), toast: vi.fn(
 vi.mock("./use-app-data", async (orig) => ({ ...(await orig<object>()), useAppData: () => ({ profile: me, users, clients: [], projects: [], tasks: [] }) }))
 
 const { UserForm } = await import("./user-form")
+const { onOwnRow } = await import("@/test/layout")
 const open = (userId: string) => render(<UserForm data={{ userId }} onClose={vi.fn()} closing={false} />)
 
 describe("UserForm — protected accounts", () => {
@@ -97,6 +98,14 @@ describe("UserForm — client admins", () => {
         expect(screen.queryByText("Pick the client they’ll manage")).not.toBeInTheDocument()
         await userEvent.click(screen.getByRole("button", { name: "Send invite" }))
         expect(api.createUser).toHaveBeenCalledWith(expect.objectContaining({ role: "CLIENT_ADMIN", clientId: null }))
+    })
+})
+
+describe("UserForm — phone and date of birth rows (PROF-06)", () => {
+    it("🟢 each gets a full-width row", () => {
+        render(<UserForm data={{}} onClose={vi.fn()} closing={false} />)
+        expect(onOwnRow(screen.getByRole("button", { name: /Choose a date/ }))).toBe(true)
+        expect(onOwnRow(screen.getByLabelText("Phone"))).toBe(true)
     })
 })
 

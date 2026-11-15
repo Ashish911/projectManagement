@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({ updateProfile: vi.fn() }))
 vi.mock("@/api/userApi", async (orig) => ({ ...(await orig<object>()), updateProfile: api.updateProfile }))
 
 const { default: ProfileContent } = await import("./profile-content")
+const { onOwnRow } = await import("@/test/layout")
 
 describe("Account page — profile", () => {
     beforeEach(() => api.updateProfile.mockReset().mockResolvedValue(state.profile.profile))
@@ -45,6 +46,15 @@ describe("Account page — date of birth display (PROF-09)", () => {
         render(<ProfileContent />)
         expect(screen.getAllByDisplayValue("14 Mar 1998").length + screen.queryAllByText("14 Mar 1998").length).toBeGreaterThan(0)
         expect(screen.queryByText(/ago/)).not.toBeInTheDocument()
+    })
+})
+
+describe("Account page — phone and date of birth rows (PROF-06)", () => {
+    it("🟢 each gets a full-width row while editing", async () => {
+        render(<ProfileContent />)
+        await userEvent.click(screen.getByRole("button", { name: /Edit/ }))
+        expect(onOwnRow(screen.getByRole("button", { name: /Choose a date/ }))).toBe(true)
+        expect(onOwnRow(screen.getByLabelText("Phone"))).toBe(true)
     })
 })
 
