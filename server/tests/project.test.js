@@ -14,6 +14,7 @@ const mockClientFindById = jest.fn();
 const mockClientFindByAssignedAdmin = jest.fn();
 
 const mockUserFindByIds = jest.fn();
+const mockUserFindAssignable = jest.fn();
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/import.repo.js", () => ({
@@ -32,6 +33,7 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   },
   UserRepo: {
     findByIds: mockUserFindByIds,
+    findAssignable: mockUserFindAssignable,
   },
   NotificationRepo: {
     create: jest.fn().mockResolvedValue({}),
@@ -853,6 +855,63 @@ describe("ProjectService", () => {
       mockProjectUpdate.mockResolvedValue(mockProject);
       await ProjectService.addUserToProject({ id: mockProject._id, users: ["748a1b2c3d4e5f6a7b8c9d1f"] }, { user: mockSuperAdmin });
       expect(mockProjectUpdate).toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // ASSIGNABLE USERS (CA-02)
+  // ════════════════════════════════════════════════════════════════
+  describe("assignableUsers", () => {
+    const people = [
+      { id: "u1", name: "Ravi", email: "ravi@x.com", role: "USER" },
+      { id: "u2", name: "Mia", email: "mia@x.com", role: "CLIENT_ADMIN" },
+    ];
+    beforeEach(() => mockUserFindAssignable.mockResolvedValue(people));
+
+    it("🟢 a client admin running the project sees everyone they may add, not just current teams", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      const result = await ProjectService.assignableUsers({ projectId: mockProject._id }, { user: mockClientAdmin });
+      expect(result).toEqual(people);
+    });
+
+    it("🟢 a super admin can list them for any project", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      expect(await ProjectService.assignableUsers({ projectId: mockProject._id }, { user: mockSuperAdmin })).toEqual(people);
+    });
+
+    it("🔴 a client admin who only sits on another client's project can't", async () => {
+      mockProjectFindById.mockResolvedValue({ ...mockProject, clientId: "748a1b2c3d4e5f6a7b8c9aaa" });
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      await expect(ProjectService.assignableUsers({ projectId: mockProject._id }, { user: mockClientAdmin }))
+        .rejects.toThrow("You don't manage this project");
+      expect(mockUserFindAssignable).not.toHaveBeenCalled();
+    });
+
+    it("🔴 a USER can't", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      await expect(ProjectService.assignableUsers({ projectId: mockProject._id }, { user: mockUser }))
+        .rejects.toThrow("You don't manage this project");
+    });
+
+    it("🟢 without a project (new project form): a client admin who runs a client", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      expect(await ProjectService.assignableUsers({}, { user: mockClientAdmin })).toEqual(people);
+      expect(mockProjectFindById).not.toHaveBeenCalled();
+    });
+
+    it("🔴 without a project: a client admin with no client, or a USER, can't", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      await expect(ProjectService.assignableUsers({}, { user: mockClientAdmin })).rejects.toThrow("You don't manage any projects");
+      await expect(ProjectService.assignableUsers({}, { user: mockUser })).rejects.toThrow("You don't manage any projects");
+      expect(mockUserFindAssignable).not.toHaveBeenCalled();
+    });
+
+    it("🔴 an invalid or unknown project id", async () => {
+      await expect(ProjectService.assignableUsers({ projectId: "nope" }, { user: mockSuperAdmin })).rejects.toThrow();
+      mockProjectFindById.mockResolvedValue(null);
+      await expect(ProjectService.assignableUsers({ projectId: mockProject._id }, { user: mockSuperAdmin }))
+        .rejects.toThrow("Project not found");
     });
   });
 });

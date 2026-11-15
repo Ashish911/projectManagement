@@ -273,6 +273,7 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `client` | `id` | SUPER_ADMIN, assigned CLIENT_ADMIN |
 | `projects` | — | Role-scoped |
 | `project` | `id` | Role-scoped |
+| `assignableUsers` | `projectId` (optional) | Whoever runs the project (any SUPER_ADMIN, its client's CLIENT_ADMIN); without `projectId`, a SUPER_ADMIN or a CLIENT_ADMIN with a client. Every USER and CLIENT_ADMIN, `id` / `name` / `email` / `role` only |
 | `tasks` | `projectId` | Project members |
 | `task` | `id` | Role-scoped |
 | `subTasks` | `taskId` | Task members |

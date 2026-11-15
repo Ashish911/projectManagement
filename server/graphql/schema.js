@@ -16,6 +16,7 @@ import {
   ClientType,
   AuthType,
   UserType,
+  TeamCandidateType,
   SubTaskType,
   NotificationType,
   TaskType,
@@ -74,6 +75,11 @@ const RootQuery = new GraphQLObjectType({
       type: ProjectType,
       args: { id: { type: new GraphQLNonNull(GraphQLID) } },
       resolve: projectResolvers.Query.project,
+    },
+    assignableUsers: {
+      type: new GraphQLList(TeamCandidateType),
+      args: { projectId: { type: GraphQLID } }, // Omitted while a project is being created
+      resolve: projectResolvers.Query.assignableUsers,
     },
     clients: {
       type: new GraphQLList(ClientType),

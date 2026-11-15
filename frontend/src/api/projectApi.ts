@@ -1,4 +1,4 @@
-import { GET_PROJECTS } from "@/queries/projectQueries";
+import { GET_ASSIGNABLE_USERS, GET_PROJECTS } from "@/queries/projectQueries";
 import {
     ADD_PROJECT,
     UPDATE_PROJECT,
@@ -7,7 +7,7 @@ import {
     REMOVE_USER_FROM_PROJECT,
 } from "@/mutations/projectMutations";
 import { gql } from "@/api/graphql";
-import type { Project } from "@/types/projectTypes";
+import type { Project, TeamCandidate } from "@/types/projectTypes";
 
 export const getProjects = async (): Promise<Project[]> =>
     (await gql<{ projects: Project[] }>(GET_PROJECTS)).projects;
@@ -37,3 +37,7 @@ export const addUserToProject = async (vars: { id: string; users: string[] }): P
 
 export const removeUserFromProject = async (vars: { id: string; users: string[] }): Promise<Project> =>
     (await gql<{ removeUserFromProject: Project }>(REMOVE_USER_FROM_PROJECT, vars)).removeUserFromProject;
+
+/** Everyone who can join this project's team (no id: a project being created). Only for whoever runs it. */
+export const getAssignableUsers = async (projectId?: string): Promise<TeamCandidate[]> =>
+    (await gql<{ assignableUsers: TeamCandidate[] }>(GET_ASSIGNABLE_USERS, { projectId })).assignableUsers;

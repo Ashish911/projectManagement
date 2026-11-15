@@ -31,3 +31,15 @@ export const GET_PROJECT = `
         }
     }
 `;
+
+/** People who can be added to a project's team (Manage team picker). */
+export const GET_ASSIGNABLE_USERS = `
+    query AssignableUsers($projectId: ID) {
+        assignableUsers(projectId: $projectId) {
+            id
+            name
+            email
+            role
+        }
+    }
+`;

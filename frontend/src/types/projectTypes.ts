@@ -12,3 +12,11 @@ export interface Project {
     client: Pick<Client, 'id' | 'name'> | null;
     user: Pick<User, 'id' | 'name' | 'email'>[];
 }
+
+/** Someone who can be added to a project team (`assignableUsers`). */
+export interface TeamCandidate {
+    id: string;
+    name: string;
+    email: string;
+    role: "USER" | "CLIENT_ADMIN";
+}

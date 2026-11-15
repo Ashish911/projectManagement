@@ -4,6 +4,9 @@ export const UserRepo = {
   find: async () => (await User.find()).map((u) => u.toObject()),
   findByIds: async (ids) =>
     (await User.find({ _id: { $in: ids } })).map((u) => u.toObject()),
+  // People who can join a project team (Manage team picker): no super admins, contact fields only
+  findAssignable: async () =>
+    (await User.find({ role: { $ne: "SUPER_ADMIN" } }).select("name email role").sort({ name: 1 })).map((u) => u.toObject()),
   findById: async (id) => (await User.findById(id))?.toObject() ?? null,
   findByEmail: async (email) =>
     (await User.findOne({ email }))?.toObject() ?? null,

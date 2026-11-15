@@ -32,6 +32,17 @@ export const UserType = new GraphQLObjectType({
   },
 });
 
+/** Someone who can be added to a project team: contact fields only (`assignableUsers`). */
+export const TeamCandidateType = new GraphQLObjectType({
+  name: "TeamCandidate",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLID), resolve: (u) => String(u.id ?? u._id) },
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: new GraphQLNonNull(GraphQLString) },
+    role: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
+
 export const AuthType = new GraphQLObjectType({
   name: "Auth",
   fields: {

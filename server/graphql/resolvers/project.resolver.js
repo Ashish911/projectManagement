@@ -6,6 +6,8 @@ export const projectResolvers = {
       await ProjectService.getProjects(context),
     project: async (_, { id }, context) =>
       await ProjectService.getProject(id, context),
+    assignableUsers: async (_, args, context) =>
+      await ProjectService.assignableUsers(args, context),
   },
   Mutation: {
     addProject: async (_, args, context) =>

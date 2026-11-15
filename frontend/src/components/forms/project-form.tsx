@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useDispatch } from "react-redux"
 import { useNavigate } from "react-router-dom"
 import { IconFolderCog, IconFolderPlus, IconSearch, IconTrash, IconUsersPlus } from "@tabler/icons-react"
-import { addProject, addUserToProject, removeUserFromProject, updateProject } from "@/api/projectApi"
+import { addProject, addUserToProject, getAssignableUsers, removeUserFromProject, updateProject } from "@/api/projectApi"
 import { addProjectToStore, updateProjectInStore } from "@/redux/actions/projectsActions"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/pm/avatar"
@@ -10,7 +10,8 @@ import { Check } from "@/components/pm/check"
 import { Tag } from "@/components/pm/status-badge"
 import { ProjectCard, projectProgress } from "@/components/pm/project-card"
 import { cn } from "@/lib/utils"
-import type { Project } from "@/types/projectTypes"
+import type { Project, TeamCandidate } from "@/types/projectTypes"
+import { Loading } from "@/components/pm/loading"
 import { Field, FormError, FormFoot, FormModal, Grid2, Pills, Section, SubmitButton, inputCls, textareaCls, useForm } from "./form-kit"
 import { Combo } from "./combo"
 import { DatePicker } from "./date-picker"
@@ -39,7 +40,7 @@ export function ProjectForm({ data, onClose, closing }: FormProps<{ projectId?: 
     const dispatch = useDispatch()
     const navigate = useNavigate()
     const openForm = useForms()
-    const { role, users, clients, projects, tasks } = useAppData()
+    const { role, clients, projects, tasks } = useAppData()
     const box = useRef<HTMLDivElement>(null)
     const cur = data.projectId ? projects.find((p) => p.id === data.projectId) ?? null : null
 
@@ -62,7 +63,12 @@ export function ProjectForm({ data, onClose, closing }: FormProps<{ projectId?: 
     )
     const v = f.v
 
-    const people = users.filter((u) => u.role !== "SUPER_ADMIN")
+    // From the server, not the users list: a client admin's list only holds people already on their projects (CA-02)
+    const [candidates, setCandidates] = useState<TeamCandidate[]>([])
+    useEffect(() => {
+        getAssignableUsers(cur?.id).then(setCandidates).catch(() => setCandidates([]))
+    }, [cur?.id])
+    const people = candidates
     const teamOptions = [
         ...people.filter((u) => u.role === "USER").map((u) => personOption(u, tasks, "Team members")),
         ...people.filter((u) => u.role === "CLIENT_ADMIN").map((u) => personOption(u, tasks, "Client admins")),
@@ -175,14 +181,20 @@ export function TeamForm({ data, onClose, closing }: FormProps<{ projectId: stri
     const [selected, setSelected] = useState<string[]>(original)
     const [q, setQ] = useState("")
     const { run, busy, error } = useAsyncAction()
+    // Who can join comes from the server: a client admin's own users list only holds people
+    // already on their projects, so nobody new could ever be added from it (CA-02)
+    const [candidates, setCandidates] = useState<TeamCandidate[] | null>(null)
+    useEffect(() => {
+        getAssignableUsers(data.projectId).then(setCandidates).catch(() => setCandidates([]))
+    }, [data.projectId])
     if (!project) return null
 
-    // Current members first (including any the user list doesn't include), then everyone else
-    const people = [...project.user, ...users.filter((u) => u.role !== "SUPER_ADMIN" && !original.includes(u.id))]
+    // Current members first (including any the candidate list doesn't include), then everyone else
+    const people = [...project.user, ...(candidates ?? []).filter((u) => !original.includes(u.id))]
     const list = people.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()))
     const adding = selected.filter((id) => !original.includes(id)).length
     const removing = original.filter((id) => !selected.includes(id)).length
-    const roleOf = (id: string) => users.find((u) => u.id === id)?.role
+    const roleOf = (id: string) => (candidates?.find((u) => u.id === id) ?? users.find((u) => u.id === id))?.role
 
     const save = () => {
         if (!adding && !removing) return onClose()
@@ -226,6 +238,7 @@ export function TeamForm({ data, onClose, closing }: FormProps<{ projectId: stri
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] outline-none focus:ring-0" />
             </label>
             <div className="-mx-2 grid max-h-[360px] gap-0.5 overflow-y-auto">
+                {candidates === null && <Loading kind="lines" rows={3} label="Loading people" className="px-2" />}
                 {list.map((u) => {
                     const on = selected.includes(u.id)
                     const was = original.includes(u.id)

@@ -65,3 +65,12 @@ describe("ProjectType.canManage", () => {
     await expect(canManage({ id: "u2", role: "USER" })).resolves.toBe(false);
   });
 });
+
+describe("Query.assignableUsers (CA-02)", () => {
+  it("🟢 is in the schema and returns contact fields only", async () => {
+    const { default: schema } = await import("../graphql/schema.js");
+    const field = schema.getQueryType().getFields().assignableUsers;
+    expect(String(field.type)).toBe("[TeamCandidate]");
+    expect(Object.keys(field.type.ofType.getFields()).sort()).toEqual(["email", "id", "name", "role"]);
+  });
+});

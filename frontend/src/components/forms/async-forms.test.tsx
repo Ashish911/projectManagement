@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { MemoryRouter } from "react-router-dom"
 import type { User } from "@/types/userTypes"
 
 // ── Store and API mocks ──────────────────────────────────────────────────────
@@ -16,17 +17,17 @@ vi.mock("react-redux", () => ({ useDispatch: () => dispatch, useSelector: (sel: 
 
 const api = vi.hoisted(() => ({
     unlockUsers: vi.fn(), updateUserRoles: vi.fn(), declineClientDeletion: vi.fn(),
-    confirmDeleteClient: vi.fn(), addUserToProject: vi.fn(), removeUserFromProject: vi.fn(),
+    confirmDeleteClient: vi.fn(), addUserToProject: vi.fn(), removeUserFromProject: vi.fn(), getAssignableUsers: vi.fn(),
 }))
 vi.mock("@/api/userApi", async (orig) => ({ ...(await orig<object>()), unlockUsers: api.unlockUsers, updateUserRoles: api.updateUserRoles }))
 vi.mock("@/api/clientApi", async (orig) => ({ ...(await orig<object>()), declineClientDeletion: api.declineClientDeletion, confirmDeleteClient: api.confirmDeleteClient }))
-vi.mock("@/api/projectApi", async (orig) => ({ ...(await orig<object>()), addUserToProject: api.addUserToProject, removeUserFromProject: api.removeUserFromProject }))
+vi.mock("@/api/projectApi", async (orig) => ({ ...(await orig<object>()), addUserToProject: api.addUserToProject, removeUserFromProject: api.removeUserFromProject, getAssignableUsers: api.getAssignableUsers }))
 const toasts = vi.hoisted(() => ({ toast: vi.fn(), toastError: vi.fn() }))
 vi.mock("@/components/forms/toaster", async (orig) => ({ ...(await orig<object>()), toast: toasts.toast, toastError: toasts.toastError }))
 
 const { BulkUnlockForm, BulkRoleForm } = await import("./user-bulk-forms")
 const { DeclineRequestForm } = await import("./client-form")
-const { TeamForm } = await import("./project-form")
+const { TeamForm, ProjectForm } = await import("./project-form")
 const { RequestDeletionDialog } = await import("@/Screens/Dashboard/Clients")
 
 function deferred<T>() {
@@ -72,7 +73,7 @@ const cases = [
     {
         name: "TeamForm",
         render: (onClose: () => void) => <TeamForm data={{ projectId: "p1" }} onClose={onClose} closing={false} />,
-        prepare: async () => { await userEvent.click(screen.getByText("Ravi Shah")) },
+        prepare: async () => { await userEvent.click(await screen.findByText("Ravi Shah")) },
         button: /save team/i,
         call: api.addUserToProject,
         args: [{ id: "p1", users: ["u1"] }],
@@ -92,6 +93,7 @@ const cases = [
 
 beforeEach(() => {
     Object.values(api).forEach((f) => f.mockReset())
+    api.getAssignableUsers.mockResolvedValue(users)
     toasts.toast.mockReset()
     toasts.toastError.mockReset()
     dispatch.mockReset()
@@ -143,3 +145,48 @@ describe.each(cases)("$name", (c) => {
         await act(async () => d.resolve(c.ok))
     })
 })
+
+describe("TeamForm — who can be added (CA-02)", () => {
+    const candidates = [
+        { id: "u1", name: "Ravi Shah", email: "r@x.io", role: "USER" },
+        { id: "u2", name: "Mia Chen", email: "m@x.io", role: "USER" },
+        { id: "u9", name: "Zoe New", email: "z@x.io", role: "CLIENT_ADMIN" },
+    ]
+    beforeEach(() => { api.getAssignableUsers.mockReset().mockResolvedValue(candidates); api.addUserToProject.mockReset().mockResolvedValue(project) })
+
+    it("🟢 lists everyone the server says can join, not only people already on a team", async () => {
+        render(<TeamForm data={{ projectId: "p1" }} onClose={() => {}} closing={false} />)
+        expect(api.getAssignableUsers).toHaveBeenCalledWith("p1")
+        await userEvent.click(await screen.findByText("Zoe New")) // Not in the client admin's users list
+        await userEvent.click(screen.getByRole("button", { name: /save team/i }))
+        expect(api.addUserToProject).toHaveBeenCalledWith({ id: "p1", users: ["u9"] })
+    })
+
+    it("🟢 shows a skeleton while the list loads; current members are listed once", async () => {
+        let done!: (v: typeof candidates) => void
+        api.getAssignableUsers.mockReturnValue(new Promise((r) => { done = r }))
+        render(<TeamForm data={{ projectId: "p1" }} onClose={() => {}} closing={false} />)
+        expect(screen.getByRole("status", { name: "Loading people" })).toBeInTheDocument()
+        await act(async () => done(candidates))
+        expect(screen.getAllByText("Mia Chen")).toHaveLength(1)
+    })
+
+    it("🔴 if the list can't load, current members can still be removed", async () => {
+        api.getAssignableUsers.mockRejectedValue(new Error("nope"))
+        render(<TeamForm data={{ projectId: "p1" }} onClose={() => {}} closing={false} />)
+        expect(await screen.findByText("Mia Chen")).toBeInTheDocument()
+        expect(screen.queryByText("Zoe New")).not.toBeInTheDocument()
+    })
+})
+
+describe("ProjectForm — team picker (CA-02)", () => {
+    it("🟢 a new project offers everyone the server says can join", async () => {
+        api.getAssignableUsers.mockResolvedValue([{ id: "u9", name: "Zoe New", email: "z@x.io", role: "USER" }])
+        render(<MemoryRouter><ProjectForm data={{}} onClose={() => {}} closing={false} /></MemoryRouter>)
+        expect(api.getAssignableUsers).toHaveBeenCalledWith(undefined)
+        await act(async () => {})
+        await userEvent.click(screen.getByRole("button", { name: /Add people/ }))
+        expect(screen.getByRole("option", { name: /Zoe New/ })).toBeInTheDocument()
+    })
+})
+

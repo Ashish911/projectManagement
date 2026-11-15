@@ -1,7 +1,7 @@
 import { cache } from "../config/cache.js";
 import { createLogger } from "../config/logger.js";
 import { NotificationService } from "./notification.service.js";
-import { managesProject, onProjectTeam, visibleProjects } from "./access.js";
+import { managesProject, onProjectTeam, ownClientOf, visibleProjects } from "./access.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -60,6 +60,31 @@ export const ProjectService = {
     throw new ForbiddenError(
       user.role === "USER" ? "You are not assigned to this project" : "You do not have access to this project",
     );
+  },
+  /**
+   * The people who can be added to a project's team: every USER and CLIENT_ADMIN (accounts
+   * aren't tied to a client), with name, email and role only. For whoever runs the project;
+   * without `projectId` (a project still being created), for anyone who runs a client.
+   * @param {object} data    `{ [projectId] }`.
+   * @param {object} context GraphQL context with the current `user`.
+   * @returns {Promise<object[]>} `{ id, name, email, role }` for each person.
+   * @throws {ForbiddenError} If the user doesn't run the project (or any client).
+   */
+  async assignableUsers({ projectId }, context) {
+    const { user } = context;
+
+    if (projectId == null) {
+      const runsAClient = user.role === "SUPER_ADMIN" || !!(await ownClientOf(user));
+      if (!runsAClient) throw new ForbiddenError("You don't manage any projects");
+      return await UserRepo.findAssignable();
+    }
+
+    validate(idSchema, { id: projectId });
+    const project = await ProjectRepo.findById(projectId);
+    if (!project) throw new NotFoundError("Project not found");
+    if (!(await managesProject(project, user))) throw new ForbiddenError("You don't manage this project");
+
+    return await UserRepo.findAssignable();
   },
   /**
    * Creates a project under a client. Not allowed for USER.
