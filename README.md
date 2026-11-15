@@ -231,7 +231,7 @@ Prometheus Plugin ◄───────────────────�
 |---|---|
 | `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; invites or creates users (`createUser`), edits them (`updateUser`), changes roles person by person with a reason (`updateUserRoles`, or `changeUserRoles` for one role), every change logged to Activity; unlocks (`unlockUsers`), resends invites, deletes (`deleteUser`, `deleteUsers`); assigns `CLIENT_ADMIN` users to clients via `assignAdmin`; promotes `USER` → `CLIENT_ADMIN` via `promoteToAdmin`; approves or declines client deletion requests (the client's admin keeps their role, with no client); queries all users. Their own account and other super admins are view-only in user admin |
 | `CLIENT_ADMIN` | Manages their assigned client, if they have one (at most one; `myClient` returns it even before it has projects), and its projects/tasks; can also be added to any project's team, where they have a `USER`'s rights (their own tasks, comments). Queries users assigned to their client's projects; can request client deletion; can delete any comment in their client's projects. A client admin with no client sees only the projects they're on |
-| `USER` | Access to projects they are assigned to; can update/change status on their own tasks and subtasks; can create subtasks on tasks assigned to them; can comment on tasks and subtasks in their projects and edit/delete their own comments |
+| `USER` | Access to projects they are assigned to; can update/change status on their own tasks and subtasks; a task where only a subtask is theirs is listed as their work, with the parent readable but not editable; can create subtasks on tasks assigned to them; can comment on tasks and subtasks in their projects and edit/delete their own comments |
 
 ## Public Operations (no JWT required)
 
@@ -278,7 +278,7 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `task` | `id` | Role-scoped |
 | `subTasks` | `taskId` | Task members |
 | `subTask` | `id` | Role-scoped |
-| `allTasks` | — | Role-scoped (all / client's projects / assigned projects) |
+| `allTasks` | — | Role-scoped (all / client's projects / assigned projects); each task carries `mySubTasks`, the caller's own subtasks on it |
 | `taskComments` | `taskId` | Project members |
 | `subTaskComments` | `subTaskId` | Project members |
 | `notifications` | — | Own only, newest first |

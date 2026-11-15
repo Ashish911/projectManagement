@@ -15,6 +15,7 @@ const mockProjectFindByAssignedUser = jest.fn();
 const mockTaskFindByProjects = jest.fn();
 const mockClientFindByAssignedAdmin = jest.fn();
 const mockSubTaskFindByTask = jest.fn();
+const mockSubTaskFindAssignedTo = jest.fn().mockResolvedValue([]);
 const mockSubTaskDelete = jest.fn();
 const mockNotify = jest.fn();
 const mockCommentDeleteByTask = jest.fn();
@@ -37,6 +38,7 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   },
   SubTaskRepo: {
     findByTask: mockSubTaskFindByTask,
+    findAssignedTo: mockSubTaskFindAssignedTo,
     delete: mockSubTaskDelete,
   },
   CommentRepo: {
@@ -108,6 +110,7 @@ const createTaskData = {
 describe("TaskService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSubTaskFindAssignedTo.mockResolvedValue([]); // No subtasks of their own unless a test says so
   });
 
   // ════════════════════════════════════════════════════════════════
@@ -185,6 +188,22 @@ describe("TaskService", () => {
   // ════════════════════════════════════════════════════════════════
   // GET TASK
   // ════════════════════════════════════════════════════════════════
+  describe("getTask — subtask assignees (TSK-05)", () => {
+    it("🟢 a USER with a subtask on the task can read it for context", async () => {
+      mockTaskFindById.mockResolvedValue({ ...mockTask, assignedTo: null, createdBy: null });
+      mockSubTaskFindAssignedTo.mockResolvedValue([{ _id: "s1", task: mockTask._id }]);
+      const result = await TaskService.getTask(mockTask._id, { user: mockUser });
+      expect(mockSubTaskFindAssignedTo).toHaveBeenCalledWith(mockUser.id, [mockTask._id]);
+      expect(result._id).toBe(mockTask._id);
+    });
+
+    it("🔴 without one, still forbidden", async () => {
+      mockTaskFindById.mockResolvedValue({ ...mockTask, assignedTo: null, createdBy: null });
+      mockSubTaskFindAssignedTo.mockResolvedValue([]);
+      await expect(TaskService.getTask(mockTask._id, { user: mockUser })).rejects.toThrow("You do not have access to this task");
+    });
+  });
+
   describe("getTask", () => {
     it("🟢 SUPER_ADMIN should get any task", async () => {
       mockTaskFindById.mockResolvedValue(mockTask);
@@ -608,6 +627,21 @@ describe("TaskService", () => {
       mockProjectFindByAssignedUser.mockResolvedValue([]);
       expect(await TaskService.getAllTasks({ user: mockClientAdmin })).toEqual([]);
       expect(mockTaskFindByProjects).not.toHaveBeenCalled();
+    });
+
+    it("🟢 each task carries the caller's own subtasks, from one query (TSK-05)", async () => {
+      const other = { ...mockTask, _id: "848a1b2c3d4e5f6a7b8c9d99", assignedTo: null };
+      const sub = { _id: "948a1b2c3d4e5f6a7b8c9d0e", task: other._id, assignedTo: mockUser.id, title: "subT2" };
+      mockProjectFindByAssignedUser.mockResolvedValue([{ id: "p1" }]);
+      mockTaskFindByProjects.mockResolvedValue([mockTask, other]);
+      mockSubTaskFindAssignedTo.mockResolvedValue([sub]);
+
+      const result = await TaskService.getAllTasks({ user: mockUser });
+
+      expect(mockSubTaskFindAssignedTo).toHaveBeenCalledTimes(1);
+      expect(mockSubTaskFindAssignedTo).toHaveBeenCalledWith(mockUser.id, [mockTask._id, other._id]);
+      expect(result.find((t) => t._id === other._id).mySubTasks).toEqual([sub]);
+      expect(result.find((t) => t._id === mockTask._id).mySubTasks).toEqual([]);
     });
 
     it("🟢 USER with no projects should get an empty list", async () => {

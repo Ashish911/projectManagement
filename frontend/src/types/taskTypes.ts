@@ -16,4 +16,15 @@ export interface Task {
     updatedAt?: string | null;
     resolvedAt?: string | null;
     subTaskStats?: { done: number; total: number };
+    /** The viewer's own subtasks on this task (from `allTasks` only; absent on single-task replies) */
+    mySubTasks?: MySubTask[] | null;
+}
+
+/** One of the viewer's subtasks, as listed under its parent task. */
+export interface MySubTask {
+    id: string;
+    title: string;
+    currentStatus: TaskStatus;
+    priority: Priority;
+    deadline: string | null;
 }

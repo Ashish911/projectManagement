@@ -3,6 +3,7 @@ import { jest } from "@jest/globals";
 // ─── Mock functions ───────────────────────────────────────────────
 const mockSubTaskFindById = jest.fn();
 const mockSubTaskFindByTask = jest.fn();
+const mockSubTaskFindAssignedTo = jest.fn().mockResolvedValue([]);
 const mockSubTaskCreate = jest.fn();
 const mockSubTaskUpdate = jest.fn();
 const mockSubTaskDelete = jest.fn();
@@ -18,6 +19,7 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   SubTaskRepo: {
     findById: mockSubTaskFindById,
     findByTask: mockSubTaskFindByTask,
+    findAssignedTo: mockSubTaskFindAssignedTo,
     create: mockSubTaskCreate,
     update: mockSubTaskUpdate,
     delete: mockSubTaskDelete,
@@ -89,6 +91,7 @@ const createSubTaskData = {
 describe("SubTaskService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSubTaskFindAssignedTo.mockResolvedValue([]); // No subtasks of their own unless a test says so
   });
 
   // ════════════════════════════════════════════════════════════════
@@ -118,6 +121,15 @@ describe("SubTaskService", () => {
         user: mockUser,
       });
 
+      expect(result).toEqual([mockSubTask]);
+    });
+
+    it("🟢 USER assigned one of the subtasks can see the parent's subtasks (TSK-05)", async () => {
+      mockTaskFindById.mockResolvedValue({ ...mockTask, assignedTo: null, createdBy: null });
+      mockSubTaskFindAssignedTo.mockResolvedValue([mockSubTask]);
+      mockSubTaskFindByTask.mockResolvedValue([mockSubTask]);
+      const result = await SubTaskService.getSubTasks(mockTask._id, { user: mockUser });
+      expect(mockSubTaskFindAssignedTo).toHaveBeenCalledWith(mockUser.id, [mockTask._id]);
       expect(result).toEqual([mockSubTask]);
     });
 

@@ -13,7 +13,7 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
-import { managesProjectId } from "./access.js";
+import { hasSubTaskOn, managesProjectId } from "./access.js";
 
 /**
  * Business logic and role checks for subtasks. Whoever runs the project (SUPER_ADMIN, or the
@@ -58,11 +58,12 @@ export const SubTaskService = {
     const task = await TaskRepo.findById(taskId);
     if (!task) throw new NotFoundError("Task not found");
 
-    // Unless they run the project, the user must be the parent task's assignee or creator
+    // Unless they run the project, the user must be the parent task's assignee or creator,
+    // or be assigned one of its subtasks (they see the others for context)
     const isAssigned =
       task.assignedTo?.toString() === user.id ||
       task.createdBy?.toString() === user.id;
-    if (!isAssigned && !(await runsTaskProject(task, user)))
+    if (!isAssigned && !(await runsTaskProject(task, user)) && !(await hasSubTaskOn(taskId, user)))
       throw new ForbiddenError("You do not have access to this task");
 
     return await SubTaskRepo.findByTask(taskId);

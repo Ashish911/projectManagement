@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const me = { id: "me", name: "Ada Admin", role: "SUPER_ADMIN" }
+const subsFor = vi.hoisted(() => ({ list: null as null | object[] }))
 const base = { id: "t1", title: "Fix login", priority: "HIGH", deadline: null, assignedTo: { id: "u1", name: "Ravi Shah" }, createdBy: me, project: { id: "p1", name: "Portal" }, createdAt: null }
 const state = vi.hoisted(() => ({ status: "RESOLVED", role: "SUPER_ADMIN", projects: [] as { id: string; canManage: boolean }[] }))
 vi.mock("react-redux", () => ({ useDispatch: () => vi.fn() }))
@@ -22,7 +23,7 @@ const sub = { id: "s1", title: "Write test", currentStatus: "NEW", priority: "NO
 
 async function open(status: string) {
     state.status = status
-    api.getSubTasks.mockResolvedValue([sub])
+    api.getSubTasks.mockResolvedValue(subsFor.list ?? [sub])
     api.getTaskComments.mockResolvedValue([])
     render(<TaskSheet data={{ id: "t1" }} onClose={vi.fn()} closing={false} />)
     await act(async () => { await Promise.resolve() })
@@ -94,3 +95,24 @@ describe("TaskSheet — a client admin", () => {
         expect(screen.getByRole("button", { name: /Delete task/ })).toBeInTheDocument()
     })
 })
+
+describe("TaskSheet — someone who only owns a subtask (TSK-05)", () => {
+    const mine = { id: "s2", title: "subT2", currentStatus: "NEW", priority: "NORMAL", deadline: null, assignedTo: { id: "me", name: "Ada Admin" } }
+    const theirs = { id: "s3", title: "subT3", currentStatus: "NEW", priority: "NORMAL", deadline: null, assignedTo: { id: "u1", name: "Ravi Shah" } }
+    beforeEach(() => { state.role = "USER"; state.projects = [{ id: "p1", canManage: false }]; subsFor.list = [mine, theirs] })
+    afterEach(() => { state.role = "SUPER_ADMIN"; state.projects = []; subsFor.list = null })
+
+    it("🟢 reads the parent but can't edit it, or add subtasks to it", async () => {
+        await open("NEW")
+        expect(screen.getByLabelText("Task title")).toBeDisabled()
+        expect(screen.queryByPlaceholderText("Add a subtask, then press Enter")).not.toBeInTheDocument()
+    })
+
+    it("🟢 edits their own subtask; someone else's is read-only", async () => {
+        await open("NEW")
+        expect(screen.getByRole("checkbox", { name: /Mark subT2/ })).toBeEnabled()
+        expect(screen.getByRole("checkbox", { name: /Mark subT3/ })).toBeDisabled()
+        expect(screen.getByText("Yours")).toBeInTheDocument()
+    })
+})
+

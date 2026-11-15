@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/pm/status-badge"
 import { Avatar } from "@/components/pm/avatar"
 import { Check } from "@/components/pm/check"
 import { EmptyState } from "@/components/pm/empty-state"
-import { TaskRow, dueBucket, isOverdue, type DueBucket } from "@/components/pm/task-row"
+import { MySubTasks, TaskRow, dueBucket, isMyWork, isOverdue, type DueBucket } from "@/components/pm/task-row"
 import { daysFrom, dueLabel, parseDate } from "@/components/pm/dates"
 import { SubtaskChip } from "@/components/forms/task-sheet"
 import { useForms } from "@/components/forms/forms-context"
@@ -45,7 +45,7 @@ function TaskCard({ task, dragging, overlay }: { task: Task; dragging?: boolean;
                 <StatusBadge value={task.priority} />
                 <span className={cn("num text-xs", overdue ? "tone-red tone-fg font-semibold" : "text-subtle-foreground")}>{due ? dueLabel(due) : ""}</span>
             </div>
-            <div className="text-[13.5px] font-medium leading-[1.35]">{task.title}</div>
+            <div className="text-[13.5px] font-medium leading-[1.35]">{task.title}<MySubTasks task={task} /></div>
             <div className="flex items-center gap-2.5">
                 <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{task.project?.name}</span>
                 <SubtaskChip task={task} />
@@ -161,8 +161,9 @@ export const Tasks: React.FC = () => {
     const taskView = readTaskView(params)
     const setTaskView = (patch: Partial<TaskView>) => setParams(writeTaskView({ ...taskView, ...patch }), { replace: true })
 
+    // Moving a task is for its assignee; "my work" also counts tasks where only a subtask is mine
     const mine = (t: Task) => t.assignedTo?.id === profile?.id
-    const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? mine(t) : true)), taskView, projects.map((p) => p.id))
+    const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? isMyWork(t, profile?.id) : true)), taskView, projects.map((p) => p.id))
     const open = visible.filter((t) => t.currentStatus !== "RESOLVED").length
     const overdue = visible.filter(isOverdue).length
     // People may move their own tasks; whoever runs the project can move any

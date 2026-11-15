@@ -38,6 +38,9 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   NotificationRepo: {
     create: jest.fn().mockResolvedValue({}),
   },
+  SubTaskRepo: {
+    findAssignedTo: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 jest.unstable_mockModule("../services/notification.service.js", () => ({

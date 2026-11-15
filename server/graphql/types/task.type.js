@@ -5,8 +5,9 @@ import {
   GraphQLObjectType,
   GraphQLID,
   GraphQLNonNull,
+  GraphQLList,
 } from "graphql";
-import { UserType, ProjectType } from "./import.type.js";
+import { UserType, ProjectType, SubTaskType } from "./import.type.js";
 
 const toIso = (value) => (value ? new Date(value).toISOString() : null);
 
@@ -21,7 +22,7 @@ const SubTaskStatsType = new GraphQLObjectType({
 
 export const TaskType = new GraphQLObjectType({
   name: "Task",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLID) },
     title: { type: new GraphQLNonNull(GraphQLString) },
     priority: { type: new GraphQLNonNull(GraphQLString) },
@@ -31,6 +32,12 @@ export const TaskType = new GraphQLObjectType({
     createdAt: { type: GraphQLString, resolve: (t) => toIso(t.createdAt) },
     updatedAt: { type: GraphQLString, resolve: (t) => toIso(t.updatedAt) },
     resolvedAt: { type: GraphQLString, resolve: (t) => toIso(t.resolvedAt) },
+    // The caller's own subtasks, attached by allTasks only (null elsewhere): a task is "my work"
+    // when it's assigned to me or has one of these (TSK-05)
+    mySubTasks: {
+      type: new GraphQLList(new GraphQLNonNull(SubTaskType)),
+      resolve: (t) => t.mySubTasks ?? null,
+    },
     subTaskStats: {
       type: new GraphQLNonNull(SubTaskStatsType),
       resolve: async (parent) => {
@@ -60,5 +67,5 @@ export const TaskType = new GraphQLObjectType({
         return await Project.findById(parent.project);
       },
     },
-  },
+  }),
 });

@@ -7,10 +7,12 @@ All notable changes to ProjoMan. Newest first.
 ### Added
 - `assignableUsers(projectId?)` query: who can join a project team, for whoever runs the project (CA-02).
 - Loaders (LDR-01): a refresh bar while on-screen data refetches; skeleton KPI cards until their lists load; busy check-offs and board cards while a status change saves; dialogs stay open until their save finishes.
+- `Task.mySubTasks` on `allTasks`: the caller's own subtasks. "My tasks", the board and dashboard counts include a task when it or one of its subtasks is assigned to you, with "↳ subtask · assigned to you" under it (TSK-05).
 - One z-index layer scale (`sticky` < `overlay` < `modal` < `popover` < `toast`); popovers render in a portal (PROF-07).
 
 ### Fixed
 - A client admin couldn't add anyone in Manage team or the project form: the picker only listed people already on their projects (CA-02).
+- A subtask assigned to you was invisible when its parent task wasn't yours; you also couldn't open the parent (`task`, `subTasks` now allow a subtask's assignee to read it) (TSK-05).
 - Lists went stale in the tab that made a change (a user's client, project counts) until a reload (USR-08).
 - The date of birth calendar showed behind the theme buttons, which stayed clickable (PROF-07).
 

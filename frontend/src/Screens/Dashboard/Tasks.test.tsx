@@ -89,3 +89,17 @@ describe("Tasks — a client admin", () => {
         expect(screen.getByRole("button", { name: /New task/ })).toBeInTheDocument()
     })
 })
+
+describe("Tasks — a member's own work (TSK-05)", () => {
+    afterEach(() => { app.role = "SUPER_ADMIN" })
+
+    it("🟢 a task appears when only one of its subtasks is assigned to me", () => {
+        app.role = "USER"
+        tasks.push(task("Parent T1", projects[0], { mySubTasks: [{ id: "s2", title: "subT2", currentStatus: "NEW", priority: "NORMAL", deadline: null }] }))
+        mount()
+        expect(screen.getByText("Parent T1")).toBeInTheDocument()
+        expect(screen.queryByText("Fix login")).not.toBeInTheDocument() // Not mine
+        tasks.pop()
+    })
+})
+

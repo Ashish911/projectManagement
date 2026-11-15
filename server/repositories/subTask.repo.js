@@ -17,6 +17,9 @@ export const SubTaskRepo = {
   // Used when a user is deleted, so subtasks don't point at a missing person
   unassignUser: async (userId) =>
     await SubTask.updateMany({ assignedTo: userId }, { $set: { assignedTo: null } }),
+  // A person's own subtasks within the given tasks (allTasks "my work", parent-task read access)
+  findAssignedTo: async (userId, taskIds) =>
+    (await SubTask.find({ assignedTo: userId, task: { $in: taskIds } })).map((s) => s.toObject()),
   findByTask: async (taskId) =>
     (await SubTask.find({ task: taskId })).map((s) => s.toObject()),
 };

@@ -47,6 +47,7 @@ export const GET_ALL_TASKS = `
     query GetAllTasks {
         allTasks {
             ${TASK_FIELDS}
+            mySubTasks { id title currentStatus priority deadline }
         }
     }
 `;

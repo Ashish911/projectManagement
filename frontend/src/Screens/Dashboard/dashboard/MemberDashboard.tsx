@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/pm/status-badge"
 import { CountUp } from "@/components/pm/count-up"
 import { Progress } from "@/components/pm/progress"
 import { AnimatedTabs } from "@/components/pm/animated-tabs"
-import { TaskRow, dueBucket, isOverdue } from "@/components/pm/task-row"
+import { TaskRow, dueBucket, isMyWork, isOverdue } from "@/components/pm/task-row"
 import { projectProgress } from "@/components/pm/project-card"
 import { daysFrom, parseDate } from "@/components/pm/dates"
 import { useForms } from "@/components/forms/forms-context"
@@ -36,7 +36,8 @@ export function MemberDashboard() {
     const serverActivity = useServerActivity()
     const firstName = profile?.name?.split(" ")[0] ?? ""
 
-    const mine = tasks.filter((t) => t.assignedTo?.id === profile?.id)
+    // My work: tasks assigned to me, or with a subtask assigned to me (same rule as the Tasks list)
+    const mine = tasks.filter((t) => isMyWork(t, profile?.id))
     const open = mine.filter((t) => t.currentStatus !== "RESOLVED")
     const groups: { value: Tab; label: string; alert?: boolean }[] = [
         { value: "overdue", label: "Overdue", alert: true },
@@ -92,7 +93,7 @@ export function MemberDashboard() {
                             ) : shown.length ? (
                                 shown.map((t, k) => (
                                     <div key={t.id} className="animate-pm-in" style={{ animationDelay: `${k * 50}ms` }}>
-                                        <TaskRow task={t} onOpen={() => openForm("task-view", { id: t.id })} onToggle={() => toggleResolved(t)} />
+                                        <TaskRow task={t} onOpen={() => openForm("task-view", { id: t.id })} onToggle={t.assignedTo?.id === profile?.id ? () => toggleResolved(t) : undefined} />
                                     </div>
                                 ))
                             ) : (

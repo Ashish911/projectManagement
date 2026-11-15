@@ -1,6 +1,6 @@
 // Project-level access shared by the services. A CLIENT_ADMIN runs their own client's
 // projects; on any other project they are only a team member, with a USER's rights.
-import { ClientRepo, ProjectRepo } from "../repositories/import.repo.js";
+import { ClientRepo, ProjectRepo, SubTaskRepo } from "../repositories/import.repo.js";
 
 /**
  * The client a CLIENT_ADMIN runs, or null (other roles, or a client admin with no client).
@@ -57,3 +57,13 @@ export const visibleProjects = async (user) => {
   const byId = new Map([...own, ...member].map((p) => [String(p.id ?? p._id), p]));
   return [...byId.values()];
 };
+
+/**
+ * True if the user is assigned one of the task's subtasks. They may read the parent task
+ * (and its other subtasks) for context, but only edit their own subtask.
+ * @param {string} taskId Task ID.
+ * @param {object} user   The current user.
+ * @returns {Promise<boolean>}
+ */
+export const hasSubTaskOn = async (taskId, user) =>
+  (await SubTaskRepo.findAssignedTo(user.id, [String(taskId)])).length > 0;

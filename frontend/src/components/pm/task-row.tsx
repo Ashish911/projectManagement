@@ -40,6 +40,7 @@ export function TaskRow({ task, showStatus, showProject = true, onOpen, onToggle
             <div className="min-w-0 flex-1">
                 <div className={cn("truncate text-[13.5px] font-medium transition-colors duration-base", done && "text-subtle-foreground line-through")}>{task.title}</div>
                 {showProject && task.project && <div className="truncate text-xs text-subtle-foreground">{task.project.name}</div>}
+                <MySubTasks task={task} />
             </div>
             <SubtaskChip task={task} />
             <StatusBadge value={task.priority} />
@@ -49,6 +50,25 @@ export function TaskRow({ task, showStatus, showProject = true, onOpen, onToggle
         </div>
     )
 }
+
+/** The viewer's own subtasks under a parent: "↳ subT2 · assigned to you" (TSK-05). */
+export function MySubTasks({ task }: { task: Task }) {
+    if (!task.mySubTasks?.length) return null
+    return (
+        <ul className="mt-0.5 grid gap-px">
+            {task.mySubTasks.map((s) => (
+                <li key={s.id} className="flex min-w-0 items-center gap-1.5 text-xs">
+                    <span className="text-subtle-foreground">↳</span>
+                    <span className={cn("truncate font-medium text-accent-foreground", s.currentStatus === "RESOLVED" && "line-through opacity-60")}>{s.title}</span>
+                    <span className="flex-none text-subtle-foreground">· assigned to you</span>
+                </li>
+            ))}
+        </ul>
+    )
+}
+
+/** My work: the task is assigned to me, or one of its subtasks is (TSK-05). Lists and counts share this. */
+export const isMyWork = (t: Task, me: string | undefined) => !!me && (t.assignedTo?.id === me || (t.mySubTasks?.length ?? 0) > 0)
 
 /** Open = anything not resolved. Overdue = open with a past deadline. */
 export const isOpen = (t: Task) => t.currentStatus !== "RESOLVED"

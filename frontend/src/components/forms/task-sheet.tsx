@@ -23,7 +23,7 @@ import { updateTaskInStore } from "@/redux/actions/tasksActions"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/pm/avatar"
 import { Check } from "@/components/pm/check"
-import { StatusBadge } from "@/components/pm/status-badge"
+import { StatusBadge, Tag } from "@/components/pm/status-badge"
 import { daysFrom, dueLabel, parseDate } from "@/components/pm/dates"
 import { cn } from "@/lib/utils"
 import type { Priority, Task, TaskStatus } from "@/types/taskTypes"
@@ -91,15 +91,17 @@ function parseTokens(raw: string, people: { id: string; name: string }[]) {
 }
 
 /** One subtask: check to resolve, click to expand an inline editor. */
-function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, readOnly }: {
+function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, readOnly, yours }: {
     sub: SubTask
     open: boolean
     onToggleOpen: () => void
     onChange: (patch: Partial<SubTask> & { assigneeId?: string | null }) => void
     onDelete: () => void
     assignees: ReturnType<typeof assigneeOptions>
-    /** The parent task is resolved: show the sub-task, but don't allow changes */
+    /** Parent resolved, or someone else's sub-task: show it, but don't allow changes */
     readOnly?: boolean
+    /** The viewer's own sub-task (highlighted when they don't run the project) */
+    yours?: boolean
 }) {
     const done = sub.currentStatus === "RESOLVED"
     const due = parseDate(sub.deadline)
@@ -112,7 +114,8 @@ function SubtaskRow({ sub, open, onToggleOpen, onChange, onDelete, assignees, re
         <div className={cn("rounded-[9px] transition-colors duration-fast hover:bg-surface-2", open && "bg-surface-2")}>
             <div className={cn("flex min-h-10 items-center gap-2.5 p-2", !readOnly && "cursor-pointer")} onClick={readOnly ? undefined : onToggleOpen}>
                 <Check checked={done} disabled={readOnly} label={`Mark ${sub.title} ${done ? "not done" : "done"}`} onChange={() => onChange({ currentStatus: done ? "NEW" : "RESOLVED" })} />
-                <span className={cn("min-w-0 flex-1 truncate text-[13.5px] font-medium transition-colors", done && "text-subtle-foreground line-through")}>{sub.title}</span>
+                <span className={cn("min-w-0 flex-1 truncate text-[13.5px] font-medium transition-colors", done && "text-subtle-foreground line-through", readOnly && !done && "text-muted-foreground")}>{sub.title}</span>
+                {yours && <Tag tone="blue" dot={false}>Yours</Tag>}
                 {sub.currentStatus === "IN_PROGRESS" && <span title="In progress" className="size-[7px] flex-none rounded-full bg-primary shadow-[0_0_0_3px_oklch(var(--accent))]" />}
                 {sub.currentStatus === "REOPENED" && <StatusBadge value="REOPENED" />}
                 {sub.priority !== "NORMAL" && !done && <StatusBadge value={sub.priority} />}
@@ -359,14 +362,16 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
                                     onToggleOpen={() => setOpenSub(openSub === s.id ? null : s.id)}
                                     onChange={(p) => changeSub(s, p)}
                                     onDelete={() => removeSub(s)}
-                                    readOnly={resolved}
+                                    // Whoever runs the project edits any sub-task; anyone else only their own (TSK-05)
+                                    readOnly={resolved || !(isAdmin || s.assignedTo?.id === profile?.id)}
+                                    yours={!isAdmin && s.assignedTo?.id === profile?.id}
                                 />
                             ))}
                         </div>
                     ) : !list.length && (
                         <div className="text-xs text-subtle-foreground">Split this task into smaller steps. Each subtask gets its own assignee, priority and deadline.</div>
                     )}
-                    {!resolved && (<>
+                    {canEdit && (<>
                     <label className="flex h-10 cursor-text items-center gap-2.5 rounded-[9px] border border-dashed border-border-strong px-2.5 transition-[border-color,box-shadow] duration-fast focus-within:border-solid focus-within:border-primary focus-within:ring-[3px] focus-within:ring-ring/35">
                         <IconPlus size={16} className="text-subtle-foreground" />
                         <input

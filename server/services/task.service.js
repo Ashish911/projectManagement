@@ -14,7 +14,7 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { ActivityService } from "./activity.service.js";
-import { managesProject, managesProjectId, onProjectTeam, visibleProjects } from "./access.js";
+import { hasSubTaskOn, managesProject, managesProjectId, onProjectTeam, visibleProjects } from "./access.js";
 import { NotificationService } from "./import.service.js";
 
 /**
@@ -31,11 +31,17 @@ export const TaskService = {
   async getAllTasks(context) {
     const { user } = context;
 
-    if (user.role === "SUPER_ADMIN") return await TaskRepo.find();
+    if (user.role === "SUPER_ADMIN") return await TaskRepo.find(); // Never assigned work
 
     const projects = await visibleProjects(user);
     if (!projects.length) return [];
-    return await TaskRepo.findByProjects(projects.map((p) => p.id));
+    const tasks = await TaskRepo.findByProjects(projects.map((p) => p.id));
+
+    // Each task carries the caller's own subtasks, so "my work" (assigned the task OR one of
+    // its subtasks) is decided here in one query rather than by loading every subtask (TSK-05)
+    const idOf = (t) => String(t._id ?? t.id);
+    const mine = tasks.length ? await SubTaskRepo.findAssignedTo(user.id, tasks.map(idOf)) : [];
+    return tasks.map((t) => ({ ...t, mySubTasks: mine.filter((s) => String(s.task) === idOf(t)) }));
   },
 
   /**
@@ -76,11 +82,12 @@ export const TaskService = {
     const task = await TaskRepo.findById(id);
     if (!task) throw new NotFoundError("Task not found");
 
-    // Unless they run the project, the user must be the task's assignee or creator
+    // Unless they run the project, the user must be the task's assignee or creator,
+    // or be assigned one of its subtasks (read-only context for their own work)
     const isAssigned =
       task.assignedTo?.toString() === user.id ||
       task.createdBy?.toString() === user.id;
-    if (!isAssigned && !(await managesProjectId(task.project, user)))
+    if (!isAssigned && !(await managesProjectId(task.project, user)) && !(await hasSubTaskOn(id, user)))
       throw new ForbiddenError("You do not have access to this task");
 
     return task;

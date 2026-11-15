@@ -33,6 +33,20 @@ describe("TaskType", () => {
   });
 });
 
+describe("TaskType.mySubTasks (TSK-05)", () => {
+  it("🟢 lists the caller's own subtasks that allTasks attached", () => {
+    const field = TaskType.getFields().mySubTasks;
+    expect(String(field.type)).toBe("[SubTask!]");
+    const resolve = field.resolve ?? ((t) => t.mySubTasks);
+    expect(resolve({ mySubTasks: [{ _id: "s1" }] })).toEqual([{ _id: "s1" }]);
+  });
+
+  it("🔴 null where a single task is returned (mutations), so a client merge keeps its value", () => {
+    const resolve = TaskType.getFields().mySubTasks.resolve;
+    expect(resolve({})).toBeNull();
+  });
+});
+
 describe("ClientType timestamps", () => {
   it("🟢 exposes createdAt as an ISO string (oldest-first attention queue)", () => {
     const field = ClientType.getFields().createdAt;
