@@ -33,7 +33,7 @@ import { Field, Grid2, Kbd, Note, Pills, Spinner, inputCls } from "./form-kit"
 import { Combo } from "./combo"
 import { DatePicker, daysFromToday } from "./date-picker"
 import { GhostAvatar, PRIORITY_TOKENS, assigneeOptions, parseDayToken } from "./options"
-import { useAppData } from "./use-app-data"
+import { canManageProject, useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toastError } from "./toaster"
 import { Loading } from "@/components/pm/loading"
@@ -175,7 +175,8 @@ export function TaskSheet({ data, onClose, closing }: FormProps<{ id: string }>)
     const { profile, role, users, projects, tasks } = useAppData()
     const task = tasks.find((t) => t.id === data.id)
     const project = projects.find((p) => p.id === task?.project?.id)
-    const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
+    // Admin powers only on a project the viewer runs; elsewhere they're a team member
+    const isAdmin = canManageProject(role, project)
     // Resolved tasks are read-only until reopened (the server enforces this too)
     const resolved = task?.currentStatus === "RESOLVED"
     const mayEdit = isAdmin || task?.assignedTo?.id === profile?.id

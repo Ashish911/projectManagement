@@ -769,12 +769,10 @@ describe("UserService", () => {
       );
     });
 
-    it("🔴 CLIENT_ADMIN should throw if not assigned to any client", async () => {
+    it("🟢 CLIENT_ADMIN with no client gets an empty list", async () => {
       mockClientFindByAssignedAdmin.mockResolvedValue(null);
 
-      await expect(
-        UserService.getUsers({ user: mockClientAdmin }),
-      ).rejects.toThrow("You are not assigned to any client");
+      await expect(UserService.getUsers({ user: mockClientAdmin })).resolves.toEqual([]);
     });
   });
 

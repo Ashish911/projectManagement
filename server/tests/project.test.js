@@ -118,6 +118,7 @@ describe("ProjectService", () => {
     it("🟢 CLIENT_ADMIN should get only their client projects", async () => {
       mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
       mockProjectFindByClient.mockResolvedValue([mockProject]);
+      mockProjectFindByAssignedUser.mockResolvedValue([]);
 
       const result = await ProjectService.getProjects({
         user: mockClientAdmin,
@@ -138,12 +139,24 @@ describe("ProjectService", () => {
       expect(mockProjectFindByAssignedUser).toHaveBeenCalledWith(mockUser.id);
     });
 
-    it("🔴 CLIENT_ADMIN should throw if no client assigned", async () => {
-      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+    it("🟢 CLIENT_ADMIN also gets other clients' projects they are on, once each", async () => {
+      const other = { ...mockProject, _id: "848a1b2c3d4e5f6a7b8c9d0f", clientId: "748a1b2c3d4e5f6a7b8c9d0f" };
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindByClient.mockResolvedValue([mockProject]);
+      mockProjectFindByAssignedUser.mockResolvedValue([mockProject, other]);
 
-      await expect(
-        ProjectService.getProjects({ user: mockClientAdmin }),
-      ).rejects.toThrow("No client assigned to this admin");
+      const result = await ProjectService.getProjects({ user: mockClientAdmin });
+
+      expect(result).toEqual([mockProject, other]);
+      expect(mockProjectFindByAssignedUser).toHaveBeenCalledWith(mockClientAdmin.id);
+    });
+
+    it("🟢 CLIENT_ADMIN with no client gets the projects they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindByAssignedUser.mockResolvedValue([mockProject]);
+
+      expect(await ProjectService.getProjects({ user: mockClientAdmin })).toEqual([mockProject]);
+      expect(mockProjectFindByClient).not.toHaveBeenCalled();
     });
 
     it("🟢 should return empty array if no projects found", async () => {
@@ -784,6 +797,62 @@ describe("ProjectService", () => {
       } catch (e) {}
 
       expect(mockProjectUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // CLIENT ADMINS AS TEAM MEMBERS
+  // ════════════════════════════════════════════════════════════════
+  describe("client admins as team members", () => {
+    const otherClientProject = { ...mockProject, clientId: "748a1b2c3d4e5f6a7b8c9d0f" };
+
+    it("🟢 a client admin can open another client's project they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockClient);
+      mockProjectFindById.mockResolvedValue({ ...otherClientProject, assignedUsers: [mockClientAdmin.id] });
+      await expect(ProjectService.getProject(mockProject._id, { user: mockClientAdmin })).resolves.toBeDefined();
+    });
+
+    it("🟢 a client admin with no client can open a project they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindById.mockResolvedValue({ ...otherClientProject, assignedUsers: [mockClientAdmin.id] });
+      await expect(ProjectService.getProject(mockProject._id, { user: mockClientAdmin })).resolves.toBeDefined();
+    });
+
+    it("🔴 a client admin with no client can't open a project they aren't on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindById.mockResolvedValue(otherClientProject);
+      await expect(ProjectService.getProject(mockProject._id, { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have access to this project",
+      );
+    });
+
+    it("🔴 being on the team doesn't let a client admin manage another client's project", async () => {
+      mockProjectFindById.mockResolvedValue({ ...otherClientProject, assignedUsers: [mockClientAdmin.id] });
+      mockClientFindById.mockResolvedValue({ ...mockClient, id: otherClientProject.clientId, assignedAdmin: null });
+      await expect(
+        ProjectService.addUserToProject({ id: mockProject._id, users: [mockUser.id] }, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not the admin of this client");
+      await expect(
+        ProjectService.updateProject({ id: mockProject._id, name: "x" }, { user: mockClientAdmin }),
+      ).rejects.toThrow("You are not the admin of this client");
+      expect(mockProjectUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 a super admin can't be added to a project team", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockUserFindByIds.mockResolvedValue([{ id: "748a1b2c3d4e5f6a7b8c9d1f", role: "SUPER_ADMIN" }]);
+      await expect(
+        ProjectService.addUserToProject({ id: mockProject._id, users: ["748a1b2c3d4e5f6a7b8c9d1f"] }, { user: mockSuperAdmin }),
+      ).rejects.toThrow("Super admins can't be added to a project team");
+      expect(mockProjectUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🟢 a client admin can be added to a project team", async () => {
+      mockProjectFindById.mockResolvedValue(mockProject);
+      mockUserFindByIds.mockResolvedValue([{ id: "748a1b2c3d4e5f6a7b8c9d1f", role: "CLIENT_ADMIN" }]);
+      mockProjectUpdate.mockResolvedValue(mockProject);
+      await ProjectService.addUserToProject({ id: mockProject._id, users: ["748a1b2c3d4e5f6a7b8c9d1f"] }, { user: mockSuperAdmin });
+      expect(mockProjectUpdate).toHaveBeenCalled();
     });
   });
 });

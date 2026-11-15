@@ -7,6 +7,8 @@ export interface Project {
     description: string;
     status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
     dueDate?: string | null;
+    /** True if the viewer runs this project (super admin, or its client's admin), not just sits on its team. */
+    canManage: boolean;
     client: Pick<Client, 'id' | 'name'> | null;
     user: Pick<User, 'id' | 'name' | 'email'>[];
 }

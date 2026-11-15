@@ -276,7 +276,7 @@ export const UserService = {
    * Lists users: all for SUPER_ADMIN, or those on the CLIENT_ADMIN's client projects.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The visible users.
-   * @throws {ForbiddenError} If the user is a USER or a CLIENT_ADMIN with no client.
+   * @throws {ForbiddenError} If the user is a USER.
    */
   async getUsers(context) {
     const { user } = context;
@@ -294,8 +294,7 @@ export const UserService = {
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findByAssignedAdmin(user.id);
-      if (!client)
-        throw new ForbiddenError("You are not assigned to any client");
+      if (!client) return [];
 
       // Unique IDs of users assigned to any of the client's projects
       const projects = await ProjectRepo.findByClientId(client.id);
@@ -602,9 +601,9 @@ export const UserService = {
     const email = input.email.toLowerCase();
     if (await UserRepo.findByEmail(email)) throw new ConflictError("Someone already uses this email");
 
-    // A client admin is created already attached to their client
+    // A client admin can be created already attached to a client, or with none yet
     let client = null;
-    if (input.role === "CLIENT_ADMIN") {
+    if (input.role === "CLIENT_ADMIN" && input.clientId) {
       client = await ClientRepo.findById(input.clientId);
       if (!client) throw new NotFoundError("Client not found");
       if (client.assignedAdmin) throw new ConflictError("That client already has a client admin");
@@ -679,7 +678,7 @@ export const UserService = {
 
   /**
    * Sets the role for one or more users. SUPER_ADMIN only.
-   * CLIENT_ADMIN needs exactly one user and the client they'll manage; users who stop
+   * A CLIENT_ADMIN may be given a client (then only one user) or none; users who stop
    * being client admins are detached from their client. At least one super admin must remain.
    * @param {object} data    `{ ids, role, [clientId] }`.
    * @param {object} context GraphQL context with the current `user`.
@@ -721,13 +720,13 @@ export const UserService = {
     for (const change of changes) {
       const target = byId.get(change.id);
       const current = target.role === "CLIENT_ADMIN" ? await ClientRepo.findByAssignedAdmin(target.id) : null;
-      const unchanged = target.role === change.role && (change.role !== "CLIENT_ADMIN" || current?.id === change.clientId);
+      const unchanged = target.role === change.role && (change.role !== "CLIENT_ADMIN" || (current?.id ?? null) === (change.clientId ?? null));
       if (!unchanged) plan.push({ change, target, current });
     }
 
     // Check every new client before changing anything
     const newClient = new Map();
-    for (const { change } of plan.filter((p) => p.change.role === "CLIENT_ADMIN")) {
+    for (const { change } of plan.filter((p) => p.change.role === "CLIENT_ADMIN" && p.change.clientId)) {
       const client = await ClientRepo.findById(change.clientId);
       if (!client) throw new NotFoundError("Client not found");
       const admin = client.assignedAdmin ? String(client.assignedAdmin.id ?? client.assignedAdmin) : null;

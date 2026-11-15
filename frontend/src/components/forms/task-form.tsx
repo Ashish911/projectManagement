@@ -10,7 +10,7 @@ import { Field, Flash, FormError, FormFoot, FormModal, Grid2, Pills, SubmitButto
 import { Combo } from "./combo"
 import { DatePicker, daysFromToday } from "./date-picker"
 import { PRIORITY_TOKENS, assigneeOptions, parseDayToken, projectOptions } from "./options"
-import { useAppData } from "./use-app-data"
+import { managedProjects, useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toast } from "./toaster"
 
@@ -82,7 +82,9 @@ type Values = {
 export function TaskForm({ data, onClose, closing }: FormProps<{ projectId?: string; status?: "NEW" | "IN_PROGRESS"; assigneeId?: string }>) {
     const dispatch = useDispatch()
     const openForm = useForms()
-    const { users, projects, tasks } = useAppData()
+    const { role, users, projects: allProjects, tasks } = useAppData()
+    // Tasks can only be added to projects the viewer runs
+    const projects = managedProjects(role, allProjects)
     const box = useRef<HTMLDivElement>(null)
     const options = projectOptions(projects)
 

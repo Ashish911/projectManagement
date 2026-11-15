@@ -57,12 +57,20 @@ describe("BulkRoleForm — per-person roles", () => {
         expect(screen.getByText("1 demotion")).toBeInTheDocument()
     })
 
-    it("🔴 a new client admin needs a client before applying", async () => {
+    it("🟢 a new client admin can be applied without a client", async () => {
+        open()
+        await setRole("Raj Patel", /^Client admin$/)
+        await userEvent.type(screen.getByPlaceholderText(/Why are these roles changing/), "Joins as an admin")
+        await userEvent.click(apply())
+        expect(api.updateUserRoles).toHaveBeenCalledWith([{ id: "u3", role: "CLIENT_ADMIN", clientId: null, reason: null }], "Joins as an admin")
+    })
+
+    it("🟢 a new client admin can be given a client", async () => {
+        api.updateUserRoles.mockClear()
         open()
         await setRole("Raj Patel", /^Client admin$/)
         await userEvent.type(screen.getByPlaceholderText(/Why are these roles changing/), "Leads Atlas")
-        expect(apply()).toBeDisabled()
-        await userEvent.click(within(row("Raj Patel")).getByRole("button", { name: /Choose client/ }))
+        await userEvent.click(within(row("Raj Patel")).getByRole("button", { name: /No client yet/ }))
         await userEvent.click(await screen.findByText("Atlas"))
         expect(apply()).toBeEnabled()
         await userEvent.click(apply())

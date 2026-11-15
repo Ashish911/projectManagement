@@ -3,11 +3,11 @@ import userEvent from "@testing-library/user-event"
 
 const me = { id: "me", name: "Ada Admin", role: "SUPER_ADMIN" }
 const base = { id: "t1", title: "Fix login", priority: "HIGH", deadline: null, assignedTo: { id: "u1", name: "Ravi Shah" }, createdBy: me, project: { id: "p1", name: "Portal" }, createdAt: null }
-const state = vi.hoisted(() => ({ status: "RESOLVED" }))
+const state = vi.hoisted(() => ({ status: "RESOLVED", role: "SUPER_ADMIN", projects: [] as { id: string; canManage: boolean }[] }))
 vi.mock("react-redux", () => ({ useDispatch: () => vi.fn() }))
 vi.mock("./use-app-data", async (orig) => ({
     ...(await orig<object>()),
-    useAppData: () => ({ profile: me, role: "SUPER_ADMIN", users: [], projects: [], tasks: [{ ...base, currentStatus: state.status }] }),
+    useAppData: () => ({ profile: me, role: state.role, users: [], projects: state.projects, tasks: [{ ...base, currentStatus: state.status }] }),
 }))
 const api = vi.hoisted(() => ({ updateTaskStatus: vi.fn(), getSubTasks: vi.fn(), getTaskComments: vi.fn(), deleteSubTask: vi.fn() }))
 vi.mock("@/api/taskApi", async (orig) => ({ ...(await orig<object>()), updateTaskStatus: api.updateTaskStatus }))
@@ -71,5 +71,26 @@ describe("TaskSheet — deleting", () => {
         expect(screen.getByText("Delete this sub-task and its comments?")).toBeInTheDocument()
         await userEvent.click(screen.getByRole("button", { name: "Yes, delete" }))
         expect(api.deleteSubTask).toHaveBeenCalledWith("s1")
+    })
+})
+
+describe("TaskSheet — a client admin", () => {
+    afterEach(() => { state.role = "SUPER_ADMIN"; state.projects = [] })
+
+    it("🔴 on another client's project, can't edit or delete someone else's task", async () => {
+        state.role = "CLIENT_ADMIN"
+        state.projects = [{ id: "p1", canManage: false }]
+        await open("IN_PROGRESS")
+        expect(screen.getByLabelText("Task title")).toBeDisabled()
+        expect(screen.queryByRole("button", { name: /Delete task/ })).not.toBeInTheDocument()
+        expect(screen.getByPlaceholderText("Write a comment")).toBeEnabled()
+    })
+
+    it("🟢 on their own client's project, edits and deletes any task", async () => {
+        state.role = "CLIENT_ADMIN"
+        state.projects = [{ id: "p1", canManage: true }]
+        await open("IN_PROGRESS")
+        expect(screen.getByLabelText("Task title")).toBeEnabled()
+        expect(screen.getByRole("button", { name: /Delete task/ })).toBeInTheDocument()
     })
 })

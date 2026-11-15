@@ -4,6 +4,7 @@ const PROJECT_FIELDS = `
     description
     status
     dueDate
+    canManage
     client {
         id
         name

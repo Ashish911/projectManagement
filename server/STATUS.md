@@ -179,12 +179,12 @@ Severity reflects risk in production:
 - **Medium:** correctness or availability.
 - **Low:** operational polish.
 
-Each row names the fix we'd recommend. None are fixed yet.
+Each row names the fix we'd recommend. S-2 is fixed; the rest are open.
 
 | # | Severity | Area | Issue and impact | Recommended fix |
 |---|---|---|---|---|
 | S-1 | **High** | Access control | **`updateClient` saves every field it is sent.** A `CLIENT_ADMIN` editing their own client can also change `assignedAdmin` (hand the client to someone else) or set `deleteRequest`. The ownership check also uses `==` instead of `===`. | Whitelist `name` / `email` / `phone` for `CLIENT_ADMIN`; keep `assignedAdmin` behind `assignAdmin`; use strict equality on `String(id)`. |
-| S-2 | **High** | Tenant isolation | **`tasks`, `task`, `subTasks` and `subTask` don't scope `CLIENT_ADMIN` to their client.** Any client admin who knows an id can read another client's tasks. Comments and `allTasks` already check ownership. | Reuse the project-membership check from `comment.service.js` (`assertProjectAccess` / `isProjectClientAdmin`) in the task and sub-task read paths, with tests for a foreign `CLIENT_ADMIN`. |
+| S-2 | ~~High~~ Fixed | Tenant isolation | ~~Task and sub-task reads and writes didn't scope `CLIENT_ADMIN` to their client.~~ Fixed 2026-11-12: `services/access.js` (`managesProject`) decides who runs a project; on any other project a client admin has a member's rights. | — |
 | S-3 | Medium | Caching | **User cache invalidation gaps.** `register`, `deleteUser` and `promoteToAdmin` don't call `invalidateUsers()`, so SUPER_ADMIN lists can be up to 5 minutes stale. Cached user objects also include password hashes and reset tokens. | Call `invalidateUsers()` in those three methods; strip `password` / `resetToken*` before caching. |
 | S-4 | Medium | Notifications | **Rare duplicate notification.** If `queue.add` times out after 3 s but Redis accepts the job later, the notification is delivered twice. | Deterministic `jobId` (e.g. hash of user + content + minute) and an idempotent `deliver()`. |
 | S-5 | Medium | Operations | **The worker must be deployed everywhere.** Compose runs `worker` / `worker-prod`; any other deployment (e.g. AWS) must run `node worker/notification.worker.js`, or queued notifications wait. | Add the worker to every deployment manifest; alert on queue depth / job age. |

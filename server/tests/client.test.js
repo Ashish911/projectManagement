@@ -579,53 +579,28 @@ describe("ClientService", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  // DELETING A CLIENT THAT HAS AN ADMIN (USR-07)
+  // DELETING A CLIENT THAT HAS AN ADMIN
   // ════════════════════════════════════════════════════════════════
   describe("deleting a client with a client admin", () => {
     const admin = "648a1b2c3d4e5f6a7b8c9d1a";
-    const other = { _id: "748a1b2c3d4e5f6a7b8c9d9e", id: "748a1b2c3d4e5f6a7b8c9d9e", name: "Bolt", assignedAdmin: null };
     const withAdmin = { ...mockClient, id: mockClient._id, assignedAdmin: admin, deleteRequest: true };
 
     beforeEach(() => {
-      mockClientFindById.mockImplementation(async (id) => (id === other._id ? other : withAdmin));
+      mockClientFindById.mockResolvedValue(withAdmin);
       mockClientDelete.mockResolvedValue(withAdmin);
     });
 
-    it("🔴 refuses until you say what happens to the admin", async () => {
-      await expect(ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin })).rejects.toThrow(
-        "Choose what happens to the client admin",
-      );
-      expect(mockClientDelete).not.toHaveBeenCalled();
-    });
-
-    it("🔴 needs a reason", async () => {
-      await expect(
-        ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "DEMOTE", reason: " " }),
-      ).rejects.toThrow("Give a reason");
-      expect(mockClientDelete).not.toHaveBeenCalled();
-    });
-
-    it("🟢 demotes the admin to USER, logs the reason, then deletes", async () => {
-      await ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "DEMOTE", reason: "Contract ended" });
-      expect(mockUserUpdate).toHaveBeenCalledWith(admin, { role: "USER" });
-      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({ action: "ROLE_CHANGED", targetUser: admin, reason: "Contract ended" }));
+    it("🟢 deletes straight away; the admin keeps their role and is told", async () => {
+      await ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin });
       expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
-    });
-
-    it("🟢 reassigns the admin to another client, then deletes", async () => {
-      await ClientService.deleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "REASSIGN", reassignTo: other._id, reason: "Moving to Bolt" });
-      expect(mockClientUpdate).toHaveBeenCalledWith(other._id, { assignedAdmin: admin });
       expect(mockUserUpdate).not.toHaveBeenCalled();
-      expect(mockRecordActivity).toHaveBeenCalledWith(expect.objectContaining({ action: "ADMIN_REASSIGNED", reason: "Moving to Bolt" }));
-      expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
+      expect(mockNotify).toHaveBeenCalledWith(admin, expect.stringContaining("was deleted"));
     });
 
-    it("🔴 won't reassign to a client that already has an admin", async () => {
-      mockClientFindById.mockImplementation(async (id) => (id === other._id ? { ...other, assignedAdmin: "648a1b2c3d4e5f6a7b8c9d7f" } : withAdmin));
-      await expect(
-        ClientService.forceDeleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin }, { adminAction: "REASSIGN", reassignTo: other._id, reason: "x" }),
-      ).rejects.toThrow("Bolt already has a client admin");
-      expect(mockClientDelete).not.toHaveBeenCalled();
+    it("🟢 the same for an approved deletion request", async () => {
+      await ClientService.deleteClientBySuperAdmin(mockClient._id, { user: mockSuperAdmin });
+      expect(mockClientDelete).toHaveBeenCalledWith(mockClient._id);
+      expect(mockUserUpdate).not.toHaveBeenCalled();
     });
   });
 
@@ -659,7 +634,7 @@ describe("ClientService", () => {
       });
     });
 
-    it("🟢 demotes the admin being replaced, so no client admin is left without a client", async () => {
+    it("🟢 the admin being replaced stays a client admin, without a client, and is told", async () => {
       const previousAdmin = "648a1b2c3d4e5f6a7b8c9d2b";
       mockClientFindById.mockResolvedValue({ ...mockClient, assignedAdmin: previousAdmin });
       mockUserFindById.mockResolvedValue(mockClientAdmin);
@@ -668,7 +643,7 @@ describe("ClientService", () => {
 
       await ClientService.assignAdmin(assignAdminData, { user: mockSuperAdmin });
 
-      expect(mockUserUpdate).toHaveBeenCalledWith(previousAdmin, { role: "USER" });
+      expect(mockUserUpdate).not.toHaveBeenCalled();
       expect(mockNotify).toHaveBeenCalledWith(previousAdmin, expect.stringContaining("no longer the admin"));
     });
 

@@ -1,7 +1,6 @@
 import { createLogger } from "../config/logger.js";
 import { ForbiddenError, NotFoundError } from "../errors/errors.js";
 import {
-  ClientRepo,
   CommentRepo,
   ProjectRepo,
   SubTaskRepo,
@@ -15,6 +14,7 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./notification.service.js";
+import { managesProject, onProjectTeam } from "./access.js";
 
 /** Loads the project a task belongs to. */
 const getTaskProject = async (task) => {
@@ -41,25 +41,13 @@ const getSubTaskWithProject = async (subTaskId) => {
   return { subTask, project: await getTaskProject(task) };
 };
 
-/** True if the user is the CLIENT_ADMIN of the client that owns the project. */
-const isProjectClientAdmin = async (project, user) => {
-  if (user.role !== "CLIENT_ADMIN") return false;
-  const client = await ClientRepo.findByAssignedAdmin(user.id);
-  return !!client && client.id.toString() === project.clientId.toString();
-};
-
 /**
- * Allows SUPER_ADMIN, the project's CLIENT_ADMIN, and users assigned to the project.
+ * Allows whoever runs the project (SUPER_ADMIN, its client's CLIENT_ADMIN) and anyone on its team.
  * @throws {ForbiddenError} For anyone else.
  */
 const assertProjectAccess = async (project, user) => {
-  if (user.role === "SUPER_ADMIN") return;
-  if (await isProjectClientAdmin(project, user)) return;
-
-  const isMember =
-    user.role === "USER" &&
-    project.assignedUsers.map(String).includes(user.id);
-  if (isMember) return;
+  if (onProjectTeam(project, user)) return;
+  if (await managesProject(project, user)) return;
 
   throw new ForbiddenError("You are not a member of this project");
 };
@@ -258,9 +246,8 @@ export const CommentService = {
     const { comment, project } = await getCommentWithProject(id);
 
     const canDelete =
-      user.role === "SUPER_ADMIN" ||
       comment.userId.toString() === user.id ||
-      (await isProjectClientAdmin(project, user));
+      (await managesProject(project, user));
 
     if (!canDelete) {
       throw new ForbiddenError(

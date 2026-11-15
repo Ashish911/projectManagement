@@ -11,7 +11,8 @@ import type { Task } from "@/types/taskTypes"
 
 /**
  * Everything the forms and screens draw from, loaded once per session.
- * Lists the role can't read stay empty (users for USER, clients for non-super admins).
+ * Lists the role can't read stay empty (users and clients for USER); a client admin's
+ * clients list is their own client, or empty if they have none.
  */
 export function useAppData() {
     const dispatch = useDispatch()
@@ -28,11 +29,23 @@ export function useAppData() {
         dispatch(fetchProjects() as any)
         dispatch(fetchAllTasks() as any)
         if (role !== "USER") dispatch(fetchUsers() as any)
-        if (role === "SUPER_ADMIN") dispatch(fetchClients() as any)
+        // A client admin's list holds just their own client (empty if they have none)
+        if (role !== "USER") dispatch(fetchClients() as any)
     }, [dispatch, role])
 
     return { profile, role, users, clients, projects, tasks, tasksLoaded }
 }
+
+/**
+ * True if the viewer runs the project: a super admin always does; a client admin only for
+ * their own client's projects (`canManage` from the server). On other projects they are a team member.
+ */
+export const canManageProject = (role: Role | undefined, project: Pick<Project, "canManage"> | null | undefined) =>
+    role === "SUPER_ADMIN" || !!project?.canManage
+
+/** The projects the viewer runs: where they can add tasks. */
+export const managedProjects = <P extends Pick<Project, "canManage">>(role: Role | undefined, projects: P[]) =>
+    projects.filter((p) => canManageProject(role, p))
 
 /** Open (unresolved) tasks assigned to a person; drives the workload bars in pickers. */
 export const openTaskCount = (tasks: Task[], userId: string) =>

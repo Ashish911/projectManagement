@@ -14,7 +14,7 @@ import { TaskRow, dueBucket, isOverdue, type DueBucket } from "@/components/pm/t
 import { daysFrom, dueLabel, parseDate } from "@/components/pm/dates"
 import { SubtaskChip } from "@/components/forms/task-sheet"
 import { useForms } from "@/components/forms/forms-context"
-import { useAppData } from "@/components/forms/use-app-data"
+import { canManageProject, managedProjects, useAppData } from "@/components/forms/use-app-data"
 import { useTaskActions } from "@/components/forms/task-actions"
 import { cn } from "@/lib/utils"
 import { useSearchParams } from "react-router-dom"
@@ -144,7 +144,9 @@ export const Tasks: React.FC = () => {
     const { profile, role, tasks, projects, tasksLoaded } = useAppData()
     const { setStatus, toggleResolved } = useTaskActions()
     const isMember = role === "USER"
-    const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
+    // Admin powers are per project: a client admin runs only their own client's projects
+    const canAdd = managedProjects(role, projects).length > 0
+    const runs = (t: Task) => canManageProject(role, projects.find((p) => p.id === t.project?.id))
 
     const [view, setView] = useState<"board" | "list">("board")
     const [who, setWho] = useState<"all" | "mine">("all")
@@ -161,8 +163,8 @@ export const Tasks: React.FC = () => {
     const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? mine(t) : true)), taskView, projects.map((p) => p.id))
     const open = visible.filter((t) => t.currentStatus !== "RESOLVED").length
     const overdue = visible.filter(isOverdue).length
-    // Members may only move their own tasks; admins can move any
-    const canMove = (t: Task) => isAdmin || mine(t)
+    // People may move their own tasks; whoever runs the project can move any
+    const canMove = (t: Task) => runs(t) || mine(t)
 
     const onDragStart = (e: DragStartEvent) => setDragId(String(e.active.id))
     const onDragEnd = (e: DragEndEvent) => {
@@ -177,7 +179,7 @@ export const Tasks: React.FC = () => {
             <PageHead title={isMember ? "My tasks" : "Tasks"} sub={`${open} open · ${overdue} overdue`}>
                 <Segmented value={view} onChange={setView} options={[{ value: "board", label: "Board" }, { value: "list", label: "List" }]} />
                 {!isMember && <Segmented value={who} onChange={setWho} options={[{ value: "all", label: "Everyone" }, { value: "mine", label: "Assigned to me" }]} />}
-                {isAdmin && <Button onClick={() => openForm("task")}><IconPlus />New task</Button>}
+                {canAdd && <Button onClick={() => openForm("task")}><IconPlus />New task</Button>}
                 {isMember && <Button onClick={() => openForm("log-update")}><IconMessagePlus />Log update</Button>}
             </PageHead>
 
@@ -214,7 +216,7 @@ export const Tasks: React.FC = () => {
                         {COLUMNS.map((s) => {
                             const col = visible.filter((t) => t.currentStatus === s)
                             return (
-                                <Column key={s} status={s} count={col.length} dragging={!!dragId} canAdd={isAdmin && (s === "NEW" || s === "IN_PROGRESS")} onAdd={() => openForm("task", { status: s })}>
+                                <Column key={s} status={s} count={col.length} dragging={!!dragId} canAdd={canAdd && (s === "NEW" || s === "IN_PROGRESS")} onAdd={() => openForm("task", { status: s })}>
                                     {col.map((t) => (
                                         <DraggableCard key={t.id} task={t} canDrag={canMove(t)} onOpen={() => openForm("task-view", { id: t.id })} />
                                     ))}

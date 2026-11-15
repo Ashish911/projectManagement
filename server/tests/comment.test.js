@@ -499,4 +499,33 @@ describe("CommentService", () => {
       ).rejects.toThrow("Comment not found");
     });
   });
+
+  // ════════════════════════════════════════════════════════════════
+  // CLIENT ADMINS ON ANOTHER CLIENT'S PROJECT
+  // ════════════════════════════════════════════════════════════════
+  describe("client admin on the team of another client's project", () => {
+    const onTeam = { ...mockProject, assignedUsers: [...mockProject.assignedUsers, mockOtherClientAdmin.id] };
+
+    beforeEach(() => {
+      mockTaskFindById.mockResolvedValue(mockTask);
+      mockProjectFindById.mockResolvedValue(onTeam);
+    });
+
+    it("🟢 can read and add comments, with or without a client of their own", async () => {
+      mockCommentFindByTask.mockResolvedValue([mockComment]);
+      for (const client of [mockOtherClient, null]) {
+        mockClientFindByAssignedAdmin.mockResolvedValue(client);
+        await expect(CommentService.getTaskComments(mockTask.id, { user: mockOtherClientAdmin })).resolves.toBeDefined();
+        await CommentService.addTaskComment({ taskId: mockTask.id, content: "Hi" }, { user: mockOtherClientAdmin });
+      }
+      expect(mockCommentCreate).toHaveBeenCalledTimes(2);
+    });
+
+    it("🔴 can't delete someone else's comment there", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(mockOtherClient);
+      mockCommentFindById.mockResolvedValue(mockComment);
+      await expect(CommentService.deleteComment(mockComment.id, { user: mockOtherClientAdmin })).rejects.toThrow();
+      expect(mockCommentDelete).not.toHaveBeenCalled();
+    });
+  });
 });

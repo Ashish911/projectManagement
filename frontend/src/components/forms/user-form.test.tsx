@@ -82,3 +82,21 @@ describe("UserForm — date of birth (PROF-04)", () => {
         expect(document.querySelector('input[type="date"]')).toBeNull()
     })
 })
+
+describe("UserForm — client admins", () => {
+    it("🟢 a client admin can be invited without a client", async () => {
+        api.createUser.mockReset().mockResolvedValue({ id: "n2", name: "Hero Lee", email: "hero@x.io" })
+        render(<UserForm data={{}} onClose={vi.fn()} closing={false} />)
+        await new Promise((r) => setTimeout(r, 100))
+        await userEvent.type(screen.getByPlaceholderText("e.g. Mina Lama"), "Hero Lee")
+        await userEvent.type(screen.getByPlaceholderText("name@company.com"), "hero@x.io")
+        await userEvent.selectOptions(screen.getByRole("combobox", { name: "Country code" }), "NP")
+        await userEvent.type(screen.getByRole("textbox", { name: "Phone" }), "9801234567")
+        await userEvent.click(screen.getByRole("button", { name: "Male" }))
+        await userEvent.click(screen.getByRole("radio", { name: /Client admin/ }))
+        expect(screen.queryByText("Pick the client they’ll manage")).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole("button", { name: "Send invite" }))
+        expect(api.createUser).toHaveBeenCalledWith(expect.objectContaining({ role: "CLIENT_ADMIN", clientId: null }))
+    })
+})
+

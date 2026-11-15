@@ -36,7 +36,7 @@ import { daysFrom, parseDate } from "@/components/pm/dates";
 import { AreaChart, LegendLine } from "@/components/pm/charts/area-chart";
 import { tokenColor } from "@/components/pm/charts/smooth";
 import { useForms } from "@/components/forms/forms-context";
-import { useAppData } from "@/components/forms/use-app-data";
+import { canManageProject, useAppData } from "@/components/forms/use-app-data";
 import { useTaskActions } from "@/components/forms/task-actions";
 import { cn } from "@/lib/utils";
 import { Loading } from "@/components/pm/loading";
@@ -94,10 +94,11 @@ export const ProjectDetail: React.FC = () => {
     const { loading } = useSelector((state: any) => state.projects);
     const { role, users, projects, tasks, tasksLoaded } = useAppData();
     const { toggleResolved } = useTaskActions();
-    const canManage = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN";
     const [tab, setTab] = useState<Tab>("overview");
 
     const project = projects.find((p) => p.id === id);
+    // A client admin on another client's project is only a team member there
+    const canManage = canManageProject(role, project);
 
     if (!project) {
         return loading || !projects.length ? (

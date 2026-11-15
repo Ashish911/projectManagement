@@ -6,11 +6,11 @@ const projects = [{ id: "p1", name: "Portal", user: [] }, { id: "p2", name: "App
 const task = (id: string, project: { id: string; name: string }, o = {}) => ({
     id, title: id, priority: "NORMAL", currentStatus: "NEW", deadline: null, assignedTo: null, createdBy: null, project, ...o,
 })
-const app = vi.hoisted(() => ({ loaded: true }))
+const app = vi.hoisted(() => ({ loaded: true, role: "SUPER_ADMIN", projects: null as null | object[] }))
 const tasks = [task("Fix login", projects[0], { priority: "HIGH" }), task("Ship app", projects[1], { priority: "URGENT" }), task("Write docs", projects[0])]
 vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
-    useAppData: () => ({ profile: { id: "me" }, role: "SUPER_ADMIN", tasks, projects, tasksLoaded: app.loaded }),
+    useAppData: () => ({ profile: { id: "me" }, role: app.role, tasks, projects: app.projects ?? projects, tasksLoaded: app.loaded }),
 }))
 vi.mock("@/components/forms/task-actions", () => ({ useTaskActions: () => ({ setStatus: vi.fn(), toggleResolved: vi.fn() }) }))
 vi.mock("@/components/forms/forms-context", async (orig) => ({ ...(await orig<object>()), useForms: () => vi.fn() }))
@@ -59,5 +59,23 @@ describe("Tasks — loading", () => {
         app.loaded = false
         mount()
         expect(screen.getByRole("status", { name: "Loading tasks" })).toBeInTheDocument()
+    })
+})
+
+describe("Tasks — a client admin", () => {
+    afterEach(() => { app.role = "SUPER_ADMIN"; app.projects = null })
+
+    it("🔴 who only sits on other clients' teams can't add tasks", () => {
+        app.role = "CLIENT_ADMIN"
+        app.projects = projects.map((p) => ({ ...p, canManage: false }))
+        mount()
+        expect(screen.queryByRole("button", { name: /New task/ })).not.toBeInTheDocument()
+    })
+
+    it("🟢 who runs a project can add tasks", () => {
+        app.role = "CLIENT_ADMIN"
+        app.projects = [{ ...projects[0], canManage: true }, { ...projects[1], canManage: false }]
+        mount()
+        expect(screen.getByRole("button", { name: /New task/ })).toBeInTheDocument()
     })
 })

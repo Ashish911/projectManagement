@@ -10,7 +10,11 @@ All notable changes to ProjoMan. Newest first.
 
 | Change | Before | After |
 |---|---|---|
-| Deleting a client that has a client admin | Deleted; the admin kept the role with no client | `deleteClientBySuperAdmin` / `forceDeleteClient` need `adminAction` (`REASSIGN` + `reassignTo`, or `DEMOTE`) and `reason` |
+| Client admins on other projects | Admin rights on every project's tasks and sub-tasks | Admin rights only on their own client's projects; on any other project they're on, a `USER`'s rights (`FORBIDDEN` otherwise) |
+| A client admin with no client | `projects` failed with "No client assigned"; `users` was `FORBIDDEN` | Allowed: they see the projects they're on; `users` returns `[]` |
+| `addUserToProject` | Accepted super admins | Refuses super admins (`FORBIDDEN`); client admins can be added |
+| Replacing a client's admin (`assignAdmin`) | The old admin was demoted to `USER` | The old admin stays a `CLIENT_ADMIN`, with no client |
+| `createUser`, `changeUserRoles`, `updateUserRoles` with `CLIENT_ADMIN` | A `clientId` was required | `clientId` is optional; with one, `changeUserRoles` still takes exactly one person |
 | Resolved tasks | Editable | `updateTask` and sub-task writes refused (409); `updateTaskStatus` only to `REOPENED` |
 | People's phone numbers (`updateProfile`, `createUser`, `updateUser`) | Any 7+ digits | Valid AU / NZ / US / NP number with country code; stored as E.164 |
 | Names and dates of birth | Any string | Letters, spaces, `'`, `.`, `-` (max 100); date of birth not in the future |
@@ -18,7 +22,6 @@ All notable changes to ProjoMan. Newest first.
 | Role in a JWT | Trusted for its hour | Read from the database on every request; a deleted user's token gets 401 |
 
 **Operations**
-- Run `npm run db:orphan-admins` (and `:prod`) to list client admins with no client; add `-- --demote` to make them users. Dev data has one: `hero@gmail.com`.
 - New dependencies: `nodemailer`, `libphonenumber-js` (server) and `libphonenumber-js` (frontend). Rebuild containers with `--renew-anon-volumes`.
 - Email in dev goes to Mailpit (`localhost:8025`) via `SMTP_HOST`. Production still needs a verified Bird sending domain and `EMAIL_FROM`: the sandbox sender only reaches workspace members, which is why invites and resets never arrived.
 - New `activities` collection; `npm run db:indexes:prod` builds its two indexes.
@@ -27,12 +30,13 @@ All notable changes to ProjoMan. Newest first.
 - Role-based in-app Guide (`/guide`), found from ⌘K ("help") and the account menu.
 - Per-person bulk role editor (`updateUserRoles`) with reasons; every role change, reopen and admin move is recorded in Activity (`activity` query) and shown on the dashboards.
 - `myClient` query, so a client admin sees their client before it has projects.
+- Client admins can join any project's team, and a client admin's client is optional. `Project.canManage` tells the UI whether the viewer runs a project, so admin controls only show there.
 - Tasks: project filter, sort and grouping kept in the URL; confirmations for reopening (with reason) and deleting tasks / sub-tasks.
 - Live refresh: notification-driven refetch, cross-tab sync, refresh on focus.
 - Shared loading skeletons; one date picker everywhere (birthdate mode, project quick picks); phone input with country codes.
 
 ### Fixed
-- A promoted client admin saw nothing (stale JWT role); orphaned client admins on client delete or admin replacement; export ignored the selection; bulk-action bar off screen; theme toggle flip-flopping; collapsed sidebar icons off centre; same current/new password accepted; promoting a user to client admin without confirmation.
+- A promoted client admin saw nothing (stale JWT role); a client admin could read and change tasks and sub-tasks of any client's project (S-2); export ignored the selection; bulk-action bar off screen; theme toggle flip-flopping; collapsed sidebar icons off centre; same current/new password accepted; promoting a user to client admin without confirmation.
 
 ## Unreleased — since `9906d68` (2026-10-06)
 

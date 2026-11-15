@@ -25,7 +25,7 @@ import { useTheme } from "@/components/hooks/use-theme"
 import { NAV_BY_ROLE } from "@/Screens/Components/app-sidebar"
 import { cn } from "@/lib/utils"
 import { Kbd } from "./form-kit"
-import { useAppData } from "./use-app-data"
+import { managedProjects, useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 
 type Item = {
@@ -47,7 +47,7 @@ export function CommandPalette({ onClose, closing }: FormProps) {
     const navigate = useNavigate()
     const openForm = useForms()
     const { theme, toggle } = useTheme()
-    const { profile, role, users, projects, tasks } = useAppData()
+    const { profile, role, users, clients, projects, tasks } = useAppData()
     const [q, setQ] = useState("")
     const [hi, setHi] = useState(0)
     const listRef = useRef<HTMLDivElement>(null)
@@ -56,12 +56,12 @@ export function CommandPalette({ onClose, closing }: FormProps) {
     const later = (fn: () => void) => () => { onClose(); setTimeout(fn, 200) }
     const go = (url: string) => () => { onClose(); navigate(url) }
 
-    const isAdmin = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN"
+    // New task needs a project the viewer runs; New project needs a client they run
+    const canAddTask = managedProjects(role, projects).length > 0
+    const canAddProject = role === "SUPER_ADMIN" || (role === "CLIENT_ADMIN" && clients.length > 0)
     const actions: Item[] = [
-        ...(isAdmin ? [
-            { group: "Actions", label: "New task", icon: IconSquareCheck, run: later(() => openForm("task")) },
-            { group: "Actions", label: "New project", icon: IconFolderPlus, run: later(() => openForm("project")) },
-        ] : []),
+        ...(canAddTask ? [{ group: "Actions", label: "New task", icon: IconSquareCheck, run: later(() => openForm("task")) }] : []),
+        ...(canAddProject ? [{ group: "Actions", label: "New project", icon: IconFolderPlus, run: later(() => openForm("project")) }] : []),
         ...(role === "SUPER_ADMIN" ? [
             { group: "Actions", label: "Invite user", icon: IconUserPlus, run: later(() => openForm("user")) },
             { group: "Actions", label: "New client", icon: IconBuildingPlus, run: later(() => openForm("client")) },

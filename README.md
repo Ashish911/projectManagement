@@ -50,7 +50,8 @@ A GraphQL-first backend built on Node.js with a clean layered architecture, role
 | Current role read from the database on every request (role changes apply at once; deleted users get 401) | Complete |
 | Resolved tasks read-only until reopened (server-enforced, incl. sub-tasks) | Complete |
 | People's phone numbers validated per country (AU / NZ / US / NP) and stored as E.164 | Complete |
-| Role-Based Access Control (SUPER_ADMIN, CLIENT_ADMIN, USER) | Complete, with two known `CLIENT_ADMIN` gaps (S-1, S-2 in `server/STATUS.md`) |
+| Role-Based Access Control (SUPER_ADMIN, CLIENT_ADMIN, USER) | Complete, with one known `CLIENT_ADMIN` gap (S-1 in `server/STATUS.md`) |
+| Client admins on any project team (admin on their own client's projects, team member elsewhere; a client is optional) | Complete |
 | Redis Caching (entity-level, 5-minute TTL, invalidation on write) | Complete |
 | Async Notification Queue (BullMQ + Worker) | Complete — `notify()` enqueues, the worker saves and publishes; delivers directly if Redis is down |
 | Real-time GraphQL Subscriptions (notificationCreated; token checked on connect) | Complete |
@@ -228,8 +229,8 @@ Prometheus Plugin ◄───────────────────�
 
 | Role | Capabilities |
 |---|---|
-| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; invites or creates users (`createUser`), edits them (`updateUser`), changes roles person by person with a reason (`updateUserRoles`, or `changeUserRoles` for one role), every change logged to Activity; unlocks (`unlockUsers`), resends invites, deletes (`deleteUser`, `deleteUsers`); assigns `CLIENT_ADMIN` users to clients via `assignAdmin`; promotes `USER` → `CLIENT_ADMIN` via `promoteToAdmin`; approves or declines client deletion requests (deleting a client with an admin requires reassigning or demoting that admin); queries all users. Their own account and other super admins are view-only in user admin |
-| `CLIENT_ADMIN` | Manages their assigned client (always exactly one; `myClient` returns it even before it has projects) and its projects/tasks, with access from client ownership; queries users assigned to their client's projects; can request client deletion; can comment on, and delete any comment in, their client's projects |
+| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; invites or creates users (`createUser`), edits them (`updateUser`), changes roles person by person with a reason (`updateUserRoles`, or `changeUserRoles` for one role), every change logged to Activity; unlocks (`unlockUsers`), resends invites, deletes (`deleteUser`, `deleteUsers`); assigns `CLIENT_ADMIN` users to clients via `assignAdmin`; promotes `USER` → `CLIENT_ADMIN` via `promoteToAdmin`; approves or declines client deletion requests (the client's admin keeps their role, with no client); queries all users. Their own account and other super admins are view-only in user admin |
+| `CLIENT_ADMIN` | Manages their assigned client, if they have one (at most one; `myClient` returns it even before it has projects), and its projects/tasks; can also be added to any project's team, where they have a `USER`'s rights (their own tasks, comments). Queries users assigned to their client's projects; can request client deletion; can delete any comment in their client's projects. A client admin with no client sees only the projects they're on |
 | `USER` | Access to projects they are assigned to; can update/change status on their own tasks and subtasks; can create subtasks on tasks assigned to them; can comment on tasks and subtasks in their projects and edit/delete their own comments |
 
 ## Public Operations (no JWT required)
@@ -287,6 +288,8 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 
 ### Mutations
 
+In this table `CLIENT_ADMIN` means the client admin of the project's client. On any other project they're on, a client admin has a `USER`'s rights.
+
 | Mutation | Description |
 |---|---|
 | `login` | Returns JWT token |
@@ -308,13 +311,13 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `updateClient` | SUPER_ADMIN or assigned CLIENT_ADMIN |
 | `assignAdmin` | SUPER_ADMIN: assign CLIENT_ADMIN to client |
 | `confirmDeleteClient` | CLIENT_ADMIN: flags client for deletion |
-| `deleteClientBySuperAdmin` | SUPER_ADMIN: deletes flagged client; if it has an admin, `adminAction` (REASSIGN + `reassignTo`, or DEMOTE) and `reason` are required |
-| `forceDeleteClient` | SUPER_ADMIN: deletes without flag check; same admin plan as above |
+| `deleteClientBySuperAdmin` | SUPER_ADMIN: deletes flagged client; its admin stays a CLIENT_ADMIN with no client and is notified |
+| `forceDeleteClient` | SUPER_ADMIN: deletes without flag check; the admin keeps their role, as above |
 | `declineClientDeletion` | SUPER_ADMIN: clears the request, notifies the client admin |
 | `addProject` | SUPER_ADMIN / CLIENT_ADMIN |
 | `updateProject` | SUPER_ADMIN / CLIENT_ADMIN |
 | `deleteProject` | SUPER_ADMIN / CLIENT_ADMIN |
-| `addUserToProject` | SUPER_ADMIN / CLIENT_ADMIN |
+| `addUserToProject` | SUPER_ADMIN / CLIENT_ADMIN of the project's client; adds USERs and CLIENT_ADMINs (super admins can't be added) |
 | `removeUserFromProject` | SUPER_ADMIN / CLIENT_ADMIN |
 | `createTask` | SUPER_ADMIN / CLIENT_ADMIN |
 | `updateTask` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
@@ -324,7 +327,7 @@ Notifications are queued in BullMQ; the worker saves each one and pushes it over
 | `updateSubTask` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
 | `updateSubTaskStatus` | SUPER_ADMIN / CLIENT_ADMIN / assigned USER |
 | `deleteSubTask` | SUPER_ADMIN / CLIENT_ADMIN / creator USER |
-| `addTaskComment` | Project members (assigned users, the client's CLIENT_ADMIN, SUPER_ADMIN) |
+| `addTaskComment` | Project members (anyone on the team, the client's CLIENT_ADMIN, SUPER_ADMIN) |
 | `addSubTaskComment` | Project members |
 | `updateComment` | Author only (while still a project member) |
 | `deleteComment` | Author / the client's CLIENT_ADMIN / SUPER_ADMIN |
@@ -498,12 +501,12 @@ npm test          # Vitest (watch); npm run test:run for a single run
 | Request client deletion | — | ✓ | — |
 | Approve / decline deletion request | ✓ | — | — |
 | Force delete client | ✓ | — | — |
-| Projects page | ✓ (all) | ✓ (own client) | ✓ (assigned) |
-| Create / Edit / Delete project | ✓ | ✓ | — |
-| Manage project team | ✓ | ✓ | — |
-| Tasks board (drag to change status) | ✓ | ✓ | ✓ (own tasks) |
-| Create / Delete task | ✓ | ✓ | — |
-| Update task status | ✓ | ✓ | ✓ (assigned only) |
+| Projects page | ✓ (all) | ✓ (own client + projects they're on) | ✓ (assigned) |
+| Create / Edit / Delete project | ✓ | ✓ (own client only) | — |
+| Manage project team | ✓ | ✓ (own client only) | — |
+| Tasks board (drag to change status) | ✓ | ✓ (own client; own tasks elsewhere) | ✓ (own tasks) |
+| Create / Delete task | ✓ | ✓ (own client only) | — |
+| Update task status | ✓ | ✓ (own client; assigned only elsewhere) | ✓ (assigned only) |
 | Create subtask | ✓ | ✓ | ✓ (if on parent task) |
 | Analytics page | ✓ | ✓ | — |
 | Notifications | ✓ | ✓ | ✓ |

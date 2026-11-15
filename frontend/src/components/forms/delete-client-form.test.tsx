@@ -26,42 +26,19 @@ const deleteBtn = () => screen.getByRole("button", { name: /Delete client/ })
 beforeEach(() => { api.forceDeleteClient.mockReset().mockResolvedValue(undefined) })
 
 describe("DeleteClientForm — the client admin", () => {
-    it("🔴 can't delete until you choose what happens to the admin and why", async () => {
+    it("🟢 only needs the client's name; the admin keeps their role", async () => {
         await open("c1")
-        await typeName("Atlas")
-        expect(deleteBtn()).toBeDisabled()
-        await userEvent.click(screen.getByRole("button", { name: "Make them a User" }))
-        expect(deleteBtn()).toBeDisabled()
-        await userEvent.type(screen.getByPlaceholderText("Why? Saved in Activity"), "Contract ended")
-        expect(deleteBtn()).toBeEnabled()
-    })
-
-    it("🟢 demoting sends the plan with the delete", async () => {
-        await open("c1")
-        await userEvent.click(screen.getByRole("button", { name: "Make them a User" }))
-        await userEvent.type(screen.getByPlaceholderText("Why? Saved in Activity"), "Contract ended")
+        expect(screen.queryByRole("button", { name: "Make them a User" })).not.toBeInTheDocument()
+        expect(screen.getByText("Priya Rao stays a client admin, with no client")).toBeInTheDocument()
         await typeName("Atlas")
         await userEvent.click(deleteBtn())
-        expect(api.forceDeleteClient).toHaveBeenCalledWith("c1", { adminAction: "DEMOTE", reassignTo: null, reason: "Contract ended" })
-    })
-
-    it("🟢 reassigning picks a client that has no admin", async () => {
-        await open("c1")
-        await userEvent.click(screen.getByRole("button", { name: "Move to another client" }))
-        await userEvent.click(screen.getByRole("button", { name: /Choose client/ }))
-        expect(screen.queryByText("Atlas", { selector: "[role=option] *" })).not.toBeInTheDocument()
-        await userEvent.click(await screen.findByText("Crest"))
-        await userEvent.type(screen.getByPlaceholderText("Why? Saved in Activity"), "Moving to Crest")
-        await typeName("Atlas")
-        await userEvent.click(deleteBtn())
-        expect(api.forceDeleteClient).toHaveBeenCalledWith("c1", { adminAction: "REASSIGN", reassignTo: "c3", reason: "Moving to Crest" })
+        expect(api.forceDeleteClient).toHaveBeenCalledWith("c1")
     })
 
     it("🟢 a client without an admin only needs its name", async () => {
         await open("c2")
-        expect(screen.queryByRole("button", { name: "Make them a User" })).not.toBeInTheDocument()
         await typeName("Bolt")
         await userEvent.click(deleteBtn())
-        expect(api.forceDeleteClient).toHaveBeenCalledWith("c2", undefined)
+        expect(api.forceDeleteClient).toHaveBeenCalledWith("c2")
     })
 })

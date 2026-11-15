@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import type { Role, User } from "@/types/userTypes"
 import { Field, FormError, FormFoot, FormModal, Grid2, Note, SubmitButton, inputCls, textareaCls } from "./form-kit"
 import { Combo } from "./combo"
-import { LogoChip } from "./options"
+import { GhostAvatar, LogoChip } from "./options"
 import { openTaskCount, useAppData } from "./use-app-data"
 import type { FormProps } from "./forms-context"
 import { toast } from "./toaster"
@@ -26,7 +26,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
 /**
  * Review dialog for role changes: each selected person gets their own new role (a client
- * admin also needs a client), with one shared reason and an optional per-person reason.
+ * admin may also get a client), with one shared reason and an optional per-person reason.
  */
 export function BulkRoleForm({ data, onClose, closing }: FormProps<{ userIds: string[] }>) {
     const dispatch = useDispatch()
@@ -43,23 +43,25 @@ export function BulkRoleForm({ data, onClose, closing }: FormProps<{ userIds: st
     const demotions = changes.filter((u) => RANK[rows[u.id].role] < RANK[u.role]).length
     const moves = changes.length - promotions - demotions
     const summary = [promotions && plural(promotions, "promotion"), demotions && plural(demotions, "demotion"), moves && plural(moves, "client change")].filter(Boolean).join(", ")
-    const missingClient = changes.some((u) => rows[u.id].role === "CLIENT_ADMIN" && !rows[u.id].clientId)
-    const canSave = changes.length > 0 && !!reason.trim() && !missingClient
+    const canSave = changes.length > 0 && !!reason.trim()
 
-    // A client can be picked if it has no admin, its admin is this person, or its admin is moving elsewhere
-    const clientOptions = (id: string) => clients
-        .filter((c) => {
-            const admin = c.assignedAdmin?.id
-            const freed = admin && rows[admin] && (rows[admin].role !== "CLIENT_ADMIN" || rows[admin].clientId !== c.id)
-            const takenHere = Object.entries(rows).some(([other, r]) => other !== id && r.role === "CLIENT_ADMIN" && r.clientId === c.id)
-            return (!admin || admin === id || freed) && !takenHere
-        })
-        .map((c) => ({ value: c.id, label: c.name, lead: <LogoChip name={c.name} /> }))
+    // A client is optional. One can be picked if it has no admin, its admin is this person, or its admin is moving elsewhere
+    const clientOptions = (id: string) => [
+        { value: "", label: "No client yet", lead: <GhostAvatar /> },
+        ...clients
+            .filter((c) => {
+                const admin = c.assignedAdmin?.id
+                const freed = admin && rows[admin] && (rows[admin].role !== "CLIENT_ADMIN" || rows[admin].clientId !== c.id)
+                const takenHere = Object.entries(rows).some(([other, r]) => other !== id && r.role === "CLIENT_ADMIN" && r.clientId === c.id)
+                return (!admin || admin === id || freed) && !takenHere
+            })
+            .map((c) => ({ value: c.id, label: c.name, lead: <LogoChip name={c.name} /> })),
+    ]
 
     const save = () => canSave && run(async () => {
         const payload = changes.map((u) => {
             const r = rows[u.id]
-            return { id: u.id, role: r.role, clientId: r.role === "CLIENT_ADMIN" ? r.clientId : null, reason: r.reason?.trim() || null }
+            return { id: u.id, role: r.role, clientId: r.role === "CLIENT_ADMIN" ? r.clientId || null : null, reason: r.reason?.trim() || null }
         })
         dispatch(upsertUsersInStore(await updateUserRoles(payload, reason.trim())))
         toast({ text: <span>Roles updated: {summary}</span> })
@@ -108,7 +110,7 @@ export function BulkRoleForm({ data, onClose, closing }: FormProps<{ userIds: st
                             </div>
                             {r.role === "CLIENT_ADMIN" && (
                                 <Field label="Client they manage" req>
-                                    <Combo value={r.clientId} onChange={(clientId) => set(u.id, { clientId })} options={clientOptions(u.id)} placeholder="Choose client" searchPlaceholder="Search clients" />
+                                    <Combo value={r.clientId} onChange={(clientId) => set(u.id, { clientId })} options={clientOptions(u.id)} placeholder="No client yet" searchPlaceholder="Search clients" />
                                 </Field>
                             )}
                             {changed && (r.reason === null ? (

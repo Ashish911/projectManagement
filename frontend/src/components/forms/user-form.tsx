@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 import type { Role, User } from "@/types/userTypes"
 import { Field, FormError, FormFoot, FormModal, Grid2, Note, Section, SubmitButton, inputCls, useForm } from "./form-kit"
 import { Combo } from "./combo"
-import { LogoChip } from "./options"
+import { GhostAvatar, LogoChip } from "./options"
 import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { toast, toastError } from "./toaster"
@@ -37,7 +37,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export const ROLES: [Role, Icon, string, string][] = [
     ["USER", IconUser, "User", "Works on tasks assigned to them"],
-    ["CLIENT_ADMIN", IconBuilding, "Client admin", "Runs one client’s projects and team"],
+    ["CLIENT_ADMIN", IconBuilding, "Client admin", "Runs a client’s projects; a team member elsewhere"],
     ["SUPER_ADMIN", IconShieldLock, "Super admin", "Full access, including deletions"],
 ]
 
@@ -127,7 +127,6 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                         : users.some((u) => u.id !== cur?.id && u.email === x.trim().toLowerCase()) ? "Someone already uses this email" : null,
             phone: (x) => (!x.trim() ? (cur ? null : "Phone number is required") : phoneError(x)),
             gender: (x) => (cur || x ? null : "Select one"),
-            clientId: (x, a) => (a.role === "CLIENT_ADMIN" && !x ? "Pick the client they’ll manage" : null),
             password: (x, a) => (!cur && a.mode === "PASSWORD" && x.length < 8 ? "At least 8 characters" : null),
             reason: (x, a) => (roleChangedIn(a) && !x.trim() ? "Say why their role is changing" : null),
         },
@@ -135,21 +134,24 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
     const v = f.v
     const strength = [v.password.length >= 8, v.password.length >= 12, /[A-Z]/.test(v.password) && /[a-z]/.test(v.password), /\d/.test(v.password) && /[^\w]/.test(v.password)].filter(Boolean).length
 
-    // Clients without an admin, plus the one this person already manages
-    const clientOptions = clients
-        .filter((c) => !c.assignedAdmin || c.assignedAdmin.id === cur?.id)
-        .map((c) => ({ value: c.id, label: c.name, sub: c.assignedAdmin ? "Managed by this user" : "No admin yet", lead: <LogoChip name={c.name} /> }))
+    // A client is optional: none yet, a client without an admin, or the one this person already manages
+    const clientOptions = [
+        { value: "", label: "No client yet", sub: "Can join project teams; assign a client later", lead: <GhostAvatar /> },
+        ...clients
+            .filter((c) => !c.assignedAdmin || c.assignedAdmin.id === cur?.id)
+            .map((c) => ({ value: c.id, label: c.name, sub: c.assignedAdmin ? "Managed by this user" : "No admin yet", lead: <LogoChip name={c.name} /> })),
+    ]
 
     const save = () => f.submit(async (x) => {
         // An empty phone is left out (it's optional when editing); otherwise it's sent in E.164
         const profile = { name: x.name.trim(), email: x.email.trim().toLowerCase(), ...(x.phone.trim() && { number: toE164(x.phone) }), gender: x.gender || "OTHERS", dob: x.dob || null }
         if (cur) {
             let updated: User = await updateUser({ id: cur.id, ...profile })
-            if (roleChangedIn(x)) [updated] = await changeUserRoles([cur.id], x.role, x.role === "CLIENT_ADMIN" ? x.clientId : null, x.reason.trim())
+            if (roleChangedIn(x)) [updated] = await changeUserRoles([cur.id], x.role, x.role === "CLIENT_ADMIN" ? x.clientId || null : null, x.reason.trim())
             dispatch(upsertUsersInStore([updated]))
             toast({ text: <span>Saved <b>{updated.name}</b></span> })
         } else {
-            const created = await createUser({ ...profile, number: toE164(x.phone), role: x.role, clientId: x.role === "CLIENT_ADMIN" ? x.clientId : null, mode: x.mode, password: x.mode === "PASSWORD" ? x.password : null })
+            const created = await createUser({ ...profile, number: toE164(x.phone), role: x.role, clientId: x.role === "CLIENT_ADMIN" ? x.clientId || null : null, mode: x.mode, password: x.mode === "PASSWORD" ? x.password : null })
             dispatch(upsertUsersInStore([created]))
             toast(x.mode === "INVITE"
                 ? { text: <span>Invite sent to <b>{created.email}</b></span>, icon: IconMailForward }
@@ -215,8 +217,8 @@ export function UserForm({ data, onClose, closing }: FormProps<{ userId?: string
                 <Note tone="amber" icon={IconAlertTriangle}>Super admins can delete clients, projects and users. Keep this to one or two people.</Note>
             )}
             {v.role === "CLIENT_ADMIN" && (
-                <Field label="Client they manage" req error={f.err.clientId} hint={clientOptions.length ? null : "Every client already has an admin."}>
-                    <Combo value={v.clientId} onChange={(x) => f.set("clientId", x)} options={clientOptions} placeholder="Choose client" searchPlaceholder="Search clients" onBlur={() => f.blur("clientId")} />
+                <Field label="Client they manage" hint={clientOptions.length > 1 ? null : "Every client already has an admin."}>
+                    <Combo value={v.clientId} onChange={(x) => f.set("clientId", x)} options={clientOptions} placeholder="No client yet" searchPlaceholder="Search clients" />
                 </Field>
             )}
 

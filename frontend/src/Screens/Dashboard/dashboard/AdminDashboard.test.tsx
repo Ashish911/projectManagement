@@ -2,9 +2,10 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
-const data = vi.hoisted(() => ({ clients: [] as object[] }))
-vi.mock("@/components/forms/use-app-data", () => ({
-    useAppData: () => ({ profile: { id: "u1", name: "Ada Admin", role: "SUPER_ADMIN" }, users: [], clients: data.clients, projects: [], tasks: [], tasksLoaded: true }),
+const data = vi.hoisted(() => ({ clients: [] as object[], role: "SUPER_ADMIN", projects: [] as object[] }))
+vi.mock("@/components/forms/use-app-data", async (orig) => ({
+    ...(await orig<object>()),
+    useAppData: () => ({ profile: { id: "u1", name: "Ada Admin", role: data.role }, role: data.role, users: [], clients: data.clients, projects: data.projects, tasks: [], tasksLoaded: true }),
     openTaskCount: () => 0,
 }))
 const dispatch = vi.hoisted(() => vi.fn())
@@ -70,5 +71,28 @@ describe("AdminDashboard — needs a decision (DASH-01)", () => {
         await userEvent.click(screen.getByRole("button", { name: "View all 4" }))
         expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ payload: "unassigned" }))
         expect(screen.getByRole("heading", { name: "Clients page" })).toBeInTheDocument()
+    })
+})
+
+describe("AdminDashboard — a client admin", () => {
+    const project = (id: string, client: string, canManage: boolean) => ({ id, name: id, status: "IN_PROGRESS", dueDate: null, canManage, client: { id: client, name: client }, user: [] })
+    afterEach(() => { data.role = "SUPER_ADMIN"; data.clients = []; data.projects = [] })
+
+    it("🔴 with no client, who is only on other clients' teams, can't create tasks or projects", () => {
+        data.role = "CLIENT_ADMIN"
+        data.projects = [project("Portal", "Bolt", false)]
+        mount()
+        expect(screen.queryByRole("button", { name: /New task/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: /New project/ })).not.toBeInTheDocument()
+    })
+
+    it("🟢 with a client, creates both, and the project panel is titled with their own client", () => {
+        data.role = "CLIENT_ADMIN"
+        data.clients = [{ id: "Atlas", name: "Atlas", deleteRequest: false, assignedAdmin: { id: "u1" } }]
+        data.projects = [project("Portal", "Bolt", false), project("Site", "Atlas", true)]
+        mount()
+        expect(screen.getByRole("button", { name: /New task/ })).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: /New project/ })).toBeInTheDocument()
+        expect(screen.getByText("Atlas")).toBeInTheDocument()
     })
 })

@@ -5,7 +5,6 @@ import {
   ProjectRepo,
   SubTaskRepo,
   CommentRepo,
-  ClientRepo,
 } from "../repositories/import.repo.js";
 import {
   createTaskSchema,
@@ -15,13 +14,17 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { ActivityService } from "./activity.service.js";
+import { managesProject, managesProjectId, onProjectTeam, visibleProjects } from "./access.js";
 import { NotificationService } from "./import.service.js";
 
-/** Business logic and role checks for tasks. Admins have full access; USERs are limited to their own. */
+/**
+ * Business logic and role checks for tasks. Whoever runs the project (SUPER_ADMIN, or the
+ * CLIENT_ADMIN of its client) has full access; everyone else is limited to their own tasks.
+ */
 export const TaskService = {
   /**
-   * Lists tasks across every project the user can see: all for SUPER_ADMIN,
-   * their client's projects for CLIENT_ADMIN, assigned projects for USER.
+   * Lists tasks across every project the user can see: all for SUPER_ADMIN, their
+   * client's projects plus the ones they are on for CLIENT_ADMIN, assigned projects for USER.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The tasks.
    */
@@ -30,15 +33,7 @@ export const TaskService = {
 
     if (user.role === "SUPER_ADMIN") return await TaskRepo.find();
 
-    let projects = [];
-    if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByAssignedAdmin(user.id);
-      if (!client) return [];
-      projects = await ProjectRepo.findByClientId(client.id);
-    } else {
-      projects = await ProjectRepo.findByAssignedUser(user.id);
-    }
-
+    const projects = await visibleProjects(user);
     if (!projects.length) return [];
     return await TaskRepo.findByProjects(projects.map((p) => p.id));
   },
@@ -48,7 +43,7 @@ export const TaskService = {
    * @param {string} projectId Project ID.
    * @param {object} context   GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The project's tasks.
-   * @throws {ForbiddenError} If a USER is not assigned to the project.
+   * @throws {ForbiddenError} If the user neither runs nor is on the project.
    */
   async getTasks(projectId, context) {
     validate(idSchema, { id: projectId });
@@ -60,13 +55,8 @@ export const TaskService = {
     if (!project) throw new NotFoundError("Project not found.");
 
     // Check user has access to this project
-    if (user.role === "USER") {
-      const isAssigned = project.assignedUsers
-        .map((id) => id.toString())
-        .includes(user.id);
-      if (!isAssigned)
-        throw new ForbiddenError("You are not assigned to this project");
-    }
+    if (!onProjectTeam(project, user) && !(await managesProject(project, user)))
+      throw new ForbiddenError("You are not assigned to this project");
 
     return await TaskRepo.findByProject(projectId);
   },
@@ -76,7 +66,7 @@ export const TaskService = {
    * @param {string} id      Task ID.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The task.
-   * @throws {ForbiddenError} If a USER neither created nor is assigned the task.
+   * @throws {ForbiddenError} If someone who doesn't run the project neither created nor is assigned the task.
    */
   async getTask(id, context) {
     validate(idSchema, { id });
@@ -86,25 +76,22 @@ export const TaskService = {
     const task = await TaskRepo.findById(id);
     if (!task) throw new NotFoundError("Task not found");
 
-    // USER must be the task's assignee or creator
-    if (user.role === "USER") {
-      const isAssigned =
-        task.assignedTo?.toString() === user.id ||
-        task.createdBy?.toString() === user.id;
-
-      if (!isAssigned)
-        throw new ForbiddenError("You do not have access to this task");
-    }
+    // Unless they run the project, the user must be the task's assignee or creator
+    const isAssigned =
+      task.assignedTo?.toString() === user.id ||
+      task.createdBy?.toString() === user.id;
+    if (!isAssigned && !(await managesProjectId(task.project, user)))
+      throw new ForbiddenError("You do not have access to this task");
 
     return task;
   },
 
   /**
-   * Creates a task in a project and notifies the assignee. Not allowed for USER.
+   * Creates a task in a project and notifies the assignee. Only for whoever runs the project.
    * @param {object} data    `{ projectId, title, [priority], [deadline], [assignedTo] }`.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The new task.
-   * @throws {ForbiddenError} If the user is a USER.
+   * @throws {ForbiddenError} If the user doesn't run the project.
    */
   async createTask(data, context) {
     validate(createTaskSchema, data);
@@ -120,6 +107,11 @@ export const TaskService = {
 
     const project = await ProjectRepo.findById(data.projectId);
     if (!project) throw new NotFoundError("Project not found");
+    if (!(await managesProject(project, user))) {
+      throw new ForbiddenError(
+        "Current role does not have permission to create tasks",
+      );
+    }
 
     const task = await TaskRepo.create({
       title: data.title,
@@ -156,7 +148,7 @@ export const TaskService = {
    * @param {object} data    Task ID plus fields to change.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The updated task.
-   * @throws {ForbiddenError} If a USER is not the task's assignee.
+   * @throws {ForbiddenError} If someone who doesn't run the project is not the task's assignee.
    */
   async updateTask(data, context) {
     validate(updateTaskSchema, data);
@@ -168,8 +160,8 @@ export const TaskService = {
 
     if (!task) throw new NotFoundError("Task not found");
 
-    // USER can only update tasks assigned to them
-    if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
+    // Unless they run the project, users can only update tasks assigned to them
+    if (task.assignedTo?.toString() !== user.id && !(await managesProjectId(task.project, user))) {
       throw new ForbiddenError(
         "You do not have permission to update this task",
       );
@@ -217,7 +209,7 @@ export const TaskService = {
    * @param {object} context GraphQL context with the current `user`.
    * @param {string} [reason] Why it was reopened; saved in Activity.
    * @returns {Promise<object>} The updated task.
-   * @throws {ForbiddenError} If a USER is not the task's assignee.
+   * @throws {ForbiddenError} If someone who doesn't run the project is not the task's assignee.
    * @throws {ConflictError}  If a resolved task is moved anywhere but REOPENED.
    */
   async updateTaskStatus(id, status, context, reason) {
@@ -230,8 +222,8 @@ export const TaskService = {
 
     if (!task) throw new NotFoundError("Task not found");
 
-    // Only assigned user or admin can update status
-    if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
+    // Only the assignee or whoever runs the project can update status
+    if (task.assignedTo?.toString() !== user.id && !(await managesProjectId(task.project, user))) {
       throw new ForbiddenError(
         "You do not have permission to update this task status",
       );
@@ -294,11 +286,11 @@ export const TaskService = {
   },
 
   /**
-   * Deletes a task and its subtasks, and notifies the assignee. Not allowed for USER.
+   * Deletes a task and its subtasks, and notifies the assignee. Only for whoever runs the project.
    * @param {string} id      Task ID.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The deleted task.
-   * @throws {ForbiddenError} If the user is a USER.
+   * @throws {ForbiddenError} If the user doesn't run the project.
    */
   async deleteTask(id, context) {
     validate(idSchema, { id });
@@ -314,6 +306,11 @@ export const TaskService = {
 
     const task = await TaskRepo.findById(id);
     if (!task) throw new NotFoundError("Task not found");
+    if (!(await managesProjectId(task.project, user))) {
+      throw new ForbiddenError(
+        "Current role does not have permission to delete tasks",
+      );
+    }
 
     // Delete all subtasks associated with this task
     const subTasks = await SubTaskRepo.findByTask(id);

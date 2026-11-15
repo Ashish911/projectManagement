@@ -13,8 +13,24 @@ import {
 } from "../validation/schema.js";
 import { validate } from "../validation/validate.js";
 import { NotificationService } from "./import.service.js";
+import { managesProjectId } from "./access.js";
 
-/** Business logic and role checks for subtasks. Admins have full access; USERs are limited to their own. */
+/**
+ * Business logic and role checks for subtasks. Whoever runs the project (SUPER_ADMIN, or the
+ * CLIENT_ADMIN of its client) has full access; everyone else is limited to their own.
+ */
+
+/**
+ * True if the user runs the project the task belongs to.
+ * @param {object|string|null} task The parent task, or its ID (loaded only for a CLIENT_ADMIN).
+ * @param {object} user The current user.
+ */
+const runsTaskProject = async (task, user) => {
+  if (user.role !== "CLIENT_ADMIN") return user.role === "SUPER_ADMIN";
+  const parent = typeof task === "string" ? await TaskRepo.findById(task) : task;
+  return !!parent && (await managesProjectId(parent.project, user));
+};
+
 /**
  * Sub-tasks of a resolved task are read-only until the task is reopened.
  * @param {object|null} task The parent task (or null if it no longer exists).
@@ -32,7 +48,7 @@ export const SubTaskService = {
    * @param {string} taskId  Parent task ID.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The task's subtasks.
-   * @throws {ForbiddenError} If a USER neither created nor is assigned the parent task.
+   * @throws {ForbiddenError} If someone who doesn't run the project neither created nor is assigned the parent task.
    */
   async getSubTasks(taskId, context) {
     validate(idSchema, { id: taskId });
@@ -42,15 +58,12 @@ export const SubTaskService = {
     const task = await TaskRepo.findById(taskId);
     if (!task) throw new NotFoundError("Task not found");
 
-    // USER must be the parent task's assignee or creator
-    if (user.role === "USER") {
-      const isAssigned =
-        task.assignedTo?.toString() === user.id ||
-        task.createdBy?.toString() === user.id;
-
-      if (!isAssigned)
-        throw new ForbiddenError("You do not have access to this task");
-    }
+    // Unless they run the project, the user must be the parent task's assignee or creator
+    const isAssigned =
+      task.assignedTo?.toString() === user.id ||
+      task.createdBy?.toString() === user.id;
+    if (!isAssigned && !(await runsTaskProject(task, user)))
+      throw new ForbiddenError("You do not have access to this task");
 
     return await SubTaskRepo.findByTask(taskId);
   },
@@ -60,7 +73,7 @@ export const SubTaskService = {
    * @param {string} id      Subtask ID.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The subtask.
-   * @throws {ForbiddenError} If a USER neither created nor is assigned the subtask.
+   * @throws {ForbiddenError} If someone who doesn't run the project neither created nor is assigned the subtask.
    */
   async getSubTask(id, context) {
     validate(idSchema, { id });
@@ -71,15 +84,12 @@ export const SubTaskService = {
 
     if (!subTask) throw new NotFoundError("SubTask not found");
 
-    // USER must be the subtask's assignee or creator
-    if (user.role === "USER") {
-      const isAssigned =
-        subTask.assignedTo?.toString() === user.id ||
-        subTask.createdBy?.toString() === user.id;
-
-      if (!isAssigned)
-        throw new ForbiddenError("You do not have access to this subtask");
-    }
+    // Unless they run the project, the user must be the subtask's assignee or creator
+    const isAssigned =
+      subTask.assignedTo?.toString() === user.id ||
+      subTask.createdBy?.toString() === user.id;
+    if (!isAssigned && !(await runsTaskProject(String(subTask.task), user)))
+      throw new ForbiddenError("You do not have access to this subtask");
 
     return subTask;
   },
@@ -89,7 +99,7 @@ export const SubTaskService = {
    * @param {object} data    `{ taskId, title, [priority], [deadline], [assignedTo] }`.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The new subtask.
-   * @throws {ForbiddenError} If a USER is not assigned the parent task.
+   * @throws {ForbiddenError} If someone who doesn't run the project is not assigned the parent task.
    */
   async createSubTask(data, context) {
     validate(createSubTaskSchema, data);
@@ -101,8 +111,8 @@ export const SubTaskService = {
     if (!task) throw new NotFoundError("Task not found");
     assertParentOpen(task);
 
-    // Only assigned user or admin can create subtasks
-    if (user.role === "USER" && task.assignedTo?.toString() !== user.id) {
+    // Only the task's assignee or whoever runs the project can create subtasks
+    if (task.assignedTo?.toString() !== user.id && !(await runsTaskProject(task, user))) {
       throw new ForbiddenError(
         "You do not have permission to create subtasks for this task",
       );
@@ -143,7 +153,7 @@ export const SubTaskService = {
    * @param {object} data    Subtask ID plus fields to change.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The updated subtask.
-   * @throws {ForbiddenError} If a USER is not the subtask's assignee.
+   * @throws {ForbiddenError} If someone who doesn't run the project is not the subtask's assignee.
    */
   async updateSubTask(data, context) {
     validate(updateSubTaskSchema, data);
@@ -153,10 +163,11 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(data.id);
     if (!subTask) throw new NotFoundError("SubTask not found");
-    assertParentOpen(await TaskRepo.findById(subTask.task));
+    const task = await TaskRepo.findById(subTask.task);
+    assertParentOpen(task);
 
-    // USER can only update subtasks assigned to them
-    if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
+    // Unless they run the project, users can only update subtasks assigned to them
+    if (subTask.assignedTo?.toString() !== user.id && !(await runsTaskProject(task, user))) {
       throw new ForbiddenError(
         "You do not have permission to update this subtask",
       );
@@ -198,7 +209,7 @@ export const SubTaskService = {
    * @param {string} status  New status, e.g. "RESOLVED" or "REOPENED".
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The updated subtask.
-   * @throws {ForbiddenError} If a USER is not the subtask's assignee.
+   * @throws {ForbiddenError} If someone who doesn't run the project is not the subtask's assignee.
    */
   async updateSubTaskStatus(id, status, context) {
     validate(updateSubTaskStatusSchema, { id, status });
@@ -208,9 +219,10 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
-    assertParentOpen(await TaskRepo.findById(subTask.task));
+    const task = await TaskRepo.findById(subTask.task);
+    assertParentOpen(task);
 
-    if (user.role === "USER" && subTask.assignedTo?.toString() !== user.id) {
+    if (subTask.assignedTo?.toString() !== user.id && !(await runsTaskProject(task, user))) {
       throw new ForbiddenError(
         "You do not have permission to update this subtask status",
       );
@@ -262,7 +274,7 @@ export const SubTaskService = {
    * @param {string} id      Subtask ID.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The deleted subtask.
-   * @throws {ForbiddenError} If a USER did not create the subtask.
+   * @throws {ForbiddenError} If someone who doesn't run the project did not create the subtask.
    */
   async deleteSubTask(id, context) {
     validate(idSchema, { id });
@@ -272,10 +284,11 @@ export const SubTaskService = {
 
     const subTask = await SubTaskRepo.findById(id);
     if (!subTask) throw new NotFoundError("SubTask not found");
-    assertParentOpen(await TaskRepo.findById(subTask.task));
+    const task = await TaskRepo.findById(subTask.task);
+    assertParentOpen(task);
 
-    // USER can only delete subtasks they created
-    if (user.role === "USER" && subTask.createdBy?.toString() !== user.id) {
+    // Unless they run the project, users can only delete subtasks they created
+    if (subTask.createdBy?.toString() !== user.id && !(await runsTaskProject(task, user))) {
       throw new ForbiddenError(
         "You do not have permission to delete this subtask",
       );

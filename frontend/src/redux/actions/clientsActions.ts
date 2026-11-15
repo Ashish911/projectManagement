@@ -8,16 +8,20 @@ import {
     CLIENTS_LIST_FLAG_DELETE,
     CLIENTS_SET_FILTER,
 } from '../constants/clientsConstants';
-import { getClients } from '@/api/clientApi';
+import { getClients, getMyClient } from '@/api/clientApi';
 import type { Client } from '@/types/clientTypes';
 
-/** `force` refetches even when the list is cached (live refresh). */
+/**
+ * Loads every client for a super admin, or just their own for a client admin.
+ * `force` refetches even when the list is cached (live refresh).
+ */
 export const fetchClients = (force = false) => async (dispatch: any, getState: any) => {
     const { clients } = getState().clients;
     if (!force && clients.length > 0) return; // already cached — skip the call
     try {
         dispatch({ type: CLIENTS_LIST_REQUEST });
-        const data = await getClients();
+        const own = getState().profile?.profile?.role === 'CLIENT_ADMIN';
+        const data = own ? [await getMyClient()].filter(Boolean) : await getClients();
         dispatch({ type: CLIENTS_LIST_SUCCESS, payload: data });
     } catch (error: any) {
         dispatch({ type: CLIENTS_LIST_FAIL, payload: error.message });

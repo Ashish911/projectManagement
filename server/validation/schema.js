@@ -224,10 +224,6 @@ export const createUserSchema = z
     mode: z.enum(["INVITE", "PASSWORD"]).default("INVITE"),
     password: z.string().optional().nullable(),
   })
-  .refine((d) => d.role !== "CLIENT_ADMIN" || !!d.clientId, {
-    message: "Pick the client they'll manage",
-    path: ["clientId"],
-  })
   .refine((d) => d.mode !== "PASSWORD" || (d.password?.length ?? 0) >= 8, {
     message: "Password must be at least 8 characters",
     path: ["password"],
@@ -249,8 +245,9 @@ export const changeUserRolesSchema = z
     clientId: nullableObjectId,
     reason: z.string().trim().max(500).optional().nullable(),
   })
-  .refine((d) => d.role !== "CLIENT_ADMIN" || (!!d.clientId && d.ids.length === 1), {
-    message: "A client admin needs exactly one person and a client",
+  // A client admin's client is optional, but a client has only one admin
+  .refine((d) => d.role !== "CLIENT_ADMIN" || !d.clientId || d.ids.length === 1, {
+    message: "A client can have only one client admin",
     path: ["clientId"],
   });
 
@@ -270,13 +267,9 @@ export const updateUserRolesSchema = z
       )
       .min(1, "Select at least one user"),
   })
-  .refine((d) => d.changes.every((c) => c.role !== "CLIENT_ADMIN" || !!c.clientId), {
-    message: "Pick a client for each new client admin",
-    path: ["changes"],
-  })
   .refine(
     (d) => {
-      const ids = d.changes.filter((c) => c.role === "CLIENT_ADMIN").map((c) => c.clientId);
+      const ids = d.changes.filter((c) => c.role === "CLIENT_ADMIN" && c.clientId).map((c) => c.clientId);
       return new Set(ids).size === ids.length;
     },
     { message: "Each client can have only one client admin", path: ["changes"] },
@@ -302,14 +295,4 @@ export const declineClientDeletionSchema = z.object({
 export const updatePreferenceSchema = z.object({
   theme: z.enum(["LIGHT", "DARK"]).optional(),
   language: z.enum(["ENGLISH", "JAPANESE", "KOREAN"]).optional(),
-});
-
-// ─── Deleting a client that has a client admin ───────────────────
-export const deleteClientAdminPlanSchema = z.object({
-  adminAction: z.enum(["REASSIGN", "DEMOTE"]).optional().nullable(),
-  reassignTo: nullableObjectId,
-  reason: z.string().trim().max(500).optional().nullable(),
-}).refine((d) => d.adminAction !== "REASSIGN" || !!d.reassignTo, {
-  message: "Pick the client to move them to",
-  path: ["reassignTo"],
 });

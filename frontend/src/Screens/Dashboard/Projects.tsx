@@ -30,8 +30,9 @@ export const Projects: React.FC = () => {
     const navigate = useNavigate();
     const openForm = useForms();
     const { loading, error, statusFilter } = useSelector((state: any) => state.projects);
-    const { role, projects, tasks } = useAppData();
-    const canManage = role === "SUPER_ADMIN" || role === "CLIENT_ADMIN";
+    const { role, clients, projects, tasks } = useAppData();
+    // Creating projects needs a client to put them under; a client admin may have none yet
+    const canManage = role === "SUPER_ADMIN" || (role === "CLIENT_ADMIN" && clients.length > 0);
 
     const [view, setView] = useState<View>("grid");
     // A dashboard drill-down may arrive with a status filter; adopt it as the active tab once

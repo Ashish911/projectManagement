@@ -1,7 +1,6 @@
 import { ActivityRepo } from "../repositories/activity.repo.js";
-import { ClientRepo } from "../repositories/client.repo.js";
-import { ProjectRepo } from "../repositories/project.repo.js";
 import logger from "../config/logger.js";
+import { visibleProjects } from "./access.js";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -23,8 +22,8 @@ export const ActivityService = {
   },
 
   /**
-   * Newest entries the caller may see: everything for SUPER_ADMIN, their client's
-   * projects for CLIENT_ADMIN, their own projects for USER.
+   * Newest entries the caller may see: everything for SUPER_ADMIN, their client's projects
+   * plus the ones they are on for CLIENT_ADMIN, their own projects for USER.
    * @param {{ limit?: number }} args
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>}
@@ -35,14 +34,7 @@ export const ActivityService = {
 
     if (user.role === "SUPER_ADMIN") return await ActivityRepo.findRecent(n);
 
-    let projects = [];
-    if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByAssignedAdmin(user.id);
-      if (!client) return [];
-      projects = await ProjectRepo.findByClientId(client.id);
-    } else {
-      projects = await ProjectRepo.findByAssignedUser(user.id);
-    }
+    const projects = await visibleProjects(user);
     if (!projects.length) return [];
     return await ActivityRepo.findByProjects(projects.map((p) => p.id), n);
   },

@@ -10,6 +10,8 @@ const mockSubTaskDelete = jest.fn();
 const mockTaskFindById = jest.fn();
 const mockNotify = jest.fn();
 const mockCommentDeleteBySubTask = jest.fn();
+const mockProjectFindById = jest.fn();
+const mockClientFindByAssignedAdmin = jest.fn();
 
 // ─── Mock the modules ─────────────────────────────────────────────
 jest.unstable_mockModule("../repositories/import.repo.js", () => ({
@@ -26,10 +28,10 @@ jest.unstable_mockModule("../repositories/import.repo.js", () => ({
   CommentRepo: {
     deleteBySubTask: mockCommentDeleteBySubTask,
   },
-  ProjectRepo: {},
+  ProjectRepo: { findById: mockProjectFindById },
   PreferenceRepo: {},
   UserRepo: {},
-  ClientRepo: {},
+  ClientRepo: { findByAssignedAdmin: mockClientFindByAssignedAdmin },
 }));
 
 jest.unstable_mockModule("../services/notification.service.js", () => ({
@@ -626,6 +628,61 @@ describe("SubTaskService", () => {
       await expect(SubTaskService.deleteSubTask(mockSubTask._id, { user: mockSuperAdmin })).rejects.toThrow(MESSAGE);
       expect(mockSubTaskUpdate).not.toHaveBeenCalled();
       expect(mockSubTaskDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // CLIENT ADMINS: admin on their client's projects, member elsewhere
+  // ════════════════════════════════════════════════════════════════
+  describe("client admin access", () => {
+    const project = { _id: "748a1b2c3d4e5f6a7b8c9d1e", clientId: "948a1b2c3d4e5f6a7b8c9d0e", assignedUsers: [mockClientAdmin.id] };
+    const task = { ...mockTask, project: project._id, assignedTo: mockUser.id, createdBy: mockSuperAdmin.id };
+    const othersSubTask = { ...mockSubTask, assignedTo: mockUser.id, createdBy: mockSuperAdmin.id };
+    const runsClient = (yes) => mockClientFindByAssignedAdmin.mockResolvedValue({ id: yes ? project.clientId : "948a1b2c3d4e5f6a7b8c9d0f" });
+
+    beforeEach(() => {
+      mockProjectFindById.mockResolvedValue(project);
+      mockTaskFindById.mockResolvedValue(task);
+      mockSubTaskFindById.mockResolvedValue(othersSubTask);
+    });
+
+    it("🟢 manages sub-tasks in their own client's project", async () => {
+      runsClient(true);
+      mockSubTaskUpdate.mockResolvedValue(othersSubTask);
+      mockSubTaskFindByTask.mockResolvedValue([othersSubTask]);
+      await SubTaskService.updateSubTask({ id: mockSubTask._id, title: "Changed" }, { user: mockClientAdmin });
+      expect(mockSubTaskUpdate).toHaveBeenCalled();
+      expect(await SubTaskService.getSubTasks(task._id, { user: mockClientAdmin })).toEqual([othersSubTask]);
+    });
+
+    it("🔴 on another client's project, can't see or change someone else's sub-tasks", async () => {
+      runsClient(false);
+      await expect(SubTaskService.getSubTasks(task._id, { user: mockClientAdmin })).rejects.toThrow("You do not have access to this task");
+      await expect(SubTaskService.getSubTask(mockSubTask._id, { user: mockClientAdmin })).rejects.toThrow("You do not have access to this subtask");
+      await expect(SubTaskService.createSubTask(createSubTaskData, { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to create subtasks for this task",
+      );
+      await expect(SubTaskService.updateSubTask({ id: mockSubTask._id, title: "x" }, { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to update this subtask",
+      );
+      await expect(SubTaskService.updateSubTaskStatus(mockSubTask._id, "IN_PROGRESS", { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to update this subtask status",
+      );
+      await expect(SubTaskService.deleteSubTask(mockSubTask._id, { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to delete this subtask",
+      );
+      expect(mockSubTaskCreate).not.toHaveBeenCalled();
+      expect(mockSubTaskUpdate).not.toHaveBeenCalled();
+      expect(mockSubTaskDelete).not.toHaveBeenCalled();
+    });
+
+    it("🟢 a client admin with no client works on their own sub-task like a team member", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      const theirs = { ...othersSubTask, assignedTo: mockClientAdmin.id };
+      mockSubTaskFindById.mockResolvedValue(theirs);
+      mockSubTaskUpdate.mockResolvedValue(theirs);
+      await SubTaskService.updateSubTaskStatus(mockSubTask._id, "IN_PROGRESS", { user: mockClientAdmin });
+      expect(mockSubTaskUpdate).toHaveBeenCalled();
     });
   });
 });

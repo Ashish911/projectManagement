@@ -69,9 +69,10 @@ export const ROLE_INTRO: Record<Role, {
         ],
     },
     CLIENT_ADMIN: {
-        headline: "You manage one client: its projects, its team and the tasks that keep work moving.",
+        headline: "You manage a client: its projects, its team and the tasks that keep work moving. On other projects you're added to, you're a team member.",
         can: [
             { icon: IconFolder, text: "Create projects for your client and pick their team" },
+            { icon: IconUsers, text: "Work on other clients' projects as a team member, if you're added" },
             { icon: IconListDetails, text: "Create tasks, assign them and set deadlines" },
             { icon: IconChartBar, text: "Track progress on the dashboard and in Analytics" },
             { icon: IconBuilding, text: "Keep your client's details up to date" },
@@ -151,7 +152,8 @@ const TOPICS: Topic[] = [
         steps: [
             only(["USER"], "Projects lists the projects you're a member of. Use the status tabs or search to find one."),
             only(["SUPER_ADMIN"], "Projects lists every project for every client. Use the status tabs or search to narrow it down."),
-            only(["CLIENT_ADMIN"], "Projects lists your client's projects. Use the status tabs or search to narrow it down."),
+            only(["CLIENT_ADMIN"], "Projects lists your client's projects, plus any other project you're on. Use the status tabs or search to narrow it down."),
+            only(["CLIENT_ADMIN"], "On another client's project you're a team member: you work on your own tasks and comment, but can't manage the project."),
             only(ADMINS, "Click New project, give it a name, status and due date, and watch the card preview update as you type."),
             "Open a project to see its progress, the burn-down chart, what's Up next and who's on the team.",
             only(ADMINS, "Use Manage team to add or remove people. Anyone added is notified and can see the project straight away."),
@@ -239,7 +241,7 @@ const TOPICS: Topic[] = [
         id: "clients",
         title: "Clients",
         icon: IconBuilding,
-        summary: "A client is a company you do work for. Each client has one client admin who manages its projects.",
+        summary: "A client is a company you do work for. Each client can have one client admin who manages its projects.",
         roles: ADMINS,
         art: "clients",
         link: { label: "Open clients", url: "/clients" },
@@ -260,7 +262,7 @@ const TOPICS: Topic[] = [
                 next: [
                     "You'll get a notification when the request is approved or declined.",
                     "If it's declined, the notification includes the reason, and the client stays as it is.",
-                    "If it's approved, the client and its projects are removed.",
+                    "If it's approved, the client and its projects are removed. You stay a client admin, with no client until a super admin assigns you one.",
                 ],
             },
         },
@@ -275,7 +277,7 @@ const TOPICS: Topic[] = [
         link: { label: "Open users", url: "/users" },
         steps: [
             "Click Invite user. Choose Invite to email them a sign-up link (valid for 48 hours), or Temporary password to set one yourself.",
-            "Pick their role. A client admin also needs the client they'll manage, and each client can have only one.",
+            "Pick their role. A client admin can be given a client now or later, and each client can have only one.",
             "The Status column shows Invited (hasn't signed in yet), Active or Locked (too many wrong passwords).",
             "Tick rows to Change role, Unlock or Remove several people at once. You can't select yourself.",
             "Open someone to edit their details or resend their invite. Use Export for a CSV or JSON copy of the list.",

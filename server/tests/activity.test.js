@@ -54,12 +54,13 @@ describe("ActivityService.list", () => {
     expect(mockFindRecent).toHaveBeenCalledWith(10);
   });
 
-  it("🟢 a CLIENT_ADMIN sees activity on their client's projects only", async () => {
+  it("🟢 a CLIENT_ADMIN sees activity on their client's projects and the projects they are on", async () => {
     mockFindByAssignedAdmin.mockResolvedValue({ id: "c1" });
     mockProjectsByClient.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+    mockProjectsByUser.mockResolvedValue([{ id: "p2" }, { id: "p3" }]);
     mockFindByProjects.mockResolvedValue([]);
     await ActivityService.list({}, { user: clientAdmin });
-    expect(mockFindByProjects).toHaveBeenCalledWith(["p1", "p2"], 20);
+    expect(mockFindByProjects).toHaveBeenCalledWith(["p1", "p2", "p3"], 20);
     expect(mockFindRecent).not.toHaveBeenCalled();
   });
 
@@ -70,8 +71,17 @@ describe("ActivityService.list", () => {
     expect(mockFindByProjects).toHaveBeenCalledWith(["p9"], 5);
   });
 
-  it("🔴 a CLIENT_ADMIN without a client sees nothing", async () => {
+  it("🟢 a CLIENT_ADMIN without a client sees activity on the projects they are on", async () => {
     mockFindByAssignedAdmin.mockResolvedValue(null);
+    mockProjectsByUser.mockResolvedValue([{ id: "p3" }]);
+    mockFindByProjects.mockResolvedValue([]);
+    await ActivityService.list({}, { user: clientAdmin });
+    expect(mockFindByProjects).toHaveBeenCalledWith(["p3"], 20);
+  });
+
+  it("🔴 a CLIENT_ADMIN with no client and no projects sees nothing", async () => {
+    mockFindByAssignedAdmin.mockResolvedValue(null);
+    mockProjectsByUser.mockResolvedValue([]);
     await expect(ActivityService.list({}, { user: clientAdmin })).resolves.toEqual([]);
     expect(mockFindByProjects).not.toHaveBeenCalled();
   });

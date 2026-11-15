@@ -36,10 +36,6 @@ npm run test:indexes
 npm run test:graphqlTypes
 npm run test:server
 
-# List client admins without a client (a client admin must have one); add `-- --demote` to make them users
-npm run db:orphan-admins
-npm run db:orphan-admins:prod
-
 # Apply schema indexes to the database (dev / prod); add `-- --dry-run` to preview
 npm run db:indexes
 npm run db:indexes:prod
@@ -92,8 +88,8 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 | Role | Key capabilities |
 |---|---|
-| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; user admin (`createUser` invite/password, `updateUser`, `changeUserRoles`, `unlockUsers`, `resendInvite`, `deleteUser`/`deleteUsers`); `assignAdmin`; `promoteToAdmin`; approves or `declineClientDeletion`; queries all users |
-| `CLIENT_ADMIN` | Manages their assigned client and its projects/tasks; queries users in their client's projects; requests client deletion (`confirmDeleteClient`); can delete any comment in those projects |
+| `SUPER_ADMIN` | Full access — manages all clients, users, projects, tasks; user admin (`createUser` invite/password, `updateUser`, `changeUserRoles`, `unlockUsers`, `resendInvite`, `deleteUser`/`deleteUsers`); `assignAdmin`; `promoteToAdmin`; approves or `declineClientDeletion` (the client's admin keeps their role); queries all users; can't be added to a project team |
+| `CLIENT_ADMIN` | Manages their assigned client, if any (a client is optional), and its projects/tasks; queries users in their client's projects; requests client deletion (`confirmDeleteClient`); can delete any comment in those projects. On another client's project they're on, a `USER`'s rights |
 | `USER` | Access to assigned projects only; can update own tasks; can comment on tasks/subtasks in those projects |
 
 **Layered architecture.**
@@ -112,7 +108,9 @@ GraphQL Request → server.js (JWT auth, rate limit, context) → Resolver → S
 
 **Notifications.** `NotificationService.notify(userId, content)` adds a job to the BullMQ `notifications` queue (`queues/notification.queue.js`, created lazily by `getNotificationQueue()`; 3 attempts with exponential back-off). The worker process (`worker/notification.worker.js`, `processNotificationJob`) calls `NotificationService.deliver()`, which saves to MongoDB and publishes via Redis PubSub to the user's `notificationCreated` subscription. If the queue can't be reached within 3s (Redis down), `notify` calls `deliver()` directly so nothing is lost. `markAllAsRead` and `markNotificationsRead(ids)` are single `updateMany` writes scoped to the caller. WebSocket connections are authenticated once in `onConnect`; a bad token closes with 4403. In other services' tests, mock `../services/notification.service.js` directly; in `notification.test.js`, mock `../queues/notification.queue.js`.
 
-**Comments.** `CommentService` (`services/comment.service.js`) gates every comment operation on project membership: a `USER` in `assignedUsers`, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`. A sub-task comment stores both `subTaskId` and its parent `taskId`, so `taskComments` filters out comments that have a `subTaskId`. Deleting a task or sub-task also deletes its comments.
+**Project access.** `services/access.js` is the one place that decides who runs a project (`managesProject`: any `SUPER_ADMIN`, or the `CLIENT_ADMIN` of its client) and who can see it (`onProjectTeam`, `visibleProjects`). Task, sub-task, comment, project and activity services all use it; don't check `role === "CLIENT_ADMIN"` for project rights. The GraphQL `Project.canManage` field exposes the same rule to the UI.
+
+**Comments.** `CommentService` (`services/comment.service.js`) gates every comment operation on project membership: anyone in `assignedUsers`, the `CLIENT_ADMIN` of the project's client, or any `SUPER_ADMIN`. A sub-task comment stores both `subTaskId` and its parent `taskId`, so `taskComments` filters out comments that have a `subTaskId`. Deleting a task or sub-task also deletes its comments.
 
 **Activity.** `ActivityService.record()` (`services/activity.service.js`, `Activity` model) stores admin events with a reason (role changes via `updateUserRoles`, task reopens); it never throws. The `activity(limit)` query is role-scoped (all / their client's projects / their projects) and the dashboards merge it with task events. Mock `../services/activity.service.js` in other services' tests.
 

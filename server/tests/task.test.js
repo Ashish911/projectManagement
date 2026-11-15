@@ -126,8 +126,9 @@ describe("TaskService", () => {
       expect(mockTaskFindByProject).toHaveBeenCalledWith(mockProject._id);
     });
 
-    it("🟢 CLIENT_ADMIN should get all tasks for a project", async () => {
-      mockProjectFindById.mockResolvedValue(mockProject);
+    it("🟢 CLIENT_ADMIN should get all tasks for their client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue({ id: "c1" });
+      mockProjectFindById.mockResolvedValue({ ...mockProject, clientId: "c1" });
       mockTaskFindByProject.mockResolvedValue([mockTask]);
 
       const result = await TaskService.getTasks(mockProject._id, {
@@ -272,8 +273,9 @@ describe("TaskService", () => {
       expect(mockTaskCreate).toHaveBeenCalled();
     });
 
-    it("🟢 CLIENT_ADMIN should create a task", async () => {
-      mockProjectFindById.mockResolvedValue(mockProject);
+    it("🟢 CLIENT_ADMIN should create a task in their client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue({ id: "c1" });
+      mockProjectFindById.mockResolvedValue({ ...mockProject, clientId: "c1" });
       mockTaskCreate.mockResolvedValue({
         ...createTaskData,
         _id: "848a1b2c3d4e5f6a7b8c9d0f",
@@ -582,6 +584,7 @@ describe("TaskService", () => {
     it("🟢 CLIENT_ADMIN should get tasks from their client's projects", async () => {
       mockClientFindByAssignedAdmin.mockResolvedValue({ id: "c1" });
       mockProjectFindByClientId.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+      mockProjectFindByAssignedUser.mockResolvedValue([]);
       mockTaskFindByProjects.mockResolvedValue([mockTask]);
 
       await TaskService.getAllTasks({ user: mockClientAdmin });
@@ -600,8 +603,9 @@ describe("TaskService", () => {
       expect(mockTaskFindByProjects).toHaveBeenCalledWith(["p1"]);
     });
 
-    it("🟢 CLIENT_ADMIN without a client should get an empty list", async () => {
+    it("🟢 CLIENT_ADMIN with no client and no projects should get an empty list", async () => {
       mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindByAssignedUser.mockResolvedValue([]);
       expect(await TaskService.getAllTasks({ user: mockClientAdmin })).toEqual([]);
       expect(mockTaskFindByProjects).not.toHaveBeenCalled();
     });
@@ -748,6 +752,113 @@ describe("TaskService", () => {
       mockTaskUpdate.mockResolvedValue({ ...mockTask, currentStatus: "IN_PROGRESS" });
       await TaskService.updateTaskStatus(mockTask._id, "IN_PROGRESS", { user: mockSuperAdmin });
       expect(mockRecordActivity).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // CLIENT ADMINS: admin on their client's projects, member elsewhere
+  // ════════════════════════════════════════════════════════════════
+  describe("client admin access", () => {
+    const ownClient = { id: "948a1b2c3d4e5f6a7b8c9d0e" };
+    const otherClient = { id: "948a1b2c3d4e5f6a7b8c9d0f" };
+    const project = { ...mockProject, clientId: ownClient.id, assignedUsers: [] };
+    const onTeam = { ...project, assignedUsers: [mockClientAdmin.id] };
+    const othersTask = { ...mockTask, assignedTo: mockUser.id, createdBy: mockSuperAdmin.id };
+    const theirTask = { ...othersTask, assignedTo: mockClientAdmin.id };
+
+    it("🟢 manages tasks in their own client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(ownClient);
+      mockProjectFindById.mockResolvedValue(project);
+      mockTaskFindById.mockResolvedValue(othersTask);
+      mockTaskUpdate.mockResolvedValue(othersTask);
+      await TaskService.updateTask({ id: mockTask._id, title: "Changed" }, { user: mockClientAdmin });
+      expect(mockTaskUpdate).toHaveBeenCalled();
+    });
+
+    it("🔴 can't see tasks of another client's project they aren't on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(project);
+      await expect(TaskService.getTasks(project._id, { user: mockClientAdmin })).rejects.toThrow("You are not assigned to this project");
+    });
+
+    it("🟢 sees tasks of another client's project they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindByProject.mockResolvedValue([othersTask]);
+      expect(await TaskService.getTasks(project._id, { user: mockClientAdmin })).toEqual([othersTask]);
+    });
+
+    it("🟢 a client admin with no client sees tasks of a project they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindByProject.mockResolvedValue([othersTask]);
+      expect(await TaskService.getTasks(project._id, { user: mockClientAdmin })).toEqual([othersTask]);
+    });
+
+    it("🔴 can't open someone else's task on another client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindById.mockResolvedValue(othersTask);
+      await expect(TaskService.getTask(mockTask._id, { user: mockClientAdmin })).rejects.toThrow("You do not have access to this task");
+    });
+
+    it("🔴 can't create tasks on another client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      await expect(TaskService.createTask(createTaskData, { user: mockClientAdmin })).rejects.toThrow(
+        "Current role does not have permission to create tasks",
+      );
+      expect(mockTaskCreate).not.toHaveBeenCalled();
+    });
+
+    it("🔴 can't edit someone else's task on another client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindById.mockResolvedValue(othersTask);
+      await expect(TaskService.updateTask({ id: mockTask._id, title: "x" }, { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to update this task",
+      );
+      await expect(TaskService.updateTaskStatus(mockTask._id, "IN_PROGRESS", { user: mockClientAdmin })).rejects.toThrow(
+        "You do not have permission to update this task status",
+      );
+      expect(mockTaskUpdate).not.toHaveBeenCalled();
+    });
+
+    it("🟢 updates their own task on another client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindById.mockResolvedValue(theirTask);
+      mockTaskUpdate.mockResolvedValue(theirTask);
+      await TaskService.updateTaskStatus(mockTask._id, "IN_PROGRESS", { user: mockClientAdmin });
+      expect(mockTaskUpdate).toHaveBeenCalled();
+    });
+
+    it("🔴 can't delete tasks on another client's project", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(otherClient);
+      mockProjectFindById.mockResolvedValue(onTeam);
+      mockTaskFindById.mockResolvedValue(theirTask);
+      await expect(TaskService.deleteTask(mockTask._id, { user: mockClientAdmin })).rejects.toThrow(
+        "Current role does not have permission to delete tasks",
+      );
+      expect(mockTaskDelete).not.toHaveBeenCalled();
+    });
+
+    it("🟢 getAllTasks covers their client's projects and the projects they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(ownClient);
+      mockProjectFindByClientId.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+      mockProjectFindByAssignedUser.mockResolvedValue([{ id: "p2" }, { id: "p3" }]);
+      mockTaskFindByProjects.mockResolvedValue([]);
+      await TaskService.getAllTasks({ user: mockClientAdmin });
+      expect(mockTaskFindByProjects).toHaveBeenCalledWith(["p1", "p2", "p3"]);
+    });
+
+    it("🟢 getAllTasks for a client admin with no client covers the projects they are on", async () => {
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockProjectFindByAssignedUser.mockResolvedValue([{ id: "p3" }]);
+      mockTaskFindByProjects.mockResolvedValue([]);
+      await TaskService.getAllTasks({ user: mockClientAdmin });
+      expect(mockProjectFindByClientId).not.toHaveBeenCalled();
+      expect(mockTaskFindByProjects).toHaveBeenCalledWith(["p3"]);
     });
   });
 });

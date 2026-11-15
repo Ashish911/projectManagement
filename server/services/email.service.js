@@ -22,18 +22,40 @@ const fromEmail = () => process.env.EMAIL_FROM || "onboarding@messagebird.dev";
  */
 const send = async ({ to, subject, html, kind }) => {
   if (process.env.SMTP_HOST) {
-    smtp ??= nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 1025), secure: false });
-    const info = await smtp.sendMail({ from: `"${FROM_NAME}" <${fromEmail()}>`, to, subject, html });
-    logger.info({ emailId: info.messageId, transport: "smtp" }, `${kind} email sent`);
+    smtp ??= nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 1025),
+      secure: false,
+    });
+    const info = await smtp.sendMail({
+      from: `"${FROM_NAME}" <${fromEmail()}>`,
+      to,
+      subject,
+      html,
+    });
+    logger.info(
+      { emailId: info.messageId, transport: "smtp" },
+      `${kind} email sent`,
+    );
     return true;
   }
   if (process.env.BIRD_API_KEY) {
     bird ??= new BirdClient({ apiKey: process.env.BIRD_API_KEY });
-    const msg = await bird.email.send({ from: { email: fromEmail(), name: FROM_NAME }, to: [to], subject, html });
-    logger.info({ emailId: msg.id, status: msg.status, transport: "bird" }, `${kind} email sent`);
+    const msg = await bird.email.send({
+      from: { email: fromEmail(), name: FROM_NAME },
+      to: [to],
+      subject,
+      html,
+    });
+    logger.info(
+      { emailId: msg.id, status: msg.status, transport: "bird" },
+      `${kind} email sent`,
+    );
     return true;
   }
-  logger.error(`No email transport configured (set SMTP_HOST or BIRD_API_KEY); ${kind.toLowerCase()} email not sent`);
+  logger.error(
+    `No email transport configured (set SMTP_HOST or BIRD_API_KEY); ${kind.toLowerCase()} email not sent`,
+  );
   return false;
 };
 

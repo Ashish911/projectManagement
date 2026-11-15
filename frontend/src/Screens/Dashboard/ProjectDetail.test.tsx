@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
-const project = { id: "p1", name: "Portal", status: "IN_PROGRESS", dueDate: null, client: { id: "c1", name: "Atlas" }, user: [{ id: "u1", name: "Ravi Shah", email: "r@x.io" }] }
+const project = { id: "p1", name: "Portal", status: "IN_PROGRESS", dueDate: null, canManage: true, client: { id: "c1", name: "Atlas" }, user: [{ id: "u1", name: "Ravi Shah", email: "r@x.io" }] }
 vi.mock("react-redux", () => ({ useSelector: (sel: (s: any) => unknown) => sel({ projects: { loading: false } }) }))
 vi.mock("@/components/forms/use-app-data", async (orig) => ({
     ...(await orig<object>()),
@@ -27,5 +27,17 @@ describe("ProjectDetail — team (PRJ-02)", () => {
         mount()
         await userEvent.click(screen.getByRole("button", { name: "More project actions" }))
         expect(screen.getAllByText(/Manage team/)).toHaveLength(1)
+    })
+})
+
+describe("ProjectDetail — a client admin on another client's project", () => {
+    afterEach(() => { project.canManage = true })
+
+    it("🔴 gets no admin controls, because they're only on the team", () => {
+        project.canManage = false
+        mount()
+        expect(screen.queryByRole("button", { name: /Manage team/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: /New task/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "More project actions" })).not.toBeInTheDocument()
     })
 })

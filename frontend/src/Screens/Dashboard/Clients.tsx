@@ -132,7 +132,7 @@ export const Clients: React.FC = () => {
                 detail ? (
                     <div className="max-w-[640px]">{detail}</div>
                 ) : (
-                    <TableCard><EmptyState icon={IconBuilding} title="No client to show" hint="You'll see your client here once it has at least one project." /></TableCard>
+                    <TableCard><EmptyState icon={IconBuilding} title="You don't manage a client yet" hint="A super admin can assign you one. Until then, you work on the projects you're added to." /></TableCard>
                 )
             ) : (
                 <>

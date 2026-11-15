@@ -3,16 +3,13 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
-  ValidationError,
 } from "../errors/errors.js";
 import { ClientRepo, UserRepo } from "../repositories/import.repo.js";
 import { NotificationService } from "./notification.service.js";
-import { ActivityService } from "./activity.service.js";
 import {
   addClientSchema,
   assignAdminSchema,
   declineClientDeletionSchema,
-  deleteClientAdminPlanSchema,
   idSchema,
   updateClientSchema,
 } from "../validation/schema.js";
@@ -28,49 +25,19 @@ import { createLogger } from "../config/logger.js";
 const adminIdOf = (admin) =>
   typeof admin?.id === "string" ? admin.id : (admin?.toString() ?? null);
 
-/** Business logic and role checks for clients. */
 /**
- * Before a client is deleted: its client admin must not be left without a client, so the
- * super admin either reassigns them to a client with no admin or demotes them to USER.
- * Checks everything before changing anything.
- * @param {object} client  The client about to be deleted.
- * @param {{ adminAction?: "REASSIGN"|"DEMOTE", reassignTo?: string, reason?: string }} plan
- * @param {object} user    The super admin.
- * @param {object} logger  Request logger.
- * @throws {ValidationError|NotFoundError|ConflictError} If the plan is missing or can't be applied.
+ * Tells a deleted client's admin. They stay a CLIENT_ADMIN, with no client until a
+ * super admin assigns them one. A failed notification doesn't undo the delete.
+ * @param {object} client The deleted client.
  */
-const settleAdminBeforeDelete = async (client, plan = {}, user, logger) => {
+const tellAdminClientDeleted = async (client) => {
   const admin = adminIdOf(client.assignedAdmin);
   if (!admin) return;
-  const { adminAction, reassignTo, reason } = validate(deleteClientAdminPlanSchema, plan);
-  if (!adminAction) throw new ValidationError("Choose what happens to the client admin: reassign them or make them a User");
-  if (!reason) throw new ValidationError("Give a reason for this change");
-
-  if (adminAction === "REASSIGN") {
-    const target = await ClientRepo.findById(reassignTo);
-    if (!target) throw new NotFoundError("Client not found");
-    if (String(target.id ?? target._id) === String(client.id ?? client._id)) throw new ValidationError("Pick a different client");
-    if (adminIdOf(target.assignedAdmin)) throw new ConflictError(`${target.name} already has a client admin`);
-    await ClientRepo.update(reassignTo, { assignedAdmin: admin });
-    await ActivityService.record({
-      actor: user.id, action: "ADMIN_REASSIGNED", targetUser: admin, client: reassignTo, reason,
-      summary: `moved the client admin of ${client.name} to ${target.name} before deleting ${client.name}`,
-    });
-    await NotificationService.notify(admin, `${client.name} was deleted. You are now the admin for client "${target.name}".`).catch(() => {});
-  } else {
-    await UserRepo.update(admin, { role: "USER" });
-    await ActivityService.record({
-      actor: user.id, action: "ROLE_CHANGED", targetUser: admin, client: client.id ?? client._id, reason,
-      summary: `changed the client admin of ${client.name} to User before deleting ${client.name}`,
-      meta: { oldRole: "CLIENT_ADMIN", newRole: "USER" },
-    });
-    await NotificationService.notify(admin, `${client.name} was deleted, so your role is now User.`).catch(() => {});
-  }
-  logger.info({ audit: true, userId: user.id, targetUserId: admin, targetClientId: client.id ?? client._id, adminAction, reason, action: "CLIENT_ADMIN_SETTLED" }, "AUDIT");
-  await cache.invalidate("users:all");
+  await NotificationService.notify(admin, `Client "${client.name}" was deleted, so you no longer manage it.`).catch(() => {});
   await cache.invalidate(`users:${admin}`);
 };
 
+/** Business logic and role checks for clients. */
 export const ClientService = {
   /**
    * The client the caller administers. Lets a CLIENT_ADMIN see their client even
@@ -275,7 +242,7 @@ export const ClientService = {
    * @returns {Promise<object>} The deleted client.
    * @throws {ConflictError} If the client has not requested deletion.
    */
-  async deleteClientBySuperAdmin(id, context, adminPlan) {
+  async deleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
     const { user } = context;
@@ -294,8 +261,8 @@ export const ClientService = {
     if (!client.deleteRequest)
       throw new ConflictError("Delete request not found for this client.");
 
-    await settleAdminBeforeDelete(client, adminPlan, user, logger);
     const deleted = await ClientRepo.delete(id);
+    await tellAdminClientDeleted(client);
 
     logger.info(
       {
@@ -319,7 +286,7 @@ export const ClientService = {
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object>} The deleted client.
    */
-  async forceDeleteClientBySuperAdmin(id, context, adminPlan) {
+  async forceDeleteClientBySuperAdmin(id, context) {
     validate(idSchema, { id });
 
     const { user } = context;
@@ -334,8 +301,8 @@ export const ClientService = {
     const client = await ClientRepo.findById(id);
     if (!client) throw new NotFoundError("Client not found");
 
-    await settleAdminBeforeDelete(client, adminPlan, user, logger);
     const deleted = await ClientRepo.delete(id);
+    await tellAdminClientDeleted(client);
 
     logger.info(
       {
@@ -438,19 +405,17 @@ export const ClientService = {
 
     const updated = await ClientRepo.update(data.id, { assignedAdmin: data.assignedAdmin });
 
-    // A client admin must have a client: the admin being replaced goes back to USER
+    // The admin being replaced stays a client admin, with no client for now
     const previousAdmin = adminIdOf(client.assignedAdmin);
     if (previousAdmin && previousAdmin !== data.assignedAdmin) {
-      await UserRepo.update(previousAdmin, { role: "USER" });
       logger.info(
-        { audit: true, userId: user.id, targetUserId: previousAdmin, targetClientId: data.id, action: "CLIENT_ADMIN_REPLACED", oldRole: "CLIENT_ADMIN", newRole: "USER" },
+        { audit: true, userId: user.id, targetUserId: previousAdmin, targetClientId: data.id, action: "CLIENT_ADMIN_REPLACED" },
         "AUDIT",
       );
-      await cache.invalidate("users:all");
       await cache.invalidate(`users:${previousAdmin}`);
       await NotificationService.notify(
         previousAdmin,
-        `You are no longer the admin for client "${client.name}", so your role is now User.`,
+        `You are no longer the admin for client "${client.name}".`,
       ).catch(() => {});
     }
 

@@ -13,23 +13,16 @@ import {
     IconUserOff,
     IconUsers,
 } from "@tabler/icons-react"
-import { deleteClientBySuperAdmin, forceDeleteClient, type AdminPlan } from "@/api/clientApi"
+import { deleteClientBySuperAdmin, forceDeleteClient } from "@/api/clientApi"
 import { deleteProject } from "@/api/projectApi"
 import { deleteUser, deleteUsers } from "@/api/userApi"
-import { addClientToStore, removeClientFromStore, updateClientInStore } from "@/redux/actions/clientsActions"
+import { addClientToStore, removeClientFromStore } from "@/redux/actions/clientsActions"
 import { addProjectToStore, removeProjectFromStore } from "@/redux/actions/projectsActions"
 import { removeUserFromStore, upsertUsersInStore } from "@/redux/actions/usersListActions"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/pm/avatar"
 import { Check } from "@/components/pm/check"
-import type { Client } from "@/types/clientTypes"
-import type { Project } from "@/types/projectTypes"
-import type { Task } from "@/types/taskTypes"
-import type { User } from "@/types/userTypes"
-import { Segmented } from "@/components/pm/segmented"
 import { Field, FormFoot, FormModal, Note, inputCls } from "./form-kit"
-import { Combo } from "./combo"
-import { LogoChip } from "./options"
 import { useAppData } from "./use-app-data"
 import { useForms, type FormProps } from "./forms-context"
 import { scheduleDelete } from "./toaster"
@@ -57,7 +50,7 @@ function Impacts({ items }: { items: [Icon, string, string][] }) {
 }
 
 /** Shared shell: impact list, then type the name to enable the destructive button. */
-function ConfirmByName({ title, name, impacts, label, extra, onConfirm, onClose, closing, secondary, ready = true }: {
+function ConfirmByName({ title, name, impacts, label, extra, onConfirm, onClose, closing, secondary }: {
     title: string
     name: string
     impacts: [Icon, string, string][]
@@ -68,10 +61,9 @@ function ConfirmByName({ title, name, impacts, label, extra, onConfirm, onClose,
     closing: boolean
     secondary?: React.ReactNode
     /** Other required choices in `extra` are complete */
-    ready?: boolean
 }) {
     const [typed, setTyped] = useState("")
-    const ok = typed.trim() === name && ready
+    const ok = typed.trim() === name
     return (
         <FormModal
             title={title}
@@ -98,49 +90,24 @@ function ConfirmByName({ title, name, impacts, label, extra, onConfirm, onClose,
     )
 }
 
-/** Deletes a client: approves a pending request, or force-deletes otherwise. */
+/** Deletes a client: approves a pending request, or force-deletes otherwise. Its admin keeps their role, with no client. */
 export function DeleteClientForm({ data, onClose, closing }: FormProps<{ clientId: string }>) {
     const dispatch = useDispatch()
     const openForm = useForms()
-    const { clients, projects, tasks, users } = useAppData()
+    const { clients, projects, tasks } = useAppData()
     const client = clients.find((c) => c.id === data.clientId)
     if (!client) return null
-    return <DeleteClientConfirm client={client} clients={clients} projects={projects} tasks={tasks} users={users} dispatch={dispatch} openForm={openForm} onClose={onClose} closing={closing} />
-}
-
-/** Body of DeleteClientForm, split out so its state hooks run only once the client is known. */
-function DeleteClientConfirm({ client, clients, projects, tasks, users, dispatch, openForm, onClose, closing }: {
-    client: Client; clients: Client[]; projects: Project[]; tasks: Task[]; users: User[]
-    dispatch: ReturnType<typeof useDispatch>; openForm: ReturnType<typeof useForms>; onClose: () => void; closing: boolean
-}) {
     const ps = projects.filter((p) => p.client?.id === client.id)
     const open = tasks.filter((t) => ps.some((p) => p.id === t.project?.id) && t.currentStatus !== "RESOLVED").length
     const admin = client.assignedAdmin
-    // A client admin can't be left without a client: move them or make them a User
-    const [action, setAction] = useState<AdminPlan["adminAction"] | null>(null)
-    const [reassignTo, setReassignTo] = useState("")
-    const [reason, setReason] = useState("")
-    const freeClients = clients.filter((c) => c.id !== client.id && !c.assignedAdmin)
-    const planReady = !admin || (!!action && !!reason.trim() && (action === "DEMOTE" || !!reassignTo))
-    const plan: AdminPlan | undefined = admin && action
-        ? { adminAction: action, reassignTo: action === "REASSIGN" ? reassignTo : null, reason: reason.trim() }
-        : undefined
-    const adminUser = admin && users.find((u) => u.id === admin.id)
 
     const confirm = () => {
-        if (!planReady) return
         onClose()
         scheduleDelete({
             text: <span><b>{client.name}</b> deleted</span>,
             hide: () => dispatch(removeClientFromStore(client.id)),
             restore: () => dispatch(addClientToStore(client)),
-            commit: async () => {
-                await (client.deleteRequest ? deleteClientBySuperAdmin(client.id, plan) : forceDeleteClient(client.id, plan))
-                // Mirror what the server did to the admin
-                const target = plan?.reassignTo && clients.find((c) => c.id === plan.reassignTo)
-                if (target && admin) dispatch(updateClientInStore({ ...target, assignedAdmin: admin }))
-                if (plan?.adminAction === "DEMOTE" && adminUser) dispatch(upsertUsersInStore([{ ...adminUser, role: "USER" }]))
-            },
+            commit: () => (client.deleteRequest ? deleteClientBySuperAdmin(client.id) : forceDeleteClient(client.id)),
         })
     }
 
@@ -152,26 +119,8 @@ function DeleteClientConfirm({ client, clients, projects, tasks, users, dispatch
             onConfirm={confirm}
             onClose={onClose}
             closing={closing}
-            ready={planReady}
-            extra={admin && (
-                <>
-                    {client.deleteRequest && (
-                        <Note><span className="flex items-center gap-2.5"><Avatar name={admin.name} seed={admin.id} size={24} /><span><b>{admin.name}</b> (client admin) requested this.</span></span></Note>
-                    )}
-                    <Field label={<>What happens to <b>{admin.name}</b>?</>} req hint="A client admin always needs a client.">
-                        <div><Segmented value={action ?? ("" as any)} onChange={setAction} options={[{ value: "REASSIGN", label: "Move to another client" }, { value: "DEMOTE", label: "Make them a User" }]} /></div>
-                    </Field>
-                    {action === "REASSIGN" && (
-                        <Field label="Client to move them to" req hint={freeClients.length ? null : "Every other client already has an admin."}>
-                            <Combo value={reassignTo} onChange={setReassignTo} options={freeClients.map((c) => ({ value: c.id, label: c.name, lead: <LogoChip name={c.name} /> }))} placeholder="Choose client" searchPlaceholder="Search clients" />
-                        </Field>
-                    )}
-                    {action && (
-                        <Field label="Reason" req>
-                            <input className={inputCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why? Saved in Activity" />
-                        </Field>
-                    )}
-                </>
+            extra={admin && client.deleteRequest && (
+                <Note><span className="flex items-center gap-2.5"><Avatar name={admin.name} seed={admin.id} size={24} /><span><b>{admin.name}</b> (client admin) requested this.</span></span></Note>
             )}
             secondary={client.deleteRequest && (
                 <Button type="button" variant="outline" onClick={() => { onClose(); setTimeout(() => openForm("decline-request", { clientId: client.id }), 200) }}>Decline request</Button>
@@ -179,9 +128,7 @@ function DeleteClientConfirm({ client, clients, projects, tasks, users, dispatch
             impacts={[
                 [IconFolder, `${plural(ps.length, "project")} lose their client`, ps.map((p) => p.name).join(", ") || "None"],
                 [IconListDetails, `${plural(open, "open task")} in those projects`, "They stay, but can only be reached by super admins"],
-                [IconUserMinus,
-                    !admin ? "No client admin to remove" : action === "REASSIGN" ? `${admin.name} becomes admin of ${clients.find((c) => c.id === reassignTo)?.name ?? "another client"}` : action === "DEMOTE" ? `${admin.name} becomes a User` : `${admin.name} needs a new place`,
-                    admin ? "Their user account is kept" : "—"],
+                [IconUserMinus, admin ? `${admin.name} stays a client admin, with no client` : "No client admin to remove", admin ? "Assign them another client any time" : "—"],
             ]}
         />
     )

@@ -74,10 +74,11 @@ describe("Users selection", () => {
         expect(selectedCount()).toBe("1")
     })
 
-    it("🔴 a client admin without a client is flagged", () => {
+    it("🟢 a client admin without a client is shown plainly, not as a problem", () => {
         render(<Users />)
         const row = screen.getByRole("checkbox", { name: "Select Raj Patel" }).closest("tr")!
-        expect(within(row).getByText("No client")).toBeInTheDocument()
+        expect(within(row).getByText("No client yet")).toBeInTheDocument()
+        expect(within(row).queryByText("No client")).not.toBeInTheDocument()
     })
 
     it("🔴 another super admin's row is view-only", () => {

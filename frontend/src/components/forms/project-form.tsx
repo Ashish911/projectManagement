@@ -43,13 +43,8 @@ export function ProjectForm({ data, onClose, closing }: FormProps<{ projectId?: 
     const box = useRef<HTMLDivElement>(null)
     const cur = data.projectId ? projects.find((p) => p.id === data.projectId) ?? null : null
 
-    // Client admins can only use their own client (known from their projects)
-    const clientChoices = useMemo(() => {
-        if (role === "SUPER_ADMIN") return clients.map((c) => ({ id: c.id, name: c.name, deleteRequest: c.deleteRequest }))
-        const byId = new Map<string, { id: string; name: string; deleteRequest?: boolean }>()
-        projects.forEach((p) => p.client && byId.set(p.client.id, p.client))
-        return [...byId.values()]
-    }, [role, clients, projects])
+    // A client admin's clients list holds only their own client (empty if they have none)
+    const clientChoices = useMemo(() => clients.map((c) => ({ id: c.id, name: c.name, deleteRequest: c.deleteRequest })), [clients])
     const locked = role === "CLIENT_ADMIN"
 
     const f = useForm<Values>(
@@ -62,7 +57,7 @@ export function ProjectForm({ data, onClose, closing }: FormProps<{ projectId?: 
                     : projects.some((p) => p.id !== cur?.id && p.name.toLowerCase() === x.trim().toLowerCase()) ? "A project with this name already exists"
                         : x.length > 60 ? "Keep it under 60 characters" : null,
             desc: (x) => (!x.trim() ? "Add a short description. It appears on project cards." : x.length > 280 ? "Keep it under 280 characters" : null),
-            clientId: (x) => (x ? null : locked ? "Your client has no projects yet; ask a super admin to create the first one" : "Pick the client this belongs to"),
+            clientId: (x) => (x ? null : locked ? "You don't manage a client yet, so you can't create projects" : "Pick the client this belongs to"),
         },
     )
     const v = f.v

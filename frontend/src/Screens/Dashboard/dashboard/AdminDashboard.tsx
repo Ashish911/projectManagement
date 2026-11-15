@@ -39,6 +39,7 @@ import type { Client } from "@/types/clientTypes"
 import type { Project } from "@/types/projectTypes"
 import type { Task } from "@/types/taskTypes"
 import { createdVsResolved, resolvedWithin, mergeActivity, taskActivity, useServerActivity, teamOf, todayLabel, useDashboardData, type Range } from "./use-dashboard-data"
+import { managedProjects } from "@/components/forms/use-app-data"
 import { ActivityList, Workload } from "./widgets"
 import { Loading } from "@/components/pm/loading"
 
@@ -60,6 +61,9 @@ export function AdminDashboard() {
     const { profile, users, clients, projects, tasks, tasksLoaded } = useDashboardData()
     const serverActivity = useServerActivity()
     const isSuper = profile?.role === "SUPER_ADMIN"
+    // A client admin adds tasks only to projects they run, and projects only under a client they run
+    const canAddTask = managedProjects(profile?.role, projects).length > 0
+    const canAddProject = isSuper || clients.length > 0
 
     const count = (status: Project["status"]) => projects.filter((p) => p.status === status).length
     const inProgress = count("IN_PROGRESS")
@@ -95,8 +99,8 @@ export function AdminDashboard() {
                 <Segmented value={range} onChange={setRange} options={[{ value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "90d", label: "90d" }]} />
                 {isSuper
                     ? <Button variant="outline" onClick={() => openForm("user")}><IconUserPlus />Invite user</Button>
-                    : <Button variant="outline" onClick={() => openForm("task")}><IconPlus />New task</Button>}
-                <Button onClick={() => openForm("project")}><IconPlus />New project</Button>
+                    : canAddTask && <Button variant="outline" onClick={() => openForm("task")}><IconPlus />New task</Button>}
+                {canAddProject && <Button onClick={() => openForm("project")}><IconPlus />New project</Button>}
             </PageHead>
 
             {isSuper && <AttentionStrip clients={clients} />}
@@ -121,7 +125,7 @@ export function AdminDashboard() {
                         ]}
                     />
                 </Panel>
-                {isSuper ? <ProjectStatusPanel projects={projects} tasks={tasks} counts={{ inProgress, completed, notStarted }} /> : <ProjectListPanel projects={projects} tasks={tasks} />}
+                {isSuper ? <ProjectStatusPanel projects={projects} tasks={tasks} counts={{ inProgress, completed, notStarted }} /> : <ProjectListPanel projects={projects} tasks={tasks} client={clients[0]?.name} />}
             </div>
 
             <div className="grid grid-cols-1 gap-4 min-[920px]:grid-cols-2 min-[1180px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]">
@@ -277,11 +281,11 @@ function ProjectStatusPanel({ projects, tasks, counts }: { projects: Project[]; 
     )
 }
 
-/** CLIENT_ADMIN: their projects with status, progress, team and open tasks. */
-function ProjectListPanel({ projects, tasks }: { projects: Project[]; tasks: Task[] }) {
+/** CLIENT_ADMIN: their projects (their client's, and any they're on) with status, progress, team and open tasks. */
+function ProjectListPanel({ projects, tasks, client }: { projects: Project[]; tasks: Task[]; client?: string }) {
     const navigate = useNavigate()
     return (
-        <Panel index={5} title="Project progress" sub={projects[0]?.client?.name}>
+        <Panel index={5} title="Project progress" sub={client}>
             {projects.length === 0 ? (
                 <EmptyState icon={IconFolder} title="No projects yet" />
             ) : (

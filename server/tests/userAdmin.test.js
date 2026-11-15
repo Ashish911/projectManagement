@@ -149,11 +149,14 @@ describe("UserService — administration", () => {
       expect(mockClientUpdate).toHaveBeenCalledWith(client.id, { assignedAdmin: "948a1b2c3d4e5f6a7b8c9d0e" });
     });
 
-    it("🔴 should reject a client admin without a client", async () => {
-      await expect(
-        UserService.createUser({ ...newUser, role: "CLIENT_ADMIN" }, { user: superAdmin }),
-      ).rejects.toThrow("Pick the client they'll manage");
-      expect(mockUserCreate).not.toHaveBeenCalled();
+    it("🟢 should create a client admin with no client yet", async () => {
+      mockUserFindByEmail.mockResolvedValue(null);
+      mockUserFindById.mockResolvedValue(null);
+
+      await UserService.createUser({ ...newUser, role: "CLIENT_ADMIN" }, { user: superAdmin });
+
+      expect(mockUserCreate).toHaveBeenCalledWith(expect.objectContaining({ role: "CLIENT_ADMIN" }));
+      expect(mockClientUpdate).not.toHaveBeenCalled();
     });
 
     it("🔴 should reject a client that already has an admin", async () => {
@@ -257,10 +260,22 @@ describe("UserService — administration", () => {
       expect(mockUserUpdate).not.toHaveBeenCalled();
     });
 
-    it("🔴 should need exactly one person for a client admin", async () => {
+    it("🔴 only one person can be made admin of a client", async () => {
       await expect(
         UserService.changeUserRoles({ ids: [member.id, otherMember.id], role: "CLIENT_ADMIN", clientId: client.id }, { user: superAdmin }),
-      ).rejects.toThrow("A client admin needs exactly one person and a client");
+      ).rejects.toThrow("A client can have only one client admin");
+    });
+
+    it("🟢 several people can be made client admins with no client", async () => {
+      mockUserFindByIds.mockResolvedValue([{ ...member }, { ...otherMember }]);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+      mockUserUpdate.mockImplementation(async (id, d) => ({ id, ...d }));
+
+      await UserService.changeUserRoles({ ids: [member.id, otherMember.id], role: "CLIENT_ADMIN" }, { user: superAdmin });
+
+      expect(mockUserUpdate).toHaveBeenCalledWith(member.id, { role: "CLIENT_ADMIN" });
+      expect(mockUserUpdate).toHaveBeenCalledWith(otherMember.id, { role: "CLIENT_ADMIN" });
+      expect(mockClientUpdate).not.toHaveBeenCalled();
     });
   });
 
@@ -319,10 +334,26 @@ describe("UserService — administration", () => {
       ).rejects.toThrow("Give a reason for the role change");
     });
 
-    it("🔴 a client admin row needs a client", async () => {
-      await expect(
-        UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "CLIENT_ADMIN" }] }, { user: superAdmin }),
-      ).rejects.toThrow("Pick a client for each new client admin");
+    it("🟢 a client admin taken off their client stays a client admin", async () => {
+      const admin = { ...member, role: "CLIENT_ADMIN" };
+      mockUserFindByIds.mockResolvedValue([admin]);
+      mockClientFindByAssignedAdmin.mockResolvedValue(client);
+      mockUserUpdate.mockImplementation(async (id, d) => ({ id, ...d }));
+
+      await UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "CLIENT_ADMIN", clientId: null }] }, { user: superAdmin });
+
+      expect(mockClientUpdate).toHaveBeenCalledWith(client.id, { assignedAdmin: null });
+      expect(mockUserUpdate).toHaveBeenCalledWith(member.id, { role: "CLIENT_ADMIN" });
+    });
+
+    it("🟢 a client admin with no client and no new client is left alone", async () => {
+      mockUserFindByIds.mockResolvedValue([{ ...member, role: "CLIENT_ADMIN" }]);
+      mockClientFindByAssignedAdmin.mockResolvedValue(null);
+
+      await UserService.updateUserRoles({ reason: "x", changes: [{ id: member.id, role: "CLIENT_ADMIN", clientId: null }] }, { user: superAdmin });
+
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockClientUpdate).not.toHaveBeenCalled();
     });
 
     it("🔴 two people can't become admin of the same client", async () => {

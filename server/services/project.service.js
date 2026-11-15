@@ -1,6 +1,7 @@
 import { cache } from "../config/cache.js";
 import { createLogger } from "../config/logger.js";
 import { NotificationService } from "./notification.service.js";
+import { managesProject, onProjectTeam, visibleProjects } from "./access.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -25,7 +26,6 @@ export const ProjectService = {
    * Lists the projects visible to the current user, scoped by role.
    * @param {object} context GraphQL context with the current `user`.
    * @returns {Promise<object[]>} The visible projects.
-   * @throws {NotFoundError} If a CLIENT_ADMIN has no assigned client.
    */
   async getProjects(context) {
     const { user } = context;
@@ -35,16 +35,8 @@ export const ProjectService = {
       return await ProjectRepo.find();
     }
 
-    // CLIENT_ADMIN sees only their client's projects
-    if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByAssignedAdmin(user.id);
-      if (!client) throw new NotFoundError("No client assigned to this admin");
-
-      return await ProjectRepo.findByClientId(client.id);
-    }
-
-    // USER sees only projects they are assigned to
-    return await ProjectRepo.findByAssignedUser(user.id);
+    // CLIENT_ADMIN: their client's projects and any they are on; USER: the ones they are on
+    return await visibleProjects(user);
   },
   /**
    * Fetches one project if the current user may see it.
@@ -62,28 +54,12 @@ export const ProjectService = {
 
     if (!project) throw new NotFoundError("Project not found.");
 
-    if (user.role === "SUPER_ADMIN") return project;
+    // Whoever runs the project, or anyone on its team
+    if (onProjectTeam(project, user) || (await managesProject(project, user))) return project;
 
-    // CLIENT_ADMIN — project must belong to their client
-    if (user.role === "CLIENT_ADMIN") {
-      const client = await ClientRepo.findByAssignedAdmin(user.id);
-      if (!client) throw new NotFoundError("No client assigned to this admin");
-
-      if (project.clientId.toString() !== client.id.toString()) {
-        throw new ForbiddenError("You do not have access to this project");
-      }
-      return project;
-    }
-
-    // USER — check if assigned to this project
-    const isAssigned = project.assignedUsers
-      .map((id) => id.toString())
-      .includes(user.id);
-
-    if (!isAssigned)
-      throw new ForbiddenError("You are not assigned to this project");
-
-    return project;
+    throw new ForbiddenError(
+      user.role === "USER" ? "You are not assigned to this project" : "You do not have access to this project",
+    );
   },
   /**
    * Creates a project under a client. Not allowed for USER.
@@ -109,7 +85,7 @@ export const ProjectService = {
 
     // CLIENT_ADMIN can only add projects for their own client
     if (user.role === "CLIENT_ADMIN") {
-      if (client.assignedAdmin.toString() !== user.id) {
+      if (client?.assignedAdmin?.toString() !== user.id) {
         throw new ForbiddenError("You are not the admin of this client");
       }
     }
@@ -159,7 +135,7 @@ export const ProjectService = {
     // CLIENT_ADMIN can only update their own client's projects
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
-      if (client.assignedAdmin.toString() !== user.id) {
+      if (client?.assignedAdmin?.toString() !== user.id) {
         throw new ForbiddenError("You are not the admin of this client");
       }
     }
@@ -209,7 +185,7 @@ export const ProjectService = {
     // CLIENT_ADMIN can only delete their own client's projects
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
-      if (client.assignedAdmin.toString() !== user.id) {
+      if (client?.assignedAdmin?.toString() !== user.id) {
         throw new ForbiddenError("You are not the admin of this client");
       }
     }
@@ -252,15 +228,17 @@ export const ProjectService = {
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
-      if (client.assignedAdmin.toString() !== user.id) {
+      if (client?.assignedAdmin?.toString() !== user.id) {
         throw new ForbiddenError("You are not the admin of this client");
       }
     }
 
-    // Every requested user must exist
+    // Every requested user must exist; super admins see every project and are never on a team
     const foundUsers = await UserRepo.findByIds(data.users);
     if (foundUsers.length !== data.users.length)
       throw new NotFoundError("One or more users not found");
+    if (foundUsers.some((u) => u.role === "SUPER_ADMIN"))
+      throw new ForbiddenError("Super admins can't be added to a project team");
 
     // Skip users already on the project
     const existingIds = project.assignedUsers.map((id) => id.toString());
@@ -318,7 +296,7 @@ export const ProjectService = {
 
     if (user.role === "CLIENT_ADMIN") {
       const client = await ClientRepo.findById(project.clientId);
-      if (client.assignedAdmin.toString() !== user.id) {
+      if (client?.assignedAdmin?.toString() !== user.id) {
         throw new ForbiddenError("You are not the admin of this client");
       }
     }
