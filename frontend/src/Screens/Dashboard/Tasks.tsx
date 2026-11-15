@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import { useSearchParams } from "react-router-dom"
 import { Combo } from "@/components/forms/combo"
 import { inputCls } from "@/components/forms/form-kit"
-import { SORTS, applyTaskView, readTaskView, writeTaskView, type TaskGroup, type TaskSort, type TaskView } from "./tasks-view"
+import { DUES, SORTS, applyTaskView, readTaskView, writeTaskView, type TaskDue, type TaskGroup, type TaskSort, type TaskView } from "./tasks-view"
 import type { Task, TaskStatus } from "@/types/taskTypes"
 import type { SubTask } from "@/types/subTaskTypes"
 import { Loading } from "@/components/pm/loading"
@@ -143,7 +143,8 @@ function ExpandableRow({ task, onOpen, onToggle }: { task: Task; onOpen: () => v
 
 export const Tasks: React.FC = () => {
     const openForm = useForms()
-    const { profile, role, tasks, projects, tasksLoaded } = useAppData()
+    const { profile, role, tasks, projects, tasksLoaded, users = [], clients = [] } = useAppData()
+    const isSuper = role === "SUPER_ADMIN"
     const { setStatus, toggleResolved } = useTaskActions()
     const isMember = role === "USER"
     // Admin powers are per project: a client admin runs only their own client's projects
@@ -163,7 +164,8 @@ export const Tasks: React.FC = () => {
 
     // Moving a task is for its assignee; "my work" also counts tasks where only a subtask is mine
     const mine = (t: Task) => t.assignedTo?.id === profile?.id
-    const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? isMyWork(t, profile?.id) : true)), taskView, projects.map((p) => p.id))
+    const clientOf = Object.fromEntries(projects.map((p) => [p.id, p.client?.id]))
+    const visible = applyTaskView(tasks.filter((t) => (isMember || who === "mine" ? isMyWork(t, profile?.id) : true)), taskView, projects.map((p) => p.id), clientOf)
     const open = visible.filter((t) => t.currentStatus !== "RESOLVED").length
     const overdue = visible.filter(isOverdue).length
     // People may move their own tasks; whoever runs the project can move any
@@ -181,7 +183,8 @@ export const Tasks: React.FC = () => {
         <>
             <PageHead title={isMember ? "My tasks" : "Tasks"} sub={`${open} open · ${overdue} overdue`}>
                 <Segmented value={view} onChange={setView} options={[{ value: "board", label: "Board" }, { value: "list", label: "List" }]} />
-                {!isMember && <Segmented value={who} onChange={setWho} options={[{ value: "all", label: "Everyone" }, { value: "mine", label: "Assigned to me" }]} />}
+                {/* Super admins are never on a team, so "Assigned to me" would always be empty (TSK-04) */}
+                {!isMember && !isSuper && <Segmented value={who} onChange={setWho} options={[{ value: "all", label: "Everyone" }, { value: "mine", label: "Assigned to me" }]} />}
                 {canAdd && <Button onClick={() => openForm("task")}><IconPlus />New task</Button>}
                 {isMember && <Button onClick={() => openForm("log-update")}><IconMessagePlus />Log update</Button>}
             </PageHead>
@@ -197,6 +200,29 @@ export const Tasks: React.FC = () => {
                         searchPlaceholder="Search projects"
                     />
                 </div>
+                {/* Oversight filters for whoever runs projects; the client filter only matters across clients (TSK-04) */}
+                {isSuper && (
+                    <div className="w-[200px] max-w-full">
+                        <Combo multi value={taskView.clients} onChange={(ids: string[]) => setTaskView({ clients: ids })}
+                            options={clients.map((c) => ({ value: c.id, label: c.name }))} placeholder="All clients" searchPlaceholder="Search clients" />
+                    </div>
+                )}
+                {!isMember && (
+                    <>
+                        <div className="w-[200px] max-w-full">
+                            <Combo multi value={taskView.assignees} onChange={(ids: string[]) => setTaskView({ assignees: ids })}
+                                options={[{ value: "none", label: "Unassigned" }, ...users.filter((u) => u.role !== "SUPER_ADMIN").map((u) => ({ value: u.id, label: u.name, sub: u.email }))]}
+                                placeholder="Anyone" searchPlaceholder="Search people" />
+                        </div>
+                        <div className="w-[180px] max-w-full">
+                            <Combo multi value={taskView.statuses} onChange={(ids: string[]) => setTaskView({ statuses: ids })}
+                                options={COLUMNS.map((s) => ({ value: s, label: COLUMN_LABEL[s] }))} placeholder="Any status" />
+                        </div>
+                    </>
+                )}
+                <select aria-label="Due date" value={taskView.due} onChange={(e) => setTaskView({ due: e.target.value as TaskDue })} className={cn(inputCls, "h-[34px] w-auto py-0 pr-8")}>
+                    {DUES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
                 <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
                     Sort
                     <select aria-label="Sort tasks" value={taskView.sort} onChange={(e) => setTaskView({ sort: e.target.value as TaskSort })} className={cn(inputCls, "h-[34px] w-auto py-0 pr-8")}>

@@ -103,3 +103,25 @@ describe("Tasks — a member's own work (TSK-05)", () => {
     })
 })
 
+describe("Tasks — a super admin's oversight view (TSK-04)", () => {
+    afterEach(() => { app.role = "SUPER_ADMIN" })
+
+    it("🔴 no 'Assigned to me': super admins are never on a team", () => {
+        mount()
+        expect(screen.queryByRole("button", { name: "Assigned to me" })).not.toBeInTheDocument()
+    })
+
+    it("🟢 filters by client, assignee, status and due date", () => {
+        mount()
+        for (const name of [/All clients/, /Anyone/, /Any status/]) expect(screen.getByRole("button", { name })).toBeInTheDocument()
+        expect(screen.getByRole("combobox", { name: "Due date" })).toBeInTheDocument()
+    })
+
+    it("🟢 a client admin keeps 'Assigned to me' (they can be on teams) and has no client filter", () => {
+        app.role = "CLIENT_ADMIN"
+        mount()
+        expect(screen.getByRole("button", { name: "Assigned to me" })).toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: /All clients/ })).not.toBeInTheDocument()
+    })
+})
+

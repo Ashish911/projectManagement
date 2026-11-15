@@ -11,6 +11,7 @@ All notable changes to ProjoMan. Newest first.
 - One z-index layer scale (`sticky` < `overlay` < `modal` < `popover` < `toast`); popovers render in a portal (PROF-07).
 
 ### Changed
+- Tasks: a super admin's view drops "Assigned to me" (super admins are never on a team) and gets oversight filters by client, assignee (incl. unassigned), status and due date, kept in the URL with the project filter and sort; client admins get the assignee, status and due filters too (TSK-04).
 - ProjoMan logo: the full logo in the expanded sidebar and on the sign-in screens, the mascot mark in the collapsed sidebar, as the favicon and as the Apple touch icon; `vite.svg` and the "Acme Inc" placeholder are gone (BRD-01).
 
 ### Fixed
