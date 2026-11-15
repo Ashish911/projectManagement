@@ -21,6 +21,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import { fetchProfile } from "@/redux/actions/userActions.ts";
+import { BrandLogo } from "@/components/pm/brand"
 import { fetchPreference } from "@/redux/actions/preferenceActions.ts";
 
 // Kanban is reachable at /kanban but no longer listed; the Tasks board replaces it in the redesign
@@ -66,9 +67,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar {...props}>
             <SidebarHeader className="px-3 pb-1 pt-3.5 group-data-[collapsible=icon]:px-0">
                 <Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-3.5 pt-1.5 text-base font-semibold tracking-[-0.02em] text-foreground hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0">
-                    {/* Ring logo: accent ring around a dark core */}
-                    <span className="size-[22px] flex-none rounded-full border-[5px] border-primary [box-shadow:inset_0_0_0_3px_oklch(var(--background)),inset_0_0_0_10px_oklch(var(--foreground))]" />
-                    <span className="truncate transition-opacity group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0">ProjoMan</span>
+                    {/* Full logo when expanded, the mascot mark when collapsed */}
+                    <BrandLogo className="h-14 group-data-[collapsible=icon]:hidden" />
+                    <BrandLogo variant="icon" className="hidden group-data-[collapsible=icon]:block" />
                 </Link>
             </SidebarHeader>
             <SidebarContent>

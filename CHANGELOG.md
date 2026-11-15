@@ -10,6 +10,9 @@ All notable changes to ProjoMan. Newest first.
 - `Task.mySubTasks` on `allTasks`: the caller's own subtasks. "My tasks", the board and dashboard counts include a task when it or one of its subtasks is assigned to you, with "↳ subtask · assigned to you" under it (TSK-05).
 - One z-index layer scale (`sticky` < `overlay` < `modal` < `popover` < `toast`); popovers render in a portal (PROF-07).
 
+### Changed
+- ProjoMan logo: the full logo in the expanded sidebar and on the sign-in screens, the mascot mark in the collapsed sidebar, as the favicon and as the Apple touch icon; `vite.svg` and the "Acme Inc" placeholder are gone (BRD-01).
+
 ### Fixed
 - A client admin couldn't add anyone in Manage team or the project form: the picker only listed people already on their projects (CA-02).
 - A subtask assigned to you was invisible when its parent task wasn't yours; you also couldn't open the parent (`task`, `subTasks` now allow a subtask's assignee to read it) (TSK-05).
