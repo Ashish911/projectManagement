@@ -2,7 +2,7 @@ import { useRef, useState } from "react"
 import { IconCalendar, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { daysFrom } from "@/components/pm/dates"
+import { calendarDay, daysFrom, plainDate } from "@/components/pm/dates"
 import { Chip } from "./form-kit"
 import { ChipX, Floating, triggerCls } from "./combo"
 import { useOutside } from "@/hooks/use-outside"
@@ -18,11 +18,8 @@ export const daysFromToday = (n: number) => {
 
 /** "YYYY-MM-DD" (local) for date-only fields like date of birth, or "" for none. */
 export const toYmd = (d: Date | null) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "")
-/** A "YYYY-MM-DD" date-only string as a local date (no timezone shift), or null. */
-export const fromYmd = (s?: string | null) => {
-    const m = s?.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null
-}
+/** A date-only value ("YYYY-MM-DD", or the API's stored date of birth) as a local date with no timezone shift, or null. */
+export const fromYmd = (s?: string | null) => calendarDay(s)
 
 /** The same day `n` months later, clamped to the end of shorter months (Jan 31 + 1 → Feb 28). */
 export const addMonths = (d: Date, n: number) => {
@@ -71,7 +68,10 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
         <div ref={ref} className="relative min-w-0">
             <button type="button" className={cn(triggerCls, open && "border-primary ring-[3px] ring-ring/35")} onClick={() => setOpen(!open)}>
                 <IconCalendar size={16} className="text-subtle-foreground" />
-                {value ? (
+                {value && birthdate ? (
+                    // A fixed day: plain date with the year, never "1999d ago" (PROF-09)
+                    <span className="min-w-0 flex-1 truncate">{plainDate(value)}</span>
+                ) : value ? (
                     <span className="min-w-0 flex-1 truncate">
                         {WEEKDAYS[value.getDay()]}, {shortDate(value)}
                         <span className={cn("ml-2 text-xs text-subtle-foreground", rel! < 0 && "tone-red tone-fg")}>

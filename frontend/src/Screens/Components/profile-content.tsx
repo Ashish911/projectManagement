@@ -14,6 +14,7 @@ import { Pencil, X } from "lucide-react";
 import { PhoneInput, formatPhone, phoneError, toE164 } from "@/components/forms/phone-input";
 import { ActionButton } from "@/components/forms/form-kit";
 import { Loading } from "@/components/pm/loading";
+import { birthDate } from "@/components/pm/dates";
 import { DatePicker, fromYmd, toYmd } from "@/components/forms/date-picker";
 
 const GENDER_OPTIONS = [
@@ -181,7 +182,7 @@ export default function ProfileContent() {
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="dob">Date of Birth</Label>
-                                    <Input id="dob" value={profile?.dob ?? ""} readOnly disabled />
+                                    <Input id="dob" value={birthDate(profile?.dob)} readOnly disabled />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="gender">Gender</Label>

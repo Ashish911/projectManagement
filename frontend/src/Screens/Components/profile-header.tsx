@@ -3,6 +3,7 @@ import { formatPhone } from "@/components/forms/phone-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { birthDate } from "@/components/pm/dates";
 import { Mail, Phone, Calendar } from "lucide-react";
 
 function getInitials(name: string): string {
@@ -54,7 +55,7 @@ export default function ProfileHeader() {
                             {profile?.dob && (
                                 <div className="flex items-center gap-1.5">
                                     <Calendar className="size-4" />
-                                    {profile.dob}
+                                    {birthDate(profile.dob)}
                                 </div>
                             )}
                         </div>

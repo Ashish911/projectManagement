@@ -43,6 +43,14 @@ describe("DatePicker — birthdate (PROF-04)", () => {
     })
 })
 
+describe("DatePicker — birthdate display (PROF-09)", () => {
+    it("🟢 shows a plain date, never 'days ago'", () => {
+        render(<DatePicker birthdate quick="none" value={new Date(1998, 2, 14)} onChange={vi.fn()} />)
+        expect(screen.getByRole("button", { name: /14 Mar 1998/ })).toBeInTheDocument()
+        expect(screen.queryByText(/ago/)).not.toBeInTheDocument()
+    })
+})
+
 describe("addMonths", () => {
     it("🔴 clamps to the end of a shorter month", () => {
         expect(addMonths(new Date(2026, 0, 31), 1)).toEqual(new Date(2026, 1, 28))

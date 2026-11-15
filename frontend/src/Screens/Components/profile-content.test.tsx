@@ -37,3 +37,14 @@ describe("Account page — date of birth (PROF-04)", () => {
         expect(screen.getByRole("button", { name: /Choose a date/ })).toBeInTheDocument()
     })
 })
+
+describe("Account page — date of birth display (PROF-09)", () => {
+    afterEach(() => { state.profile.profile.dob = "" })
+    it("🟢 shows the stored date as a plain date", () => {
+        state.profile.profile.dob = String(Date.UTC(1998, 2, 14))
+        render(<ProfileContent />)
+        expect(screen.getAllByDisplayValue("14 Mar 1998").length + screen.queryAllByText("14 Mar 1998").length).toBeGreaterThan(0)
+        expect(screen.queryByText(/ago/)).not.toBeInTheDocument()
+    })
+})
+

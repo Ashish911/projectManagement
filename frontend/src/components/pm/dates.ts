@@ -8,6 +8,26 @@ export function parseDate(value?: string | null): Date | null {
     return isNaN(d.getTime()) ? null : d
 }
 
+/**
+ * A calendar date the API stores as UTC midnight (date of birth), as its local Date.
+ * Accepts "YYYY-MM-DD", epoch-ms or ISO strings; null if there's none.
+ */
+export function calendarDay(value?: string | null): Date | null {
+    const ymd = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
+    const d = parseDate(value)
+    return d ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null
+}
+
+/** A plain date, "14 Mar 1998" (dates of birth and other fixed days; never relative). */
+export const plainDate = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+
+/** A date of birth from the API as "14 Mar 1998", or "" if there's none (PROF-09). */
+export const birthDate = (value?: string | null) => {
+    const d = calendarDay(value)
+    return d ? plainDate(d) : ""
+}
+
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 const DAY_MS = 86_400_000
 
