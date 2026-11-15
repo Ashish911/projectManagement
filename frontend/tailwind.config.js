@@ -40,6 +40,8 @@ module.exports = {
       transitionTimingFunction: {
         out: "cubic-bezier(.22,1,.36,1)", spring: "cubic-bezier(.34,1.4,.64,1)",
       },
+      // One layer scale for everything that stacks. Popovers sit above modals because they open from inside them.
+      zIndex: { base: "0", sticky: "10", overlay: "20", modal: "50", popover: "60", toast: "70" },
       transitionDuration: { fast: "120ms", base: "200ms", slow: "360ms", draw: "1100ms" },
       keyframes: {
         "accordion-down": { from: { height: 0 }, to: { height: "var(--radix-accordion-content-height)" } },

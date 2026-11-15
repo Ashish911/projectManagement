@@ -98,7 +98,7 @@ const subscribe = (l: () => void) => {
 export function Toaster() {
     const list = useSyncExternalStore(subscribe, () => toasts)
     return (
-        <div aria-live="polite" className="fixed bottom-5 right-5 z-[70] grid justify-items-end gap-2">
+        <div aria-live="polite" className="fixed bottom-5 right-5 z-toast grid justify-items-end gap-2">
             {list.map((t) => {
                 const I = t.icon ?? (t.tone === "error" ? IconAlertCircle : IconCircleCheck)
                 return (

@@ -51,7 +51,7 @@ export function SideSheet({ onClose, closing, width = 580, label, children }: { 
         return () => window.removeEventListener("keydown", onKey)
     }, [])
     return createPortal(
-        <div className={cn("fixed inset-0 z-50 bg-[oklch(0.22_0.01_65/.22)] dark:bg-[oklch(0.05_0_0/.6)]", closing ? "animate-fm-fade-out" : "animate-fm-fade")} onMouseDown={onClose}>
+        <div className={cn("fixed inset-0 z-modal bg-[oklch(0.22_0.01_65/.22)] dark:bg-[oklch(0.05_0_0/.6)]", closing ? "animate-fm-fade-out" : "animate-fm-fade")} onMouseDown={onClose}>
             <aside
                 role="dialog"
                 aria-label={label}

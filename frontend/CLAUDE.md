@@ -155,6 +155,7 @@ Also re-exported from `@/hooks`: `useTheme`, `useIsMobile`, `useForm`, `useForms
 - **Path alias:** `@/` → `./src/`.
 - **Class merging:** always use `cn()` from `@/lib/utils`.
 - **Design system:** use tokens (`bg-card`, `bg-surface-2`, `text-muted-foreground`, `text-subtle-foreground`, `border-strong`, `chart-1..4`) and `src/components/pm/`, not raw palette colours. Status/priority/role pills go through `StatusBadge`; ad-hoc tones use `.tone-<hue> .tone-bg .tone-fg`. Wrap figures in `.num`.
+- **Stacking:** use the `z-` layer scale in `tailwind.config.js` (`sticky` < `overlay` < `modal` < `popover` < `toast`), never raw numbers. Popovers (`Floating` in `forms/combo.tsx`: Combo, DatePicker) portal to `<body>` and sit above modals because they open from inside them; give `useOutside` both the trigger and the panel ref.
 - **Design reference:** `ProjoMan Dashboard (standalone) (1).html` in the repo root.
 - **GraphQL strings** live in `src/queries/` and `src/mutations/`; **types** in `src/types/`.
 - **GraphQL enums:** send the value as-is (`"IN_PROGRESS"`, `"URGENT"`); only `Gender` uses `M`/`F`/`O`.

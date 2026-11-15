@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react"
+import React, { useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { IconCheck, IconLock, IconSearch, IconSelector, IconX } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { Check } from "@/components/pm/check"
@@ -18,7 +19,47 @@ export type ComboOption = {
 export const triggerCls =
     "flex w-full min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-border-strong bg-card pl-3 pr-2.5 text-left text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-fast enabled:hover:border-subtle-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted-foreground group-data-[invalid=true]/field:border-[oklch(var(--st-dot-l)_var(--st-dot-c)_27)]"
 export const popCls =
-    "absolute left-0 right-0 top-[calc(100%+6px)] z-30 min-w-[240px] origin-top animate-fm-drop rounded-[11px] border bg-card p-1.5 shadow-lg"
+    "fixed z-popover min-w-[240px] origin-top animate-fm-drop rounded-[11px] border bg-card p-1.5 shadow-lg"
+
+/**
+ * A popover panel portalled to <body> and pinned under `anchor` (above it when there's no room below),
+ * so no stacking context on the page can paint over it. Follows the anchor on scroll and resize.
+ * `match` makes it at least as wide as the anchor.
+ */
+export const Floating = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { anchor: React.RefObject<HTMLElement>; match?: boolean }>(
+    function Floating({ anchor, match, className, style, ...rest }, fwd) {
+        const own = useRef<HTMLDivElement | null>(null)
+        const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" })
+        useLayoutEffect(() => {
+            const place = () => {
+                const a = anchor.current?.getBoundingClientRect()
+                if (!a) return
+                const w = Math.max(own.current?.offsetWidth ?? 0, match ? a.width : 0)
+                const h = own.current?.offsetHeight ?? 0
+                const up = a.bottom + 6 + h > window.innerHeight && a.top - 6 - h > 0
+                setPos({
+                    top: up ? a.top - 6 - h : a.bottom + 6,
+                    left: Math.max(8, Math.min(a.left, window.innerWidth - w - 8)),
+                    minWidth: match ? a.width : undefined,
+                    transformOrigin: up ? "bottom" : "top",
+                })
+            }
+            place()
+            window.addEventListener("scroll", place, true)
+            window.addEventListener("resize", place)
+            return () => {
+                window.removeEventListener("scroll", place, true)
+                window.removeEventListener("resize", place)
+            }
+        }, [anchor, match])
+        const ref = (el: HTMLDivElement | null) => {
+            own.current = el
+            if (typeof fwd === "function") fwd(el)
+            else if (fwd) fwd.current = el
+        }
+        return createPortal(<div ref={ref} className={cn(popCls, className)} style={{ ...pos, ...style }} {...rest} />, document.body)
+    },
+)
 
 /** Small round × used inside triggers and chips. */
 export const ChipX = ({ onClick, label = "Remove" }: { onClick: (e: React.MouseEvent) => void; label?: string }) => (
@@ -45,7 +86,8 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
     const [q, setQ] = useState("")
     const [hi, setHi] = useState(0)
     const ref = useRef<HTMLDivElement>(null)
-    useOutside(ref, () => { setOpen(false); onBlur?.() }, open)
+    const pop = useRef<HTMLDivElement>(null)
+    useOutside([ref, pop], () => { setOpen(false); onBlur?.() }, open)
 
     const values = multi ? (value as string[]) : [value as string]
     const list = options.filter((o) => !q || `${o.label} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()))
@@ -93,7 +135,7 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
             </button>
 
             {open && (
-                <div className={popCls} onKeyDown={onKey}>
+                <Floating ref={pop} anchor={ref} match onKeyDown={onKey}>
                     <div className="mb-1 flex h-[34px] items-center gap-2 border-b px-2 text-subtle-foreground">
                         <IconSearch size={15} />
                         <input
@@ -131,7 +173,7 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
                         ))}
                         {!list.length && <div className="p-3 text-center text-xs text-subtle-foreground">No matches</div>}
                     </div>
-                </div>
+                </Floating>
             )}
         </div>
     )

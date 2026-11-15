@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { daysFrom } from "@/components/pm/dates"
 import { Chip } from "./form-kit"
-import { ChipX, popCls, triggerCls } from "./combo"
+import { ChipX, Floating, triggerCls } from "./combo"
 import { useOutside } from "@/hooks/use-outside"
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -51,8 +51,9 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
 }) {
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
+    const pop = useRef<HTMLDivElement>(null)
     const [month, setMonth] = useState(() => { const d = value ?? new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
-    useOutside(ref, () => setOpen(false), open)
+    useOutside([ref, pop], () => setOpen(false), open)
 
     // Six weeks starting on the Monday on/before the 1st
     const start = new Date(month.getFullYear(), month.getMonth(), 1 - ((month.getDay() + 6) % 7))
@@ -82,7 +83,7 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
             </button>
 
             {open && (
-                <div className={cn(popCls, "right-auto w-[296px]")}>
+                <Floating ref={pop} anchor={ref} role="dialog" aria-label="Choose a date" className="w-[296px]">
                     {quick.length > 0 && (
                         <div className="mb-2 flex flex-wrap gap-1.5 border-b px-1 pb-2.5 pt-1">
                             {quick.map(([label, d]) => <Chip key={label} on={sameDay(d, value)} onClick={() => pick(d)}>{label}</Chip>)}
@@ -131,7 +132,7 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
                             )
                         })}
                     </div>
-                </div>
+                </Floating>
             )}
         </div>
     )

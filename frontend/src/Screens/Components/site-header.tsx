@@ -39,7 +39,7 @@ export function SiteHeader() {
     }), [openForm])
 
     return (
-        <header className="sticky top-0 z-10 flex h-[--header-height] shrink-0 items-center gap-2.5 border-b bg-background/85 px-5 backdrop-blur-[10px]">
+        <header className="sticky top-0 z-sticky flex h-[--header-height] shrink-0 items-center gap-2.5 border-b bg-background/85 px-5 backdrop-blur-[10px]">
             <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-label="Toggle sidebar">
                 {sidebarState === "collapsed" ? <IconLayoutSidebarLeftExpand /> : <IconLayoutSidebarLeftCollapse />}
             </Button>

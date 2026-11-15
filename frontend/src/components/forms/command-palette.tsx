@@ -105,7 +105,7 @@ export function CommandPalette({ onClose, closing }: FormProps) {
 
     return createPortal(
         <div
-            className={cn("fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[oklch(0.22_0.01_65/.34)] px-5 pb-12 pt-[12vh] backdrop-blur-[4px] dark:bg-[oklch(0.05_0_0/.6)]", closing ? "animate-fm-fade-out" : "animate-fm-fade")}
+            className={cn("fixed inset-0 z-modal flex items-start justify-center overflow-y-auto bg-[oklch(0.22_0.01_65/.34)] px-5 pb-12 pt-[12vh] backdrop-blur-[4px] dark:bg-[oklch(0.05_0_0/.6)]", closing ? "animate-fm-fade-out" : "animate-fm-fade")}
             onMouseDown={onClose}
         >
             <div

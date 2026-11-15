@@ -48,3 +48,27 @@ describe("addMonths", () => {
         expect(addMonths(new Date(2026, 0, 31), 1)).toEqual(new Date(2026, 1, 28))
     })
 })
+
+describe("DatePicker — layering (PROF-07)", () => {
+    it("🟢 the calendar renders in a portal on the shared popover layer", async () => {
+        const { container } = render(<DatePicker value={null} onChange={vi.fn()} />)
+        await userEvent.click(screen.getByRole("button", { name: /No deadline/ }))
+        const cal = screen.getByRole("dialog", { name: "Choose a date" })
+        expect(container.contains(cal)).toBe(false)
+        expect(cal).toHaveClass("z-popover")
+    })
+
+    it("🔴 a click inside the portalled calendar doesn't close it", async () => {
+        render(<DatePicker value={null} onChange={vi.fn()} />)
+        await userEvent.click(screen.getByRole("button", { name: /No deadline/ }))
+        await userEvent.click(screen.getByRole("button", { name: "Next month" }))
+        expect(screen.getByRole("dialog", { name: "Choose a date" })).toBeInTheDocument()
+    })
+
+    it("🔴 a click outside closes it", async () => {
+        render(<><DatePicker value={null} onChange={vi.fn()} /><button>elsewhere</button></>)
+        await userEvent.click(screen.getByRole("button", { name: /No deadline/ }))
+        await userEvent.click(screen.getByRole("button", { name: "elsewhere" }))
+        expect(screen.queryByRole("dialog", { name: "Choose a date" })).not.toBeInTheDocument()
+    })
+})

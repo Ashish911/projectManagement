@@ -183,7 +183,7 @@ export const Users: React.FC = () => {
                 role="toolbar"
                 aria-label="Bulk actions"
                 className={cn(
-                    "fixed bottom-6 left-1/2 z-20 flex items-center gap-2.5 rounded-xl border bg-card py-2 pl-4 pr-2.5 shadow-lg transition-[transform,opacity] duration-[420ms] ease-spring",
+                    "fixed bottom-6 left-1/2 z-overlay flex items-center gap-2.5 rounded-xl border bg-card py-2 pl-4 pr-2.5 shadow-lg transition-[transform,opacity] duration-[420ms] ease-spring",
                     selection.selected.length ? "-translate-x-1/2 translate-y-0 opacity-100" : "pointer-events-none -translate-x-1/2 translate-y-[140%] opacity-0",
                 )}
             >
