@@ -1,13 +1,14 @@
 import { useRef, useState } from "react"
-import { IconCalendar, IconChevronDown, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
+import { IconCalendar, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { calendarDay, daysFrom, plainDate } from "@/components/pm/dates"
-import { Chip } from "./form-kit"
+import { Chip, SelectField } from "./form-kit"
 import { ChipX, Floating, triggerCls } from "./combo"
 import { useOutside } from "@/hooks/use-outside"
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const headerSelect = "h-8 rounded-md pl-2.5 pr-7 text-[13px] font-semibold"
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 /** A date `n` days from today, at local midnight. */
@@ -33,29 +34,6 @@ const untilWeekday = (wd: number) => ((wd - new Date().getDay() + 7) % 7) || 7
 
 const sameDay = (a?: Date | null, b?: Date | null) => !!a && !!b && a.toDateString() === b.toDateString()
 export const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-
-/** Month or year selector in the calendar header: a native select with a centred chevron of our own. */
-function MonthYearSelect({ label, value, onChange, options, className }: {
-    label: string
-    value: number
-    onChange: (v: number) => void
-    options: [number, string][]
-    className?: string
-}) {
-    return (
-        <span className="relative inline-flex">
-            <select
-                aria-label={label}
-                value={value}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className={cn("h-8 cursor-pointer appearance-none rounded-md border border-border-strong bg-card bg-none pl-2.5 pr-7 text-[13px] font-semibold text-foreground outline-none transition-[border-color,box-shadow] duration-fast hover:border-subtle-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/35", className)}
-            >
-                {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
-            </select>
-            <IconChevronDown size={14} aria-hidden className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-subtle-foreground" />
-        </span>
-    )
-}
 
 /**
  * The app's one date field: quick picks, a Monday-first month calendar, and × to clear.
@@ -115,10 +93,10 @@ export function DatePicker({ value, onChange, placeholder = "No deadline", quick
                     <div className="flex h-8 items-center gap-1 px-1 pb-1">
                         {birthdate ? (
                             <span className="flex flex-1 gap-1.5">
-                                <MonthYearSelect label="Month" value={month.getMonth()} onChange={(m) => setMonth(new Date(month.getFullYear(), m, 1))}
-                                    options={MONTHS.map((m, i) => [i, m])} />
-                                <MonthYearSelect label="Year" value={month.getFullYear()} onChange={(y) => setMonth(new Date(y, month.getMonth(), 1))}
-                                    options={Array.from({ length: 101 }, (_, i) => [thisYear - i, String(thisYear - i)])} className="num" />
+                                <SelectField label="Month" value={month.getMonth()} onChange={(m) => setMonth(new Date(month.getFullYear(), m, 1))}
+                                    options={MONTHS.map((m, i) => [i, m] as const)} selectClassName={headerSelect} />
+                                <SelectField label="Year" value={month.getFullYear()} onChange={(y) => setMonth(new Date(y, month.getMonth(), 1))}
+                                    options={Array.from({ length: 101 }, (_, i) => [thisYear - i, String(thisYear - i)] as const)} selectClassName={cn(headerSelect, "num")} />
                             </span>
                         ) : (
                             <b className="flex-1 pl-1.5 text-[13.5px] font-semibold">{MONTHS[month.getMonth()]} {month.getFullYear()}</b>

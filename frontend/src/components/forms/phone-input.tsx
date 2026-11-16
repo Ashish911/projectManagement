@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { AsYouType, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js"
 import { cn } from "@/lib/utils"
-import { inputCls } from "./form-kit"
+import { SelectField, inputCls } from "./form-kit"
 
 /** Countries we accept phone numbers from, first is the default (matches the server). */
 export const PHONE_COUNTRIES: { code: CountryCode; name: string; flag: string; dial: string }[] = [
@@ -80,15 +80,15 @@ export function PhoneInput({ value, onChange, onBlur, label, className }: {
 
     return (
         <div className={cn("flex gap-1.5", className)}>
-            <select
-                aria-label="Country code"
+            <SelectField
+                label="Country code"
                 value={country}
-                onChange={(e) => { const c = e.target.value as CountryCode; setCountry(c); emit(c, national) }}
+                onChange={(c) => { setCountry(c); emit(c, national) }}
                 onBlur={onBlur}
-                className={cn(inputCls, "num w-[104px] flex-none pr-1")}
-            >
-                {PHONE_COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.dial}</option>)}
-            </select>
+                options={PHONE_COUNTRIES.map((c) => [c.code, `${c.flag} ${c.dial}`] as const)}
+                className="w-[112px] flex-none"
+                selectClassName="num pl-2.5"
+            />
             <input
                 aria-label={label}
                 type="tel"

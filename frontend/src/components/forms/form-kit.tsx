@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { Icon } from "@tabler/icons-react"
-import { IconAlertCircle, IconX } from "@tabler/icons-react"
+import { IconAlertCircle, IconChevronDown, IconX } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { StatusBadge, type StatusKey } from "@/components/pm/status-badge"
@@ -285,6 +285,38 @@ export function SubmitButton({ busy, children, onClick, danger, disabled }: {
             {busy && <Spinner />}
             {busy ? "Saving…" : children}
         </Button>
+    )
+}
+
+/**
+ * The app's select: a native <select> (keyboard and mobile pickers for free) drawn like our
+ * inputs, with a centred chevron of its own; the browser's sat on the edge of the field.
+ * Number values come back as numbers.
+ */
+export function SelectField<T extends string | number>({ label, value, onChange, options, onBlur, className, selectClassName }: {
+    label: string
+    value: T
+    onChange: (v: T) => void
+    options: readonly (readonly [T, string])[]
+    onBlur?: () => void
+    /** The wrapper (width, flex) */
+    className?: string
+    /** The select itself (height, font) */
+    selectClassName?: string
+}) {
+    return (
+        <span className={cn("relative inline-flex min-w-0", className)}>
+            <select
+                aria-label={label}
+                value={value}
+                onBlur={onBlur}
+                onChange={(e) => onChange((typeof value === "number" ? Number(e.target.value) : e.target.value) as T)}
+                className={cn(inputCls, "w-full cursor-pointer appearance-none bg-none pr-8", selectClassName)}
+            >
+                {options.map(([v, text]) => <option key={String(v)} value={v}>{text}</option>)}
+            </select>
+            <IconChevronDown data-chevron size={14} aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-subtle-foreground" />
+        </span>
     )
 }
 

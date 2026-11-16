@@ -125,3 +125,14 @@ describe("Tasks — a super admin's oversight view (TSK-04)", () => {
     })
 })
 
+describe("Tasks — filter selects", () => {
+    it("🟢 due date and sort draw their chevron inside the field", () => {
+        mount()
+        for (const name of ["Due date", "Sort tasks"]) {
+            const select = screen.getByRole("combobox", { name })
+            expect(select).toHaveClass("appearance-none")
+            expect(select.parentElement!.querySelector("svg[data-chevron]")).not.toBeNull()
+        }
+    })
+})
+

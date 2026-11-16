@@ -17,6 +17,7 @@ All notable changes to ProjoMan. Newest first.
 - ProjoMan logo: the mascot mark as an app icon with the "ProjoMan" wordmark in the sidebar (just the mark when collapsed; the sign-in screens are unchanged), as the favicon and as the Apple touch icon; `vite.svg` is gone (BRD-01).
 
 ### Fixed
+- Native selects (Tasks "Due date" and "Sort", the phone country code, the date picker's month/year) drew the browser's chevron on the edge of the field; one `SelectField` now draws a centred chevron inside it.
 - The shared date picker (due dates, project dates, date of birth): centred month/year chevrons and header controls on one line, quick picks on an even grid, distinct today / picked / past / other-month days, and no "past" dimming for a date of birth (PROF-08, TSK-03).
 - Date of birth showed as relative time ("1999d ago") in the picker and as raw digits on the profile; it's now a plain date, "14 Mar 1998", and the picker opens on the stored day (PROF-09).
 - A client admin couldn't add anyone in Manage team or the project form: the picker only listed people already on their projects (CA-02).
