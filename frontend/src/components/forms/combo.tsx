@@ -24,10 +24,10 @@ export const popCls =
 /**
  * A popover panel portalled to <body> and pinned under `anchor` (above it when there's no room below),
  * so no stacking context on the page can paint over it. Follows the anchor on scroll and resize.
- * `match` makes it at least as wide as the anchor.
+ * `match` makes it at least as wide as the anchor; `fit` exactly as wide (stays within a card).
  */
-export const Floating = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { anchor: React.RefObject<HTMLElement>; match?: boolean }>(
-    function Floating({ anchor, match, className, style, ...rest }, fwd) {
+export const Floating = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { anchor: React.RefObject<HTMLElement>; match?: boolean; fit?: boolean }>(
+    function Floating({ anchor, match, fit, className, style, ...rest }, fwd) {
         const own = useRef<HTMLDivElement | null>(null)
         const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" })
         useLayoutEffect(() => {
@@ -41,6 +41,7 @@ export const Floating = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
                     top: up ? a.top - 6 - h : a.bottom + 6,
                     left: Math.max(8, Math.min(a.left, window.innerWidth - w - 8)),
                     minWidth: match ? a.width : undefined,
+                    width: fit ? a.width : undefined,
                     transformOrigin: up ? "bottom" : "top",
                 })
             }
@@ -51,13 +52,13 @@ export const Floating = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
                 window.removeEventListener("scroll", place, true)
                 window.removeEventListener("resize", place)
             }
-        }, [anchor, match])
+        }, [anchor, match, fit])
         const ref = (el: HTMLDivElement | null) => {
             own.current = el
             if (typeof fwd === "function") fwd(el)
             else if (fwd) fwd.current = el
         }
-        return createPortal(<div ref={ref} className={cn(popCls, className)} style={{ ...pos, ...style }} {...rest} />, document.body)
+        return createPortal(<div ref={ref} className={cn(popCls, fit && "min-w-0", className)} style={{ ...pos, ...style }} {...rest} />, document.body)
     },
 )
 
@@ -72,7 +73,7 @@ export const ChipX = ({ onClick, label = "Remove" }: { onClick: (e: React.MouseE
  * Searchable select. Single mode closes on pick; `multi` keeps the list open
  * and shows picks as removable chips. Arrow keys move, Enter picks, Esc closes.
  */
-export function Combo({ value, onChange, options, placeholder = "Select…", disabled, multi, searchPlaceholder = "Search…", onBlur }: {
+export function Combo({ value, onChange, options, placeholder = "Select…", disabled, multi, searchPlaceholder = "Search…", onBlur, fit }: {
     value: string | string[]
     onChange: (v: any) => void
     options: ComboOption[]
@@ -81,6 +82,8 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
     multi?: boolean
     searchPlaceholder?: string
     onBlur?: () => void
+    /** The list is exactly as wide as the field (inside a narrow card) */
+    fit?: boolean
 }) {
     const [open, setOpen] = useState(false)
     const [q, setQ] = useState("")
@@ -135,7 +138,7 @@ export function Combo({ value, onChange, options, placeholder = "Select…", dis
             </button>
 
             {open && (
-                <Floating ref={pop} anchor={ref} match onKeyDown={onKey}>
+                <Floating ref={pop} anchor={ref} match fit={fit} onKeyDown={onKey}>
                     <div className="mb-1 flex h-[34px] items-center gap-2 border-b px-2 text-subtle-foreground">
                         <IconSearch size={15} />
                         <input

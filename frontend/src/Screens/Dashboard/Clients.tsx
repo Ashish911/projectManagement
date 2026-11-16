@@ -7,13 +7,12 @@ import {
     IconPencil,
     IconPhone,
     IconPlus,
-    IconSelector,
     IconTrash,
     IconUserPlus,
 } from "@tabler/icons-react";
-import { confirmDeleteClient, getMyClient } from "@/api/clientApi";
+import { assignAdmin, confirmDeleteClient, getMyClient } from "@/api/clientApi";
 import { formatPhone } from "@/components/forms/phone-input";
-import { flagClientDeleteRequest, setClientsFilter } from "@/redux/actions/clientsActions";
+import { flagClientDeleteRequest, setClientsFilter, updateClientInStore } from "@/redux/actions/clientsActions";
 import type { Client } from "@/types/clientTypes";
 import type { Project } from "@/types/projectTypes";
 import { Button } from "@/components/ui/button";
@@ -27,6 +26,7 @@ import { EmptyState } from "@/components/pm/empty-state";
 import { projectProgress } from "@/components/pm/project-card";
 import { Progress } from "@/components/pm/progress";
 import { FormFoot, FormModal, SubmitButton } from "@/components/forms/form-kit";
+import { Combo, type ComboOption } from "@/components/forms/combo";
 import { useForms } from "@/components/forms/forms-context";
 import { useAppData } from "@/components/forms/use-app-data";
 import { toast, toastError } from "@/components/forms/toaster";
@@ -67,7 +67,7 @@ export const Clients: React.FC = () => {
     const dispatch = useDispatch();
     const openForm = useForms();
     const { loading, error, activeFilter } = useSelector((state: any) => state.clients);
-    const { profile, clients, projects, tasks } = useAppData();
+    const { profile, clients, projects, tasks, users = [] } = useAppData();
     const isSuperAdmin = profile?.role === "SUPER_ADMIN";
 
     // A dashboard drill-down may arrive with a filter; adopt it as the active tab once
@@ -102,6 +102,24 @@ export const Clients: React.FC = () => {
     );
     const selected = allClients.find((c) => c.id === selectedId) ?? rows[0] ?? null;
 
+    // Client admins who can run this client: anyone free, plus its current admin (one client each)
+    const runsOther = (userId: string, clientId: string) => allClients.some((c) => c.id !== clientId && c.assignedAdmin?.id === userId);
+    const adminChoices = (client: Client) =>
+        users.filter((u) => u.role === "CLIENT_ADMIN" && !runsOther(u.id, client.id)).map((u) => ({ id: u.id, name: u.name, email: u.email }));
+    const [assigning, setAssigning] = useState(false);
+    const pickAdmin = async (client: Client, adminId: string) => {
+        setAssigning(true);
+        try {
+            const updated = await assignAdmin({ id: client.id, assignedAdmin: adminId });
+            dispatch(updateClientInStore(updated));
+            toast({ text: <span><b>{updated.assignedAdmin?.name ?? "New admin"}</b> now runs {client.name}</span> });
+        } catch (e: any) {
+            toastError(e.message);
+        } finally {
+            setAssigning(false);
+        }
+    };
+
     const detail = selected && (
         <ClientDetail
             key={selected.id}
@@ -111,6 +129,9 @@ export const Clients: React.FC = () => {
             isSuperAdmin={isSuperAdmin}
             onEdit={() => openForm("client", isSuperAdmin ? { clientId: selected.id } : { client: selected, onSaved: setOwnClient })}
             onAssign={() => openForm("client", { clientId: selected.id })}
+            adminChoices={adminChoices(selected)}
+            assigning={assigning}
+            onPickAdmin={(adminId) => pickAdmin(selected, adminId)}
             onRequestDeletion={() => setRequesting(selected)}
             onApproveDeletion={() => openForm("delete-client", { clientId: selected.id })}
             onDeclineDeletion={() => openForm("decline-request", { clientId: selected.id })}
@@ -272,13 +293,19 @@ const DetailSection = ({ title, children }: { title: string; children: React.Rea
     </section>
 );
 
-function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign, onRequestDeletion, onApproveDeletion, onDeclineDeletion, onDelete }: {
+const PROMOTE = "__promote"
+
+function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign, adminChoices, assigning, onPickAdmin, onRequestDeletion, onApproveDeletion, onDeclineDeletion, onDelete }: {
     client: Client;
     projects: Project[];
     tasks: Task[];
     isSuperAdmin: boolean;
     onEdit: () => void;
+    /** Opens the client dialog (to promote someone who isn't a client admin yet) */
     onAssign: () => void;
+    adminChoices: { id: string; name: string; email?: string | null }[];
+    assigning: boolean;
+    onPickAdmin: (adminId: string) => void;
     onRequestDeletion: () => void;
     onApproveDeletion: () => void;
     onDeclineDeletion: () => void;
@@ -289,14 +316,17 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
     const stats = [["Projects", projects.length], ["Open tasks", prog.open], ["Resolved", `${prog.pct}%`]] as const;
 
     return (
-        <aside className="sticky top-[76px] grid animate-slide-in gap-5 rounded-xl border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-3">
+        <aside className="sticky top-[76px] grid min-w-0 animate-slide-in gap-5 rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-start gap-3">
                 <LogoChip name={client.name} large />
                 <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-xl font-semibold tracking-[-0.02em]">{client.name}</h2>
+                    <div className="flex items-center gap-1">
+                        <h2 className="min-w-0 flex-1 truncate text-xl font-semibold leading-8 tracking-[-0.02em]">{client.name}</h2>
+                        {/* Sits on the name's line, not centred on the whole header */}
+                        <Button variant="ghost" size="icon" className="-mr-1.5 size-8 flex-none" onClick={onEdit} aria-label="Edit client"><IconPencil /></Button>
+                    </div>
                     <ClientFlags client={client} />
                 </div>
-                <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Edit client"><IconPencil /></Button>
             </div>
 
 
@@ -332,25 +362,25 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
             </DetailSection>
 
             <DetailSection title="Client admin">
-                {client.assignedAdmin ? (
-                    <button
-                        disabled={!isSuperAdmin}
-                        onClick={onAssign}
-                        className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-border-strong px-3 text-left transition-colors duration-fast enabled:hover:border-primary disabled:cursor-default"
-                    >
+                {isSuperAdmin ? (
+                    // Picks inline, in the card; promoting someone new still opens the client dialog
+                    <Combo
+                        fit
+                        value={client.assignedAdmin?.id ?? ""}
+                        disabled={assigning}
+                        placeholder="Assign a client admin"
+                        searchPlaceholder="Search client admins"
+                        onChange={(id: string) => (id === PROMOTE ? onAssign() : id && id !== client.assignedAdmin?.id && onPickAdmin(id))}
+                        options={[
+                            ...adminChoices.map((u): ComboOption => ({ value: u.id, label: u.name, sub: u.email ?? undefined, lead: <Avatar name={u.name} seed={u.id} size={24} /> })),
+                            { value: PROMOTE, label: "Promote someone else…", sub: "Make a user a client admin", lead: <span className="grid size-6 place-items-center text-subtle-foreground"><IconUserPlus size={16} /></span> },
+                        ]}
+                    />
+                ) : client.assignedAdmin ? (
+                    <div className="flex h-10 items-center gap-2.5 rounded-lg border border-border-strong px-3">
                         <Avatar name={client.assignedAdmin.name} seed={client.assignedAdmin.id} size={26} />
-                        <span className="flex-1 truncate">{client.assignedAdmin.name}</span>
-                        {isSuperAdmin && <IconSelector size={16} className="text-subtle-foreground" />}
-                    </button>
-                ) : isSuperAdmin ? (
-                    <button
-                        onClick={onAssign}
-                        className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 text-left text-muted-foreground transition-colors duration-fast hover:border-primary"
-                    >
-                        <IconUserPlus size={16} />
-                        <span className="flex-1">Assign a client admin</span>
-                        <IconSelector size={16} />
-                    </button>
+                        <span className="min-w-0 flex-1 truncate">{client.assignedAdmin.name}</span>
+                    </div>
                 ) : (
                     <span className="text-[13.5px] text-subtle-foreground">Unassigned</span>
                 )}
@@ -371,19 +401,24 @@ function ClientDetail({ client, projects, tasks, isSuperAdmin, onEdit, onAssign,
                 {projects.length === 0 ? (
                     <div className="text-[13.5px] text-subtle-foreground">No projects yet.</div>
                 ) : (
-                    <div className="-mx-2 grid">
+                    <div className="grid min-w-0 gap-1">
                         {projects.map((p) => {
                             const pct = projectProgress(tasks, p.id).pct
                             return (
+                                // Inside the card's padding: name and status, then the bar with its % at the end
                                 <button
                                     key={p.id}
                                     onClick={() => navigate(`/projects/${p.id}`)}
-                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 rounded-md px-2 py-2 text-left text-[13.5px] transition-colors duration-fast hover:bg-surface-2"
+                                    className="grid min-w-0 gap-2 rounded-lg border border-transparent p-2.5 text-left text-[13.5px] transition-colors duration-fast hover:border-border hover:bg-surface-2"
                                 >
-                                    <span className="truncate font-medium">{p.name}</span>
-                                    <StatusBadge value={p.status} />
-                                    <Progress value={pct} className="h-1" />
-                                    <span className="num w-9 text-right text-xs text-subtle-foreground">{pct}%</span>
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
+                                        <span className="flex-none"><StatusBadge value={p.status} /></span>
+                                    </span>
+                                    <span className="flex min-w-0 items-center gap-2.5">
+                                        <Progress value={pct} className="h-1 min-w-0 flex-1" />
+                                        <span className="num w-9 flex-none text-right text-xs text-subtle-foreground">{pct}%</span>
+                                    </span>
                                 </button>
                             )
                         })}
