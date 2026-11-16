@@ -72,9 +72,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar {...props}>
             <SidebarHeader className="px-3 pb-1 pt-3.5 group-data-[collapsible=icon]:px-0">
                 <Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-3.5 pt-1.5 text-base font-semibold tracking-[-0.02em] text-foreground hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0">
-                    {/* Full logo when expanded, the mascot mark when collapsed */}
-                    <BrandLogo className="h-14 group-data-[collapsible=icon]:hidden" />
-                    <BrandLogo variant="icon" className="hidden group-data-[collapsible=icon]:block" />
+                    {/* Mark + wordmark; collapsed, just the mark */}
+                    <BrandLogo wordmarkClassName="transition-opacity group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0" />
                 </Link>
             </SidebarHeader>
             <SidebarContent>

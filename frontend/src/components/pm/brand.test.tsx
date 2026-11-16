@@ -3,15 +3,16 @@ import { resolve } from "node:path"
 import { render, screen } from "@testing-library/react"
 import { BrandLogo } from "./brand"
 
-describe("BrandLogo (BRD-01)", () => {
-    it("🟢 full logo by default", () => {
+describe("BrandLogo", () => {
+    it("🟢 the app mark next to the ProjoMan wordmark, as one link-sized lockup", () => {
         render(<BrandLogo />)
-        expect(screen.getByRole("img", { name: "ProjoMan" })).toHaveAttribute("src", "/brand/projoman-logo.png")
+        expect(screen.getByRole("img", { name: "" , hidden: true })).toHaveAttribute("src", "/brand/projoman-icon.png")
+        expect(screen.getByText("ProjoMan")).toBeInTheDocument()
     })
 
-    it("🟢 the small mark for tight spots (collapsed sidebar)", () => {
-        render(<BrandLogo variant="icon" />)
-        expect(screen.getByRole("img", { name: "ProjoMan" })).toHaveAttribute("src", "/brand/projoman-icon.png")
+    it("🟢 the wordmark can be hidden (collapsed sidebar) without losing the accessible name", () => {
+        render(<BrandLogo wordmarkClassName="hidden" />)
+        expect(screen.getByLabelText("ProjoMan")).toBeInTheDocument()
     })
 })
 
