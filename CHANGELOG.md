@@ -14,7 +14,7 @@ All notable changes to ProjoMan. Newest first.
 - Analytics is hidden from client admins (nav, route and Guide) behind `VITE_FEATURE_CA_ANALYTICS`, off by default, until it shows something their Dashboard doesn't (CA-01).
 - Phone (with its country code) and date of birth each get a full-width row in Edit profile, the Account page and the user form (PROF-06).
 - Tasks: a super admin's view drops "Assigned to me" (super admins are never on a team) and gets oversight filters by client, assignee (incl. unassigned), status and due date, kept in the URL with the project filter and sort; client admins get the assignee, status and due filters too (TSK-04).
-- ProjoMan logo: the full logo in the expanded sidebar and on the sign-in screens, the mascot mark in the collapsed sidebar, as the favicon and as the Apple touch icon; `vite.svg` and the "Acme Inc" placeholder are gone (BRD-01).
+- ProjoMan logo: the full logo in the expanded sidebar (the sign-in screens are unchanged), the mascot mark in the collapsed sidebar, as the favicon and as the Apple touch icon; `vite.svg` is gone (BRD-01).
 
 ### Fixed
 - The shared date picker (due dates, project dates, date of birth): centred month/year chevrons and header controls on one line, quick picks on an even grid, distinct today / picked / past / other-month days, and no "past" dimming for a date of birth (PROF-08, TSK-03).
