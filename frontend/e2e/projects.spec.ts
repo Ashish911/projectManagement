@@ -12,7 +12,7 @@ test.describe("clientAdmin", () => {
         await form.getByPlaceholder("e.g. Atlas Portal").fill(name)
         await form.getByPlaceholder("What is this project for?").fill("Created by the e2e suite")
         await form.getByRole("button", { name: "Add people" }).click()
-        await form.getByRole("option", { name: seed.users.user.name }).click()
+        await page.getByRole("option", { name: seed.users.user.name }).click()
         await form.getByRole("button", { name: "Create project" }).click()
 
         await expect(form).toBeHidden()

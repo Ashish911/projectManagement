@@ -17,9 +17,9 @@ test("🟢 a member sees a live notification when a task is assigned to them", a
     const form = adminPage.getByRole("dialog", { name: "New task" })
     await form.getByPlaceholder("What needs doing?").fill(title)
     await form.locator("[data-invalid]").filter({ has: adminPage.getByText(/^Project\*?$/) }).getByRole("button").click()
-    await form.getByRole("option", { name: seed.project.name }).click()
+    await adminPage.getByRole("option", { name: seed.project.name }).click()
     await form.locator("[data-invalid]").filter({ has: adminPage.getByText(/^Assignee$/) }).getByRole("button").click()
-    await form.getByRole("option", { name: seed.users.user.name }).click()
+    await adminPage.getByRole("option", { name: seed.users.user.name }).click()
     await form.getByRole("button", { name: "Create task" }).click()
     await expect(form).toBeHidden()
 

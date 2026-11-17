@@ -15,7 +15,7 @@ test.describe("clientAdmin", () => {
         const form = tabA.getByRole("dialog", { name: "New task" })
         await form.getByPlaceholder("What needs doing?").fill(title)
         await form.locator("[data-invalid]").filter({ has: tabA.getByText(/^Project\*?$/) }).getByRole("button").click()
-        await form.getByRole("option", { name: seed.project.name }).click()
+        await tabA.getByRole("option", { name: seed.project.name }).click()
         await form.getByRole("button", { name: "Create task" }).click()
         await expect(form).toBeHidden()
 

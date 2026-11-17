@@ -29,7 +29,7 @@ test.describe("clientAdmin", () => {
         await form.getByPlaceholder("What needs doing?").fill(title)
         // The project combo may already have a project picked, so find it by its field label
         await form.locator("[data-invalid]").filter({ has: page.getByText(/^Project\*?$/) }).getByRole("button").click()
-        await form.getByRole("option", { name: seed.project.name }).click()
+        await page.getByRole("option", { name: seed.project.name }).click()
         await form.getByRole("button", { name: "Create task" }).click()
         await expect(form).toBeHidden()
 

@@ -5,7 +5,7 @@ import type { Role } from "./env"
 /** Sidebar entries each role should see, in order (NAV_BY_ROLE in app-sidebar.tsx). */
 const NAV: Record<Role, string[]> = {
     superAdmin: ["Dashboard", "Users", "Clients", "Projects", "Tasks", "Guide"],
-    clientAdmin: ["Dashboard", "Clients", "Projects", "Tasks", "Analytics", "Guide"],
+    clientAdmin: ["Dashboard", "Clients", "Projects", "Tasks", "Guide"], // Analytics is behind a flag (CA-01)
     user: ["Dashboard", "Projects", "Tasks", "Guide"],
 }
 
